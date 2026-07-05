@@ -1,0 +1,48 @@
+{
+  "branch": "pipeline-worker/nvim-explorer-mouse-support",
+  "targetBranch": "main",
+  "worktreePath": "/tmp/pipeline-worker-5Jmg06/worktree",
+  "attempt": 0,
+  "phase": "done",
+  "startedAt": "2026-07-05T09:30:59.187Z",
+  "updatedAt": "2026-07-05T09:32:12.167Z",
+  "history": [
+    {
+      "at": "2026-07-05T09:30:59.187Z",
+      "phase": "diff",
+      "level": "info",
+      "message": "Created worktree at /tmp/pipeline-worker-5Jmg06/worktree (temp branch pipeline-worker/tmp-e68ea042)"
+    },
+    {
+      "at": "2026-07-05T09:31:19.340Z",
+      "phase": "intent",
+      "level": "info",
+      "message": "Captured intent; renamed to feature branch pipeline-worker/nvim-explorer-mouse-support"
+    },
+    {
+      "at": "2026-07-05T09:31:19.341Z",
+      "phase": "checks",
+      "level": "info",
+      "message": "Checks passed ()"
+    },
+    {
+      "at": "2026-07-05T09:31:22.608Z",
+      "phase": "mr",
+      "level": "info",
+      "message": "Opened MR/PR https://github.com/MohanTn/claude-code-helpers/pull/2"
+    },
+    {
+      "at": "2026-07-05T09:31:22.622Z",
+      "phase": "watch",
+      "level": "info",
+      "message": "Started watching pipeline"
+    },
+    {
+      "at": "2026-07-05T09:32:12.167Z",
+      "phase": "done",
+      "level": "info",
+      "message": "No CI pipeline found for this MR/PR — nothing to watch"
+    }
+  ],
+  "mrIid": 2
+}
