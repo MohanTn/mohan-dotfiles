@@ -1,4 +1,4 @@
-# claude-code-helpers
+# mohan-dotfiles
 
 Reproducible machine setup as a Nix flake: Claude Code config, zsh + oh-my-zsh, git, Neovim (LazyVim), pi extensions, and every tool they depend on. Clone it on any Linux box or WSL distro, run one script, and the machine is set up the way I like it.
 
@@ -14,11 +14,11 @@ setup.sh      single entry point: setup, apply/update, drift audit, input upgrad
 
 ## New machine (Linux or WSL)
 
-The repo must live at `~/REPO/claude-code-helpers`; the account name doesn't matter; `flake.nix` reads `$USER` at eval time (see `--impure` below), so it works unmodified under any username.
+The repo must live at `~/REPO/mohan-dotfiles`; the account name doesn't matter; `flake.nix` reads `$USER` at eval time (see `--impure` below), so it works unmodified under any username.
 
 ```
-git clone git@github.com:MohanTn/claude-code-helpers.git ~/REPO/claude-code-helpers
-~/REPO/claude-code-helpers/setup.sh
+git clone git@github.com:MohanTn/mohan-dotfiles.git ~/REPO/mohan-dotfiles
+~/REPO/mohan-dotfiles/setup.sh
 ```
 
 `setup.sh` installs Nix (Determinate Systems installer) if missing, activates the Home Manager configuration (conflicting existing files are kept as `*.hm-backup`), switches the login shell to zsh, and finishes with a drift audit. Everything Nix-installed is pinned by `flake.lock`, so every machine gets identical versions.

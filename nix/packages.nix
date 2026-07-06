@@ -30,5 +30,8 @@
     unzip
     lazygit
     wslu # wslview and friends; harmless on plain Linux
+
+    # AI custom assisted packages
+    # pipeline-worker or pw, local-scribe (TODO: define these custom packages)
   ];
 }

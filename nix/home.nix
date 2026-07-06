@@ -1,19 +1,28 @@
-{ username, ... }:
+{ username, lib, ... }:
 
+let
+  userPackagesConfig = /home/${username}/.config/mohan-dotfiles/packages-config.nix;
+  configPath = if builtins.pathExists userPackagesConfig
+               then userPackagesConfig
+               else ./default-packages-config.nix;
+in
 {
   imports = [
     ./packages.nix
+    ./optional-packages.nix
+    ./maintenance.nix
     ./zsh.nix
     ./git.nix
     ./claude.nix
     ./nvim.nix
     ./pi.nix
+    configPath
   ];
 
   # `username` comes from $USER, read impurely in flake.nix and threaded in
   # via extraSpecialArgs, so this config works unmodified on any machine or
   # account name. The repo itself still needs to live at
-  # ~/REPO/claude-code-helpers (see nvim.nix).
+  # ~/REPO/mohan-dotfiles (see nvim.nix).
   home.username = username;
   home.homeDirectory = "/home/${username}";
 

@@ -16,12 +16,12 @@
 # repo and Nix. The live files under $HOME are read-only store symlinks,
 # and each apply forcibly re-links anything that was replaced by hand.
 #
-# Expected checkout location: ~/REPO/claude-code-helpers (nvim.nix links
+# Expected checkout location: ~/REPO/mohan-dotfiles (nvim.nix links
 # ~/.config/nvim straight at this checkout).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXPECTED_DIR="$HOME/REPO/claude-code-helpers"
+EXPECTED_DIR="$HOME/REPO/mohan-dotfiles"
 # Only used before the first switch; afterwards the home-manager CLI from the
 # flake-pinned generation takes over.
 HM_FLAKE="home-manager/release-25.05"

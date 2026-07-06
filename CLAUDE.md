@@ -1,6 +1,6 @@
-# claude-code-helpers: repo guide
+# mohan-dotfiles: repo guide
 
-Personal machine setup as a Nix flake (standalone Home Manager, non-NixOS). The source of truth for every config is this repo; the live files under `$HOME` are read-only Nix store symlinks, refreshed by `home-manager switch --flake ~/REPO/claude-code-helpers --impure`.
+Personal machine setup as a Nix flake (standalone Home Manager, non-NixOS). The source of truth for every config is this repo; the live files under `$HOME` are read-only Nix store symlinks, refreshed by `home-manager switch --flake ~/REPO/mohan-dotfiles --impure`.
 
 ## Layout
 

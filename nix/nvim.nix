@@ -1,7 +1,7 @@
 { config, ... }:
 
 let
-  repo = "${config.home.homeDirectory}/REPO/claude-code-helpers";
+  repo = "${config.home.homeDirectory}/REPO/mohan-dotfiles";
 in
 {
   # The single out-of-store exception: LazyVim writes lazy-lock.json into the
