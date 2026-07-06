@@ -7,7 +7,7 @@ source "$HOME/.claude/hooks/lib/common.sh"
 proj_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 [ -z "$proj_cwd" ] && proj_cwd="$PWD"
 
-digest_dir="$HOOKS_HOME/state/digests"
+digest_dir="$HOOKS_STATE_HOME/digests"
 mkdir -p "$digest_dir" 2>/dev/null
 key=$(printf '%s' "$proj_cwd" | md5sum | cut -d' ' -f1)
 digest="$digest_dir/${key}.md"
