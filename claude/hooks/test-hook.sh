@@ -15,6 +15,7 @@
 set -uo pipefail
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/claude-hooks"
 TEST_SESSION_ID="manual-test"
 
 # hook basename -> "event_name::one-line purpose"
@@ -195,7 +196,7 @@ cmd_selftest() {
   run_hook pre-tool-use-loop-breaker.sh "$loop_payload" >/dev/null 2>&1
   expect_exit "loop-breaker blocks the 3rd identical call" \
     pre-tool-use-loop-breaker.sh "$loop_payload" 2
-  rm -rf "${HOOKS_DIR:?}/state/selftest-loop"
+  rm -rf "${STATE_HOME:?}/selftest-loop"
 
   expect_exit "stop-goal-check no-ops with no captured goal" \
     stop-goal-check.sh \
@@ -205,7 +206,7 @@ cmd_selftest() {
   expect_exit "session-end-cleanup runs cleanly" \
     session-end-cleanup.sh '{}' 0
 
-  rm -rf "${HOOKS_DIR:?}/state/selftest"
+  rm -rf "${STATE_HOME:?}/selftest"
 
   echo "---"
   echo "$pass_count passed, $fail_count failed"

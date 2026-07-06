@@ -47,6 +47,7 @@ return {
                   ["<2-LeftMouse>"] = "confirm",
                   ["<C-LeftMouse>"] = "select_and_next",
                   ["<RightMouse>"] = "explorer_context_menu",
+                  ["D"] = "explorer_del",
                 },
               },
             },

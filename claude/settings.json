@@ -92,5 +92,6 @@
   },
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "dark"
+  "theme": "dark",
+  "model": "claude-fable-5[1m]"
 }

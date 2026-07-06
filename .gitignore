@@ -1,3 +1,5 @@
 claude/hooks/state/
-.pipelin-worker/**
 .pipeline-worker/
+# nix build outputs
+result
+result-*
