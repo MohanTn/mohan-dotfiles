@@ -1,7 +1,12 @@
 #!/usr/bin/env zsh
-# Custom async prompt: emoji git status (computed off the main thread so a
-# slow `git status` in a big repo never blocks typing), a colored badge line,
-# and a reactive exit-code/duration line. Sourced from nix/zsh.nix.
+# "Phosphor CRT" prompt: green-on-black, styled after old monochrome
+# monitors, with a modern hint (color emoji, a live clock in the terminal's
+# own title bar instead of on every line). Sourced from nix/zsh.nix.
+#
+# Git status is computed off the main thread via zle -F so a slow `git
+# status` in a large repo never blocks typing; a spinner stands in for the
+# branch segment until it resolves (sched's granularity is whole seconds, so
+# it's only visibly animated in slow/large repos).
 
 setopt PROMPT_SUBST
 zmodload zsh/datetime
@@ -14,6 +19,15 @@ typeset -g _prompt_git_fd=-1
 typeset -g _prompt_spinner_active=0
 typeset -g _prompt_spinner_idx=0
 typeset -ga _prompt_spinner_frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+
+# Phosphor tiers: real dual/tri-trace CRTs shipped in a few distinct tube
+# colors (P1 green, P3 amber); reusing that as per-field accent hues keeps
+# the palette on-theme instead of turning the prompt into a rainbow.
+typeset -g _crt_sep="%F{#23492f}"
+typeset -g _crt_branch="%F{#55e6c1}"
+typeset -g _crt_amber="%F{#e3c66b}"
+typeset -g _crt_prompt="%F{#b6ffce}"
+typeset -g _crt_reset="%f"
 
 # porcelain=2 --branch gives dirty files, branch name, and ahead/behind vs
 # upstream (# branch.ab +N -M) in one call instead of three separate ones.
@@ -61,9 +75,9 @@ _prompt_async_git_callback() {
     else
       icon="🌿"
     fi
-    (( ahead > 0 )) && sync+=" ↑${ahead}"
-    (( behind > 0 )) && sync+=" ↓${behind}"
-    _PROMPT_GIT_SEGMENT="  ${icon} ${branch}${sync}"
+    (( ahead > 0 )) && sync+=" ${_crt_amber}↑${ahead}${_crt_reset}"
+    (( behind > 0 )) && sync+=" ${_crt_amber}↓${behind}${_crt_reset}"
+    _PROMPT_GIT_SEGMENT="  ${_crt_sep}::${_crt_reset} ${icon} ${_crt_branch}${branch}${_crt_reset}${sync}"
   else
     _PROMPT_GIT_SEGMENT=""
   fi
@@ -75,7 +89,7 @@ _prompt_async_git_callback() {
 _prompt_spinner_tick() {
   (( _prompt_spinner_active )) || return
   _prompt_spinner_idx=$(( (_prompt_spinner_idx + 1) % ${#_prompt_spinner_frames[@]} ))
-  _PROMPT_GIT_SEGMENT="  ${_prompt_spinner_frames[$((_prompt_spinner_idx + 1))]}"
+  _PROMPT_GIT_SEGMENT="  ${_crt_sep}::${_crt_reset} ${_crt_branch}${_prompt_spinner_frames[$((_prompt_spinner_idx + 1))]}${_crt_reset}"
   zle && zle reset-prompt
   (( _prompt_spinner_active )) && sched +1 _prompt_spinner_tick
 }
@@ -97,24 +111,31 @@ _prompt_preexec() {
   _prompt_cmd_start=$EPOCHSECONDS
 }
 
+# Terminal title doubles as the CRT "window banner": a live clock that
+# updates once per prompt instead of being repeated on every line.
+_prompt_set_title() {
+  print -Pn '\e]0;%n@%m  🕐 %D{%H:%M:%S}\a'
+}
+
 _prompt_precmd() {
   if (( _prompt_cmd_start > 0 )); then
     local elapsed=$(( EPOCHSECONDS - _prompt_cmd_start ))
     _prompt_cmd_start=0
     if (( elapsed >= 3 )); then
-      _PROMPT_DURATION_SEGMENT="⏱ ${elapsed}s "
+      _PROMPT_DURATION_SEGMENT="${_crt_amber}⏱ ${elapsed}s${_crt_reset} "
     else
       _PROMPT_DURATION_SEGMENT=""
     fi
   fi
+  _prompt_set_title
   _prompt_async_git_start
 }
 
 preexec_functions+=(_prompt_preexec)
 precmd_functions+=(_prompt_precmd)
 
-PROMPT='%K{54}%F{255} 📁 %/${_PROMPT_GIT_SEGMENT}  🕐 %D{%Y-%m-%d %H:%M:%S} %f%k
-%(?.%F{green}.%F{red})❯%f '
+PROMPT='%F{#4a8f68}%n@%m${_crt_reset} ${_crt_sep}::${_crt_reset} 📁 %F{#7dffb0}%/${_crt_reset}${_PROMPT_GIT_SEGMENT}
+${_crt_prompt}❯${_crt_reset} '
 RPROMPT='${_PROMPT_DURATION_SEGMENT}%(?.✅.❌)'
 
 if [[ -o interactive ]]; then

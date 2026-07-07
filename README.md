@@ -59,10 +59,12 @@ To add a new non-secret environment variable for good, add it to the `home.sessi
 
 ### Prompt
 
-`zsh/prompt.zsh` (sourced by `nix/zsh.nix`) is a from-scratch prompt, not an oh-my-zsh theme:
+`zsh/prompt.zsh` (sourced by `nix/zsh.nix`) is a from-scratch "phosphor CRT" prompt, not an oh-my-zsh theme: green-on-black, styled after old monochrome monitors, with a modern hint.
 
-* A colored badge line always shows the full working directory, git branch, and current date/time: 🌿 clean, 🔥 dirty, `↑N` commits ahead of upstream (pending push), `↓N` behind (pending pull). Git status is computed in a background job via zsh's `zle -F`, so a slow `git status` in a large repo never blocks typing; while it's pending a spinner (`⠋⠙⠹...`) animates in its place, one frame per second (only actually visible in slow/large repos, since fast ones resolve before the first tick).
-* The prompt arrow is green/red and `RPROMPT` shows ✅/❌ based on the last command's exit status, plus `⏱ Ns` if the last command ran 3 seconds or longer.
+* Shows the full working directory and git branch: 🌿 clean, 🔥 dirty, `↑N`/`↓N` for commits ahead/behind of upstream (pending push/pull). Git status is computed in a background job via zsh's `zle -F`, so a slow `git status` in a large repo never blocks typing; while it's pending, a spinner (`⠋⠙⠹...`) animates in its place, one frame per second (only actually visible in slow/large repos, since fast ones resolve before the first tick).
+* `RPROMPT` shows ✅/❌ based on the last command's exit status, plus `⏱ Ns` if it ran 3 seconds or longer.
+* The clock lives in the terminal's own window/tab title (updated every prompt) instead of repeating on every line.
+* Each field gets its own step on the same green phosphor ladder (user@host, separators, path, branch) rather than one flat shade, so the line stays scannable without leaving the monochrome palette; emoji are the one deliberate "modern" touch, since a real CRT never had color.
 * Opening a new interactive terminal prints a one-line typewriter-animated greeting.
 
 Edit `zsh/prompt.zsh` directly (plain zsh, no Nix escaping needed) and re-run `./setup.sh` to change it.
