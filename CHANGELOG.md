@@ -17,6 +17,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Added
 
+- Added a custom async zsh prompt (`zsh/prompt.zsh`) that computes git status in a background worker, displays emoji-coded status (🌿 clean, 🔥 dirty) with upstream sync info, shows command duration and exit codes, and includes a typewriter-animated greeting. Updated README with comprehensive setup and configuration documentation, fixed pip-tools Nix package reference, and disabled oh-my-zsh theme in favor of the custom prompt.
 - Added `migrate_pre_nix_dotfiles()` function to fold any pre-existing `~/.zshrc`/`~/.zshenv` content into `~/.zshrc.local` before Home Manager takes over on first adoption, preventing hand-written environment variables and credentials from being silently lost. Fixed undefined `pip-tools` package reference by moving it to `python3Packages.pip-tools`. Includes comprehensive test coverage in flake checks.
 - Adds a complete shell port of claude/hooks for GitHub Copilot CLI, adapted to Copilot's camelCase JSON payload format and decision-on-stdout contract. Includes all guards (edit, loop, goal), gates (type-check, build), and state cleanup. Coupled with a new nix/copilot.nix module, flake check, and comprehensive README documentation.
 - Introduces a new Lua configuration module that enhances Neovim's Snacks file explorer with comprehensive mouse support: double-click to open/toggle files, ctrl-click for multi-selection, and right-click context menu with file operations (new, rename, copy, cut, paste, delete, open, refresh).

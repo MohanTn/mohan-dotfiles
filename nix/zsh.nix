@@ -6,7 +6,8 @@
 
     oh-my-zsh = {
       enable = true;
-      theme = "robbyrussell";
+      # Prompt itself comes from zsh/prompt.zsh below, not an oh-my-zsh theme.
+      theme = "";
       plugins = [ "git" ];
       extraConfig = ''
         ENABLE_CORRECTION="true"
@@ -35,6 +36,13 @@
       fi
       export NVM_DIR="$HOME/.nvm"
       [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+      # Default `ls` directory blue (di=01;34) is too dark to read on a dark
+      # background; override to a brighter cyan, keep everything else default.
+      command -v dircolors >/dev/null 2>&1 && eval "$(dircolors -b)"
+      export LS_COLORS="''${LS_COLORS}:di=01;36"
+
+      source ${../zsh/prompt.zsh}
 
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
