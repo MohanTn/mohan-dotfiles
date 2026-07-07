@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/session-start.sh\"",
+        "timeoutSec": 10
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/user-prompt-submit.sh\"",
+        "timeoutSec": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "matcher": "edit|create|write",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/pre-tool-use-edit-guard.sh\"",
+        "timeoutSec": 5
+      },
+      {
+        "type": "command",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/pre-tool-use-loop-breaker.sh\"",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "matcher": "edit|create|write",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/post-tool-use-edit.sh\"",
+        "timeoutSec": 45
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/agent-stop-goal-check.sh\"",
+        "timeoutSec": 8
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "bash \"${COPILOT_HOME:-$HOME/.copilot}/hooks/scripts/session-end-cleanup.sh\"",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

@@ -14,6 +14,7 @@ in
     ./zsh.nix
     ./git.nix
     ./claude.nix
+    ./copilot.nix
     ./nvim.nix
     ./pi.nix
     configPath

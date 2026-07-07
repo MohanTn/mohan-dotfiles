@@ -1,12 +1,13 @@
 # mohan-dotfiles
 
-Reproducible machine setup as a Nix flake: Claude Code config, zsh + oh-my-zsh, git, Neovim (LazyVim), pi extensions, and every tool they depend on. Clone it on any Linux box or WSL distro, run one script, and the machine is set up the way I like it.
+Reproducible machine setup as a Nix flake: Claude Code config, Copilot CLI hooks, zsh + oh-my-zsh, git, Neovim (LazyVim), pi extensions, and every tool they depend on. Clone it on any Linux box or WSL distro, run one script, and the machine is set up the way I like it.
 
 ```
 flake.nix     inputs (pinned nixpkgs + home-manager) and CI checks
 nix/          one Home Manager module per concern:
-              packages, zsh, git, claude, nvim, pi
+              packages, zsh, git, claude, copilot, nvim, pi
 claude/       ~/.claude/{settings.json,CLAUDE.md,hooks,skills,commands,statusline-usage.py}
+copilot/      ~/.copilot/hooks (Copilot CLI port of claude/hooks)
 nvim/         ~/.config/nvim (LazyVim)
 pi/           ~/.pi/agent/extensions
 setup.sh      single entry point: setup, apply/update, drift audit, input upgrade
@@ -35,7 +36,7 @@ export PIPELINE_WORKER_GITHUB_TOKEN="github_pat_..."
 
 `pi/agent/extensions/` holds two extensions for the [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent`), symlinked into `~/.pi/agent/extensions/` by the Nix flake:
 
-- `hooks/` — a TypeScript port of the same guard/goal/loop-breaker behavior as `claude/hooks`, wired into Pi's extension lifecycle instead of Claude Code's hook events: session-start digest injection, GOAL capture + YAGNI/self-check prompting, edit/write no-op guards, import resolution + `tsc`/`dotnet build` gates, `sonar_lite.py` static analysis, and the consecutive-tool-call loop breaker. It intentionally excludes anything `claude/hooks` has since dropped (bash-command dedup, read caching, architecture hints, TTS/ding, pre-compact) — keep the two in sync when one changes.
+- `hooks/` — a TypeScript port of the same guard/goal/loop-breaker behavior as `claude/hooks`, wired into Pi's extension lifecycle instead of Claude Code's hook events: session-start digest injection, GOAL capture + YAGNI/self-check prompting, edit/write no-op guards, import resolution + `tsc`/`dotnet build` gates, `sonar_lite.py` static analysis, and the consecutive-tool-call loop breaker. It intentionally excludes anything `claude/hooks` has since dropped (bash-command dedup, read caching, architecture hints, TTS/ding, pre-compact) — keep the ports in sync when one changes (see also `copilot/` below).
 - `pipeline-panel/` — a full-screen dashboard extension for launching and watching `pipeline-worker` runs (worktree, MR/PR, CI) from inside Pi.
 
 Each extension has its own test suite (`node:test` + `tsx`):
@@ -44,6 +45,18 @@ Each extension has its own test suite (`node:test` + `tsx`):
 cd pi/agent/extensions/hooks && npm install && npm test        # or: npm run typecheck
 cd pi/agent/extensions/pipeline-panel && npm install && npm test
 ```
+
+## Copilot CLI hooks
+
+`copilot/hooks/` is a shell port of `claude/hooks` for [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks), linked to `~/.copilot/hooks` by `nix/copilot.nix` (Copilot loads every `*.json` there as user-level hook config; `mohan-hooks.json` wires the events to the scripts in `scripts/`). Same behaviors, adapted to Copilot's contract (camelCase payloads on stdin, JSON decisions on stdout instead of exit-2 blocks):
+
+- `sessionStart` — project digest + GOAL/GOAL_CHECK convention injected as `additionalContext` (Copilot ignores `userPromptSubmitted` output, so the per-prompt GOAL reminder from `claude/hooks` moves here, once per session).
+- `preToolUse` — edit/write no-op guard and the consecutive-tool-call loop breaker, denying via `permissionDecision`.
+- `postToolUse` — import resolution + `tsc`/`dotnet build` gates; findings come back as `additionalContext` (Copilot's postToolUse cannot block).
+- `agentStop` — goal-check gate: blocks the first stop after a stated `GOAL:` with no later `GOAL_CHECK:`, scanning the transcript file at stop time (no transcript path exists at preToolUse, so there is no separate goal-capture hook).
+- `userPromptSubmitted` / `sessionEnd` — per-prompt state reset and stale-state pruning.
+
+State lives under `~/.local/state/copilot-hooks/`. The regression suite mirrors the Claude one: `copilot/hooks/test-hook.sh selftest` (also a flake check).
 
 ### Not managed by Nix (by design)
 
@@ -78,16 +91,17 @@ Updating pinned packages:
 
 ## Testing
 
-`nix flake check --impure` runs all CI gates locally: it builds the full home configuration, runs the hook regression suite, and lints + tests `setup.sh` (shellcheck plus doctor drift-audit cases against a synthetic Home Manager profile). The hooks can also be exercised directly:
+`nix flake check --impure` runs all CI gates locally: it builds the full home configuration, runs the Claude and Copilot hook regression suites, and lints + tests `setup.sh` (shellcheck plus doctor drift-audit cases against a synthetic Home Manager profile). The hooks can also be exercised directly:
 
 ```
 claude/hooks/test-hook.sh list                           # list hooks + what each does
 claude/hooks/test-hook.sh run pre-tool-use-edit-guard.sh # run with a built-in sample payload
 echo '{"...":"..."}' | claude/hooks/test-hook.sh run <hook.sh> -   # custom payload
 claude/hooks/test-hook.sh selftest                       # regression checks
+copilot/hooks/test-hook.sh selftest                      # same harness for the Copilot port
 ```
 
-Hook runtime state (session logs, loop counters, digests) lives under `~/.local/state/claude-hooks/`, never in this repo.
+Hook runtime state (session logs, loop counters, digests) lives under `~/.local/state/claude-hooks/` and `~/.local/state/copilot-hooks/`, never in this repo.
 
 ## WSL notes
 

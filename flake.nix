@@ -1,5 +1,5 @@
 {
-  description = "Mohan's reproducible machine setup: Claude Code, zsh, git, Neovim, pi (Home Manager flake)";
+  description = "Mohan's reproducible machine setup: Claude Code, Copilot CLI hooks, zsh, git, Neovim, pi (Home Manager flake)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -40,6 +40,20 @@
             cp -r ${./claude/hooks} "$HOME/.claude/hooks"
             chmod -R u+w "$HOME/.claude/hooks"
             bash "$HOME/.claude/hooks/test-hook.sh" selftest > "$out"
+            cat "$out"
+          '';
+
+        # Same regression suite for the Copilot CLI port of the hooks, run in
+        # a sandbox HOME exactly the way Copilot invokes them (camelCase JSON
+        # payload on stdin, JSON decisions on stdout).
+        copilot-hooks-selftest = pkgs.runCommand "copilot-hooks-selftest"
+          { nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.git ]; }
+          ''
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME/.copilot"
+            cp -r ${./copilot/hooks} "$HOME/.copilot/hooks"
+            chmod -R u+w "$HOME/.copilot/hooks"
+            bash "$HOME/.copilot/hooks/test-hook.sh" selftest > "$out"
             cat "$out"
           '';
 
