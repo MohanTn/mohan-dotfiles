@@ -20,7 +20,7 @@ in
     (optionals cfg.enablePython [
       python3
       poetry
-      pip-tools
+      python3Packages.pip-tools
     ])
     ++ (optionals cfg.enableDocker [
       docker
