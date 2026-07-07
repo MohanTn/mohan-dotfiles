@@ -95,6 +95,27 @@
               echo "expected doctor to fail on missing file" >&2; exit 1
             fi
 
+            echo "-- migrate_pre_nix_dotfiles: folds a hand-written zshrc into .zshrc.local"
+            # shellcheck disable=SC1090
+            source "$script"
+            rm -f "$HOME/.zshrc.local"
+            echo 'export TOKEN=hand-written-secret' > "$HOME/.zshrc"
+            migrate_pre_nix_dotfiles
+            grep -qF 'hand-written-secret' "$HOME/.zshrc.local"
+            [ -f "$HOME/.zshrc" ] && [ ! -L "$HOME/.zshrc" ]
+
+            echo "-- migrate_pre_nix_dotfiles: re-running does not duplicate the block"
+            migrate_pre_nix_dotfiles
+            count=$(grep -cF 'hand-written-secret' "$HOME/.zshrc.local")
+            [ "$count" -eq 1 ]
+
+            echo "-- migrate_pre_nix_dotfiles: a symlinked (already-managed) zshrc is left alone"
+            rm -f "$HOME/.zshrc.local"
+            rm "$HOME/.zshrc"
+            ln -s "$hf/.zshrc" "$HOME/.zshrc"
+            migrate_pre_nix_dotfiles
+            [ ! -e "$HOME/.zshrc.local" ]
+
             echo "all setup.sh checks passed" > "$out"
             cat "$out"
           '';

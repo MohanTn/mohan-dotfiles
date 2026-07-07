@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Changed
 
+- `setup.sh` now folds any pre-existing `~/.zshrc`/`~/.zshenv` content into `~/.zshrc.local` before Home Manager takes those files over on first adoption, so hand-written PATH exports and credentials stay sourced instead of only living in an easy-to-miss `*.hm-backup` copy. Fixed the undefined `pip-tools` package reference in `nix/optional-packages.nix` (it lives under `python3Packages`, not top-level `pkgs`).
 - The flake now dynamically reads the system username via `$USER` at eval time instead of being hardcoded to "mohan", making it work unchanged on any machine. All Nix invocations now require the `--impure` flag. Tmux and its configuration have been removed as an out-of-scope tool. Several unused LazyVim boilerplate files were deleted, and a file deletion keybinding was added to the Neovim file explorer.
 - Refactor machine bootstrap into `setup.sh` with three commands: default apply (setup or update), `doctor` for drift audit without changes, and `upgrade` for bumping dependencies. Adds comprehensive testing via a new flake check that validates shellcheck and exercises doctor against synthetic profiles.
 - Replaced `bootstrap.sh` with `setup.sh`, a single entry point for the machine lifecycle: the no-arg run installs Nix if missing and applies the Home Manager flake (also the update path; hand edits under `$HOME` are reverted with the edited copy kept as `*.hm-backup`), `setup.sh doctor` audits that every managed file is still served from the Nix store without changing anything, and `setup.sh upgrade` bumps flake inputs then applies. A new `setup-script` flake check shellchecks the script and unit-tests the doctor audit against a synthetic Home Manager profile.
@@ -16,5 +17,6 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Added
 
+- Added `migrate_pre_nix_dotfiles()` function to fold any pre-existing `~/.zshrc`/`~/.zshenv` content into `~/.zshrc.local` before Home Manager takes over on first adoption, preventing hand-written environment variables and credentials from being silently lost. Fixed undefined `pip-tools` package reference by moving it to `python3Packages.pip-tools`. Includes comprehensive test coverage in flake checks.
 - Adds a complete shell port of claude/hooks for GitHub Copilot CLI, adapted to Copilot's camelCase JSON payload format and decision-on-stdout contract. Includes all guards (edit, loop, goal), gates (type-check, build), and state cleanup. Coupled with a new nix/copilot.nix module, flake check, and comprehensive README documentation.
 - Introduces a new Lua configuration module that enhances Neovim's Snacks file explorer with comprehensive mouse support: double-click to open/toggle files, ctrl-click for multi-selection, and right-click context menu with file operations (new, rename, copy, cut, paste, delete, open, refresh).

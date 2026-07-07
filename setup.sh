@@ -5,7 +5,10 @@
 #                       installs Nix if missing, activates the Home Manager
 #                       flake, sets the login shell to zsh, then audits for
 #                       drift. Files changed outside Nix are reverted (the
-#                       edited copy is kept next to them as *.hm-backup).
+#                       edited copy is kept next to them as *.hm-backup). On
+#                       first adoption, any pre-existing ~/.zshrc or
+#                       ~/.zshenv content is also folded into
+#                       ~/.zshrc.local so it stays sourced, not just backed up.
 #   ./setup.sh doctor   audit only: verify every managed config is still
 #                       served from the Nix store. Exits 1 on drift,
 #                       changes nothing.
@@ -82,6 +85,37 @@ switch() {
   fi
 }
 
+# On first adoption ~/.zshrc and ~/.zshenv are still hand-written files; Home
+# Manager's own -b hm-backup only saves them as *.hm-backup once it replaces
+# them with a store symlink, which is easy to miss. Fold their content into
+# ~/.zshrc.local first, since that file is untracked, never overwritten by an
+# apply, and already sourced by nix/zsh.nix, so nothing (PATH exports,
+# credentials) goes missing even if the .hm-backup is never noticed. A
+# symlink means Home Manager already owns the file, so this is a no-op on
+# every run after the first.
+migrate_pre_nix_dotfiles() {
+  local marker f rel local_file
+  local_file="$HOME/.zshrc.local"
+  for f in "$HOME/.zshrc" "$HOME/.zshenv"; do
+    if [ ! -f "$f" ] || [ -L "$f" ]; then
+      continue
+    fi
+    rel="${f#"$HOME/"}"
+    marker="# --- migrated by setup.sh from pre-Nix $rel, review and prune ---"
+    if [ -f "$local_file" ] && grep -qF "$marker" "$local_file"; then
+      continue
+    fi
+    log "found a hand-written $rel; folding its content into ~/.zshrc.local so nothing is lost"
+    {
+      echo ""
+      echo "$marker"
+      echo "# Migrated on $(date -Iseconds), before Home Manager took over $rel."
+      echo "# Check for exports duplicated by nix/zsh.nix and prune this block."
+      cat "$f"
+    } >> "$local_file"
+  done
+}
+
 ensure_login_shell() {
   local zsh_path current_shell
   zsh_path="$(command -v zsh)"
@@ -147,6 +181,9 @@ Done. Reminders:
     on the next apply. 'setup.sh doctor' audits for such drift any time.
   * Secrets are NOT managed by this repo. Create ~/.zshrc.local with, e.g.:
       export PIPELINE_WORKER_GITHUB_TOKEN="..."
+  * On first adoption, any pre-existing ~/.zshrc or ~/.zshenv content is
+    folded into ~/.zshrc.local automatically; review it there and prune
+    what's now redundant with nix/zsh.nix.
   * Docker (the daemon) is a system service and stays a manual install:
       https://docs.docker.com/engine/install/
   * Open a new terminal (or run 'exec zsh') to pick up the new environment.
@@ -159,6 +196,7 @@ apply() {
   if [ -n "$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null)" ]; then
     info "repo has uncommitted changes; this apply includes them (run 'nix flake check --impure' before committing)"
   fi
+  migrate_pre_nix_dotfiles
   switch
   ensure_login_shell
   doctor
@@ -188,4 +226,6 @@ main() {
   esac
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi
