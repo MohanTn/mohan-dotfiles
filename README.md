@@ -7,7 +7,7 @@ flake.nix     inputs (pinned nixpkgs + home-manager) and CI checks
 nix/          one Home Manager module per concern:
               packages, zsh, git, claude, copilot, nvim, pi
 claude/       ~/.claude/{settings.json,CLAUDE.md,hooks,skills,commands,agents,statusline-usage.py}
-copilot/      ~/.copilot/hooks (Copilot CLI port of claude/hooks)
+copilot/      ~/.copilot/{copilot-instructions.md,hooks,agents,skills} (Copilot CLI port of the claude/ config)
 zsh/          prompt.zsh: custom async prompt sourced by nix/zsh.nix
 nvim/         ~/.config/nvim (LazyVim)
 pi/           ~/.pi/agent/extensions
@@ -83,7 +83,11 @@ cd pi/agent/extensions/hooks && npm install && npm test        # or: npm run typ
 cd pi/agent/extensions/pipeline-panel && npm install && npm test
 ```
 
-## Copilot CLI hooks
+## Copilot CLI
+
+Besides the hooks below, `nix/copilot.nix` links three more Copilot ports of the Claude config: `copilot/copilot-instructions.md` → `~/.copilot/copilot-instructions.md` (global user instructions: the same fundamentals, Fable-charter working style, and feature-team workflow as `claude/CLAUDE.md`), `copilot/agents/` → `~/.copilot/agents` (the five feature-team custom agents as `*.agent.md`, selectable with `/agent` or delegated as subagents), and `copilot/skills/` → `~/.copilot/skills` (personal-skill ports of the `claude/commands` prompts: `feature`, `arch`, `explore-topic`, `ui-mock`; Copilot has no custom slash commands, so they trigger by name in a prompt). Keep these in sync with their `claude/` counterparts when one side changes.
+
+### Hooks
 
 `copilot/hooks/` is a shell port of `claude/hooks` for [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks), linked to `~/.copilot/hooks` by `nix/copilot.nix` (Copilot loads every `*.json` there as user-level hook config; `mohan-hooks.json` wires the events to the scripts in `scripts/`). Same behaviors, adapted to Copilot's contract (camelCase payloads on stdin, JSON decisions on stdout instead of exit-2 blocks):
 
