@@ -26,9 +26,19 @@
       };
 
       checks.${system} = {
-        # Building the activation package validates every module, file link,
-        # and package reference without touching the running system.
-        home = self.homeConfigurations.${username}.activationPackage;
+        # Evaluating (not building) the activation package validates every
+        # module, option, and home.file source reference without downloading
+        # or building the full package closure: zed-editor and dotnet-sdk
+        # alone pull in tens of GB of GUI/multimedia libraries that a CI
+        # runner has no use for. Referencing .drvPath forces Nix to
+        # instantiate every derivation in the tree (still catching bad
+        # attribute names, assertion failures, and missing home.file
+        # sources); unsafeDiscardOutputDependency strips the string context
+        # that would otherwise turn this into a real build dependency on
+        # every one of those derivations' outputs.
+        home = pkgs.runCommand "home-eval-check" { } ''
+          echo "${builtins.unsafeDiscardOutputDependency self.homeConfigurations.${username}.activationPackage.drvPath}" > "$out"
+        '';
 
         # The hooks' own regression suite, run in a sandbox HOME exactly the
         # way Claude Code invokes them (JSON payload on stdin).
