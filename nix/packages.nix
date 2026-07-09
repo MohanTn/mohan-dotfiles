@@ -9,6 +9,7 @@
     jq # every Claude Code hook
     python3 # statusline-usage.py
     nodejs_22 # LazyVim LSP extras, pi extensions, npm global CLIs
+    pnpm # for enriched_planning
     gcc # Treesitter parser builds
     gnumake
     curl

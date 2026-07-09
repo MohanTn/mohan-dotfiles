@@ -39,5 +39,6 @@ in
   home.sessionPath = [
     "$HOME/.npm-global/bin"
     "$HOME/.local/bin"
+    "$HOME/.local/share/pnpm"
   ];
 }

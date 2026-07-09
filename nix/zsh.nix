@@ -58,6 +58,10 @@
     # npm global installs go to a user-writable prefix (the Nix store is
     # read-only); ~/.npm-global/bin is on home.sessionPath.
     NPM_CONFIG_PREFIX = "${config.home.homeDirectory}/.npm-global";
+    # pnpm's global bin dir (pnpm link --global, pnpm add -g); the Nix store
+    # pnpm binary can't write there itself, so it's declared here instead of
+    # via `pnpm setup`. ~/.local/share/pnpm is on home.sessionPath.
+    PNPM_HOME = "${config.home.homeDirectory}/.local/share/pnpm";
     FREEBUFF_MODE = "true";
     PIPELINE_WORKER_AGENT = "claude";
     PIPELINE_WORKER_FORGE = "github";

@@ -12,7 +12,6 @@ let
   # Self-updating npm CLIs, installed natively (not pinned by Nix) so they
   # stay current. Bootstrapped only when missing.
   npmGlobals = [
-    "@earendil-works/pi-coding-agent"
     "pipeline-worker"
     "@google/gemini-cli"
     "freebuff"
@@ -35,6 +34,14 @@ in
       fi
     done
     run cp -rT --no-preserve=mode,ownership ${extensionsSrc} "$HOME/.pi/agent/extensions"
+  '';
+
+  home.activation.piCodingAgent = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+    if [ ! -d "$NPM_CONFIG_PREFIX/lib/node_modules/@earendil-works/pi-coding-agent" ] \
+      && [ ! -d "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent" ]; then
+      run ${pkgs.nodejs_22}/bin/npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+    fi
   '';
 
   home.activation.npmGlobalTools = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

@@ -50,9 +50,10 @@ in
     '');
 
     installCopilot = mkIf cfg.enableGitHubCopilot (hm.dag.entryAfter [ "installPackages" ] ''
-      export PATH="${pkgs.curl}/bin:${pkgs.bash}/bin:$PATH"
-      echo "Installing GitHub Copilot CLI from https://gh.io/copilot-install"
-      ($DRY_RUN_CMD curl -fsSL https://gh.io/copilot-install | $DRY_RUN_CMD bash) || echo "Warning: GitHub Copilot CLI installation failed, continuing" >&2
+      export PATH="${pkgs.nodejs_22}/bin:$PATH"
+      export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+      echo "Installing GitHub Copilot CLI via npm..."
+      ($DRY_RUN_CMD npm install -g @github/copilot) || echo "Warning: GitHub Copilot CLI installation failed, continuing" >&2
     '');
 
     installLocalScribe = mkIf cfg.enableLocalScribe (hm.dag.entryAfter [ "installPackages" ] ''

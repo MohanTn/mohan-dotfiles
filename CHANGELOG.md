@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Changed
 
+- This change introduces pnpm package manager support by adding it to base packages, configuring its global bin directory in PATH and PNPM_HOME environment variable. It also modernizes the GitHub Copilot CLI installation from a remote shell script to an npm-based install, and makes pi-coding-agent installation conditional with script safety controls.
 - `setup.sh` now folds any pre-existing `~/.zshrc`/`~/.zshenv` content into `~/.zshrc.local` before Home Manager takes those files over on first adoption, so hand-written PATH exports and credentials stay sourced instead of only living in an easy-to-miss `*.hm-backup` copy. Fixed the undefined `pip-tools` package reference in `nix/optional-packages.nix` (it lives under `python3Packages`, not top-level `pkgs`).
 - The flake now dynamically reads the system username via `$USER` at eval time instead of being hardcoded to "mohan", making it work unchanged on any machine. All Nix invocations now require the `--impure` flag. Tmux and its configuration have been removed as an out-of-scope tool. Several unused LazyVim boilerplate files were deleted, and a file deletion keybinding was added to the Neovim file explorer.
 - Refactor machine bootstrap into `setup.sh` with three commands: default apply (setup or update), `doctor` for drift audit without changes, and `upgrade` for bumping dependencies. Adds comprehensive testing via a new flake check that validates shellcheck and exercises doctor against synthetic profiles.
