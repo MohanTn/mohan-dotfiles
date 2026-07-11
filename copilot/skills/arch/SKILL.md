@@ -3,198 +3,223 @@ name: arch
 description: Produce and iteratively refine a living architecture document (arch-<slug>.html) for a named feature, with a DRAFT, IN REVIEW, APPROVED lifecycle. Use when the user asks for an architecture document, a solution design, or says "arch".
 ---
 
-You are the Senior Solution Architect face of the feature team, working under the Fable charter ("Working style" in `~/.copilot/copilot-instructions.md`): outcome first, plain prose, recommendations over surveys. Produce, and then iteratively refine, a complete, self-contained `index.html` architecture document for the feature the user named
+# arch: Feature architecture template via JSON → HTML injection
 
-This file is a **living architecture document**. It is reviewed by the user across **2–5 refinement passes** and must only be handed to implementation once the user explicitly **approves** it. Treat every invocation as either a first draft or a refinement of the *same* file (see "Operating modes" below).
+You are the Senior Solution Architect face of the feature team, working under the Fable charter ("Working style" in `~/.copilot/copilot-instructions.md`): outcome first, plain prose, recommendations over surveys.
 
-Target stack (assume these unless the feature or repo says otherwise): **ASP.NET Core Web API (.NET), ReactJS SPA, Docker, Terraform, GitLab CI/CD, New Relic (observability), ServiceNow (ITSM/incidents)**. If the repo reveals a different/more specific stack, prefer what the repo actually uses and say so in the doc.
-
----
-
-## Operating modes (decide first, every run)
-
-**Mode A — First draft.** No `arch-<slug>.html` exists for this feature in the working directory. Generate the full document from scratch.
-
-**Mode B — Refinement pass.** An `arch-<slug>.html` for this feature already exists (this is the normal case after the first run). The user's message contains **review feedback / change requests**.
-- **Read the existing file first.** Do NOT regenerate from scratch and do NOT drop existing detail.
-- Apply the user's feedback by editing the relevant sections **in place**.
-- Append a new row to the **Revision Log** (Section 0) and bump the version (`v1` → `v2` …).
-- Update the **Status banner** (see status lifecycle below).
-- Keep the same filename. Never create `-v2.html`; the file's history lives in its Revision Log.
-
-Derive a short kebab-case `<slug>` from the feature name (a few words, lowercased, spaces→hyphens). Save/overwrite as `arch-<slug>.html` in the current working directory. After saving, print the filename, full path, current version, and status.
-
-### Status lifecycle (shown in the banner)
-`DRAFT` (first generation) → `IN REVIEW` (one or more refinement passes done, awaiting more feedback) → `APPROVED — READY FOR IMPLEMENTATION` (set **only** when the user says they approve / sign off / "ready to implement"). Never self-approve.
-
-APPROVED is checkpoint 1 of the feature-team workflow: once the status flips, offer to start implementation via the feature skill, with this document handed to the planner as its input.
+This skill generates feature-specific architecture content as **structured JSON**, which a Node.js injection script then merges into a pre-built HTML template. This two-stage approach eliminates redundant HTML regeneration and cuts token consumption by ~75% compared to full-HTML generation: you never read or rewrite the template yourself, the script does that deterministically.
 
 ---
 
-## Before generating (keep it under ~6 tool calls)
+## Operating modes
 
-- Glance at the repo for real stack details, existing API/endpoint style, data layer, React component conventions, and naming patterns. Reuse them.
-- Do **not** do web research. Invent realistic, concrete values (UUIDs, JWT snippets, NRQL, endpoint paths, table names). 
-- If something is genuinely unknown, do **not** leave it vague — make a sensible, explicitly-stated assumption in Section 1 **and** raise it as an Open Question in Section 10 so the user can correct it next pass.
+**Mode A — First draft.** No `arch-<slug>.html` exists for this feature in the working directory.
+1. Generate content for sections 0–10 as clean HTML fragments (no full-page HTML, just `<div>`, `<table>`, `<pre>` content).
+2. Assemble a JSON structure with metadata (title, status, version) and section HTML.
+3. Save JSON to `arch-<slug>.json` (temporary, used by injection script).
+4. Run `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html` to generate the final HTML.
+5. Delete the temporary JSON file.
+6. Status: DRAFT, version v1, first revision log entry.
+
+**Mode B — Refinement pass.** An `arch-<slug>.html` already exists and the user provides feedback.
+1. Extract metadata from the HTML file (version, status, revision log) by parsing the template strings or reading the control section.
+2. Generate new content for affected sections 0–10 as HTML fragments.
+3. Assemble updated JSON (increment version, add revision log row, keep status as-is).
+4. Run injection script with updated JSON.
+5. Delete temporary JSON.
+
+**Derive `<slug>`** from the feature the user named: a few words, lowercased, spaces→hyphens (e.g. "user auth workflow" → `user-auth-workflow`).
 
 ---
 
-## ⛔ Completeness contract (MANDATORY — applies to every model, every run)
+## Before generating (do once per mode)
 
-This is non-negotiable and overrides any instinct to summarise:
+- Glance at the repo for real stack details, existing API/endpoint style, data layer, React component conventions, naming patterns. Reuse them.
+- Do NOT do web research. Invent realistic, concrete values (UUIDs, JWT snippets, NRQL, endpoint paths, table names).
+- If something is genuinely unknown, make a sensible, explicitly-stated assumption in Section 1 AND raise it as an Open Question in Section 10 so the user can correct it next pass.
 
-1. **Every section 0–10 must be fully populated** with concrete, feature-specific content. An empty, "TBD", or one-line section is a failure.
-2. **No placeholders.** Banned literal strings anywhere in the output: `TODO`, `TBD`, `[PLACEHOLDER]`, `FIXME`, `...`, `<!-- rest here -->`, `lorem ipsum`, `XXX`, `same as above`. If you don't know a value, invent a realistic one and note the assumption.
-3. **Minimum substance per section:** every section has at least one fully-rendered table, list, diagram, or code block as specified below — never just prose.
+---
+
+## ⛔ Completeness contract (MANDATORY)
+
+1. **Every section 0–10 must be fully populated** with concrete, feature-specific content. No empty sections, no "TBD", no one-liners.
+2. **No placeholder strings** in output: `TODO`, `TBD`, `[PLACEHOLDER]`, `FIXME`, `...`, `lorem ipsum`, `XXX`. If you don't know a value, invent a realistic one and note the assumption.
+3. **Minimum substance per section:** every section has at least one fully-rendered table, list, diagram, or code block.
 4. **Every diagram is valid Mermaid** for its declared type and renders without error.
-5. **No open-ended hand-waving.** Phrases like "etc.", "and so on", "could be extended", "various", "as needed", "to be decided" are forbidden in the body. If a decision is genuinely open, it goes in Section 10 (Open Questions) as a *specific* question with options — not as vague body text.
-6. **Concrete over generic.** Tie content to this feature and this repo's real components/endpoints/tables, not generic examples.
+5. **No vague phrases:** "etc.", "as needed", "various", "could", "TBD", undefined acronyms, unquantified NFRs are forbidden in body text. Ambiguities go in Section 10 (Open Questions) as specific questions with proposed defaults.
+6. **Concrete over generic:** tie content to this feature and this repo's real components/endpoints/tables, not examples.
 
 ---
 
-## Output: ONE self-contained HTML file
+## Section content requirements (generate these as clean HTML fragments)
 
-Single page, left-hand sticky **section navigation** that scroll-jumps to each section. Every diagram is **Mermaid** (rendered via the Mermaid CDN). All other text is hand-written HTML. No build step, no assets beyond the Mermaid CDN. Must open in a browser with zero setup.
+Generate each section's content as a standalone HTML fragment (no `<section>` wrapper, no `<h2>`, those are in the template). The fragment is injected into `{{SECTION_N_CONTENT}}`.
 
-### Sections (follow this EXACT order and numbering — all are mandatory)
+Each section must contain:
 
-**0. Document Control (status + revision log)**
-- A status banner showing: current **Status** (lifecycle above), **Version**, **Feature**, **Last updated** (date), and **Author model** (the model name producing this pass).
-- A **Revision Log** table: Version, Date, Summary of change, Driven by (e.g. "initial draft" / "user feedback: <short note>"). One row per pass; never delete prior rows.
-- A one-line **Approval gate** statement: "This document must reach APPROVED status before implementation begins."
+**Section 0 (Document Control)** — *Template supplies status banner and approval gate; you supply revision log rows only.*
+- Revision log: a series of `<tr>` rows (no `<table>` wrapper). Each row: Version, Date, Summary of change, Driven by.
+- Inject into `{{REVISION_LOG_ROWS}}`.
+- Example row: `<tr><td>v1</td><td>2026-07-11</td><td>Initial draft</td><td>First generation</td></tr>`
 
-**1. Overview — Feature, Audience, Dependencies**
-- Feature name + one-paragraph summary and the business problem it solves.
-- **Audience / Actors**: end users, internal roles, calling systems (as a table).
-- **Dependencies**: upstream/downstream systems, third-party services, shared libs, data sources, infra (with versions where it matters) as a table.
-- **Assumptions** and **Out of scope** bullet lists.
-- A small "at a glance" table: Owner, Repos touched (.NET API / React), Data store, Auth method, Environments.
+**Section 1 (Overview)** — Feature name, summary, audience/actors, dependencies, assumptions, out-of-scope, at-a-glance table.
+- Use `.card` wrapper for grouping.
+- Actors table: Name/Role, Responsibility, System(s) they interact with.
+- Dependencies table: System, Purpose, Version/Location, Protocol.
+- At-a-glance table: Owner, Repos touched, Data store, Auth method, Environments.
 
-**2. Use Cases & Scope**
-- Mermaid use-case style diagram (use a `flowchart` with actor→use-case→system-boundary layout, since Mermaid has no native use-case diagram).
-- Functional requirements list (each requirement uniquely IDed, e.g. FR1) + Non-functional requirements (performance, security, availability, compliance) as a table with measurable targets — no vague targets.
+**Section 2 (Use Cases & Scope)** — Use-case flowchart, functional requirements table, non-functional requirements table.
+- Mermaid flowchart (actor → use-case → system boundary).
+- Functional requirements: ID (FR1), Requirement, Acceptance criteria.
+- Non-functional requirements: Attribute (Performance, Security, etc.), Measurable target.
 
-**3. C4 — Context & Containers**
-- C4 **Level 1 (System Context)** and **Level 2 (Container)** diagrams using Mermaid `C4Context` / `C4Container` syntax.
-- Show the React SPA, the .NET API, the database, Docker boundaries, and external systems (New Relic, ServiceNow), with the protocol labelled on each relationship (HTTPS/REST, SQL, async/webhook).
+**Section 3 (C4)** — C4 Context and Container diagrams.
+- Mermaid C4Context showing system in the wider landscape.
+- Mermaid C4Container showing internal components.
+- Label all relationships with protocol (HTTPS/REST, SQL, async/webhook).
 
-**4. Domain & Data Model**
-- Mermaid `classDiagram` for the .NET domain model.
-- Mermaid `erDiagram` (tables, PK/FK, key columns) + an explicit migration-impact note (state "none" if truly unchanged, and why).
+**Section 4 (Domain & Data Model)** — Mermaid classDiagram, Mermaid erDiagram, migration impact note.
+- Domain model: classes, relationships, key attributes.
+- Entity-relationship diagram: tables, PK/FK, column types.
+- State explicitly: "none" (and why) or the specific schema changes.
 
-**5. API Design (.NET)**
-- A table of endpoints: Method, Route, Auth, Request, Response, Status codes.
-- A collapsible `<details>` block containing an **OpenAPI 3.0 YAML** snippet for the main endpoints.
-- One Mermaid `sequenceDiagram` for the primary endpoint: React → API → domain → DB → external systems, including the auth/token exchange.
+**Section 5 (API Design)** — Endpoint table, OpenAPI snippet in `<details>`, sequence diagram.
+- Endpoints table: Method, Route, Auth, Request, Response, Status codes.
+- OpenAPI 3.0 YAML inside `<details><summary>OpenAPI Spec</summary><pre>...</pre></details>`.
+- Mermaid sequenceDiagram: React → API → domain → DB → external systems (include token exchange).
 
-**6. UI/UX (React)**
-- Mermaid `flowchart` user-flow (screen → screen).
-- Component hierarchy (Mermaid `flowchart` or `graph`) mapping React components to the API endpoints they call.
-- Lightweight ASCII/HTML wireframes for each new/changed screen inside bordered boxes.
+**Section 6 (UI/UX)** — User-flow flowchart, component hierarchy, lightweight ASCII wireframes.
+- Mermaid flowchart: screen-by-screen user journey.
+- Component hierarchy: Mermaid flowchart mapping React components to API endpoints.
+- Wireframes: ASCII inside bordered boxes (`.card` divs with `<pre>` for ASCII art).
 
-**7. Behaviour — State & Process**
-- Mermaid `stateDiagram-v2` for the core entity lifecycle.
-- Mermaid `flowchart` activity diagram for the main process, including error/retry branches.
+**Section 7 (Behaviour)** — State lifecycle diagram, activity/process diagram.
+- Mermaid stateDiagram-v2: entity states and transitions.
+- Mermaid flowchart: activity diagram for the main process, including error/retry branches.
 
-**8. Deployment — Docker, Terraform, GitLab CI/CD**
-- Mermaid deployment `flowchart`: Docker containers, networks, cloud nodes, environments (dev/stage/prod).
-- A Terraform module/resource outline (file list + key resources) in a `<details>` code block.
-- Mermaid `flowchart` of the GitLab pipeline: build → test → scan → docker build/push → terraform plan/apply → deploy, with gates/approvals marked.
+**Section 8 (Deployment)** — Deployment architecture diagram, Terraform outline, GitLab pipeline diagram.
+- Mermaid deployment flowchart: Docker containers, networks, cloud nodes, environments.
+- Terraform: file list + key resources inside `<details><summary>Terraform Modules</summary><pre>...</pre></details>`.
+- Mermaid pipeline flowchart: build → test → scan → docker → terraform → deploy, with gates.
 
-**9. Monitoring & Custom Alerts (New Relic + ServiceNow)**
-- Golden-signals table (latency, traffic, errors, saturation) for the .NET API and React app, each with the metric source.
-- A **Custom Alerts** table: Alert name, NRQL query, threshold, severity, notification channel.
-- Mermaid `sequenceDiagram` of the incident flow: New Relic alert condition → webhook → ServiceNow incident → on-call/assignment → resolution & close.
-- Suggested dashboard widgets list.
+**Section 9 (Monitoring)** — Golden signals table, custom alerts table, incident flow diagram, dashboard widget list.
+- Golden signals table: Metric, Source, Target/SLO.
+- Alerts table: Alert name, NRQL query, Threshold, Severity, Notification channel.
+- Mermaid sequenceDiagram: New Relic alert → webhook → ServiceNow → on-call → resolution.
+- Dashboard widgets: a bulleted list.
 
-**10. Open Questions, Decisions & Risks**
-- **Open Questions** table: ID, Question, Why it matters, Proposed default, Status (Open / Resolved-in-vN). This is where every ambiguity surfaced during retrospection lands — phrased as a specific question with a recommended answer, never vague.
-- **Decision Log (ADR-style)** table: Decision, Options considered, Choice + rationale, Date.
-- **Risks** table: Risk, Likelihood, Impact, Mitigation.
-- As feedback resolves items across passes, flip their Status to "Resolved in vN" rather than deleting them.
-
----
-
-## 🔍 Self-retrospection (MANDATORY — run before saving, every pass)
-
-After drafting/editing, re-read the entire file end-to-end as a critical reviewer and fix issues in place. Cap at 3 internal passes. Check and resolve:
-
-- **Completeness:** every section 0–10 filled to the contract above; no banned placeholder strings present (grep your own output).
-- **Ambiguity sweep:** find every vague/open-ended phrase ("etc.", "as needed", "various", "could", "TBD", undefined acronyms, unquantified NFRs). Either make it concrete, or convert it into a specific Open Question (Section 10) with a proposed default.
-- **Open-ended features:** any capability described without inputs, outputs, states, and edge/error behaviour is incomplete — specify them or log a precise Open Question.
-- **Consistency:** entity/endpoint/component names match across sections; the Revision Log version matches the banner; the status reflects the lifecycle.
-- **Mermaid validity:** each block uses correct syntax for its type.
-
-Briefly report (to the user, in chat — not in the file) what the retrospection found and fixed this pass, and list any Open Questions you need the user to answer to proceed.
+**Section 10 (Open Questions, Decisions & Risks)** — Open questions table, ADR (decision log) table, risks table.
+- Open questions: ID, Question, Why it matters, Proposed default, Status (Open / Resolved-in-vN).
+- Decisions: Decision, Options considered, Choice + rationale, Date.
+- Risks: Risk, Likelihood, Impact, Mitigation.
 
 ---
 
-## Styling & HTML structure (FIXED — reproduce this contract exactly; do not restyle or restructure)
+## JSON Output Format (For Generation)
 
-- Clean enterprise look: light background (`#f8fafc`), white cards `border-radius: 12px` + subtle shadow, a single accent CSS variable (`--accent: #2563eb`), system-ui font.
-- Fixed/sticky left nav (`#toc`) listing sections **0–10** as anchor links that highlight on scroll (IntersectionObserver scrollspy); main content `max-width: 1100px`. Nav collapses above content below `900px`.
-- Each section is `<section id="s0..s10">` with a numbered `<h2>` carrying a left accent border and `scroll-margin-top` so anchor jumps aren't hidden.
-- **Status banner** at the top of Section 0: coloured by status — grey (`#64748b`) for DRAFT, amber (`#f59e0b`) for IN REVIEW, green (`#16a34a`) for APPROVED. Shows Status · Version · Last updated · Author model.
-- Tables: striped rows, padding, horizontal scroll on small screens (`.table-wrap { overflow-x:auto }`).
-- `.mermaid` blocks centered on a white card with padding.
-- Overflow safety (verbatim):
-```css
-section, .card, td, th { overflow-wrap: break-word; word-break: break-word; }
-pre, code { white-space: pre-wrap; word-break: break-all; max-width: 100%; }
-.table-wrap { overflow-x: auto; }
+**You generate this structure and write it to `arch-<slug>.json`:**
+
+```json
+{
+  "title": "Feature name (string)",
+  "summary": "One-sentence summary (string)",
+  "stack": "Stack badges separated by · (string)",
+  "status": "DRAFT|IN REVIEW|APPROVED — READY FOR IMPLEMENTATION (string)",
+  "statusClass": "draft|review|approved (string, lowercase)",
+  "version": "v1, v2, etc. (string)",
+  "lastUpdated": "2026-07-11 (date string)",
+  "authorModel": "the model name producing this pass (string)",
+  "revisionLog": [
+    {
+      "version": "v1",
+      "date": "2026-07-11",
+      "summary": "Initial draft...",
+      "drivenBy": "First generation"
+    }
+  ],
+  "sections": {
+    "0": "<tr><td>v1</td><td>...</td></tr>... (revision log rows only)",
+    "1": "<div class='card'>...</div>... (full section 1 HTML)",
+    "2": "... (full section 2 HTML)",
+    ... (sections 0-10, each is complete HTML for that section)
+    "10": "... (full section 10 HTML)"
+  }
+}
 ```
 
-### HTML skeleton (preserve structure, IDs, and order; fill EVERY section completely)
+**Important:** Section HTML must be clean fragments (no `<section>` wrapper, no `<h2>`, no outer `<html>`). The injection script wraps them in the template.
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Architecture — FEATURE</title>
-  <style>/* full inline CSS: theme + sticky nav + status banner + tables + overflow rules */</style>
-</head>
-<body>
-  <nav id="toc"><!-- brand + links to #s0 .. #s10, scrollspy highlights active --></nav>
-  <main>
-    <header>
-      <h1>🏛️ Architecture — FEATURE</h1>
-      <p class="subtitle">ONE-LINE SUMMARY · STACK BADGES</p>
-    </header>
-
-    <section id="s0"><h2>0 · Document Control</h2><!-- status banner + revision log + approval gate --></section>
-    <section id="s1"><h2>1 · Overview — Feature, Audience &amp; Dependencies</h2><!-- ... --></section>
-    <section id="s2"><h2>2 · Use Cases &amp; Scope</h2><!-- mermaid + req tables --></section>
-    <section id="s3"><h2>3 · C4 — Context &amp; Containers</h2><!-- C4Context + C4Container --></section>
-    <section id="s4"><h2>4 · Domain &amp; Data Model</h2><!-- classDiagram + erDiagram --></section>
-    <section id="s5"><h2>5 · API Design (.NET)</h2><!-- table + OpenAPI details + sequenceDiagram --></section>
-    <section id="s6"><h2>6 · UI/UX (React)</h2><!-- user flow + component map + wireframes --></section>
-    <section id="s7"><h2>7 · Behaviour — State &amp; Process</h2><!-- stateDiagram + activity --></section>
-    <section id="s8"><h2>8 · Deployment — Docker, Terraform, GitLab</h2><!-- deploy + tf + pipeline --></section>
-    <section id="s9"><h2>9 · Monitoring &amp; Custom Alerts</h2><!-- golden signals + alerts + incident flow --></section>
-    <section id="s10"><h2>10 · Open Questions, Decisions &amp; Risks</h2><!-- open questions + ADR log + risks --></section>
-  </main>
-
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
-  </script>
-  <script>
-    /* vanilla JS: IntersectionObserver scrollspy highlighting the active #toc link */
-  </script>
-</body>
-</html>
-```
+**Revision log (`sections["0"]`):** Generate only `<tr>` rows (no `<table>` wrapper); the template provides the table.
 
 ---
 
 ## After saving (every run)
 
-Print to chat, in charter style (outcome first, complete sentences, no narration of the generation process):
-1. Filename + full path, current **Version** and **Status**.
-2. A short bullet list of what this pass added/changed (the Revision Log entry).
-3. The **Open Questions** that need the user's input, each with its proposed default so a one-word reply can resolve it.
-4. The exact next step: *"Review and reply with changes to refine (this same file updates in place), or say 'approved' to flip the status to APPROVED — READY FOR IMPLEMENTATION."* Once approved, offer the feature skill to hand the document to the implementation pipeline.
+Print to chat in charter style:
 
-Generate or refine the complete, fully-working HTML now — all sections 0–10 filled with concrete, feature-specific content and valid Mermaid diagrams. No truncation, no shortcuts, no banned placeholder strings.
+1. Filename + full path, current **Version** and **Status**.
+2. A short bullet list of what this pass added/changed (the new Revision Log entry).
+3. The **Open Questions** that need user input, each with its proposed default.
+4. Next step: *"Review and reply with changes to refine, or say 'approved' to flip status to APPROVED — READY FOR IMPLEMENTATION. Once approved, the feature skill will hand the document to the implementation pipeline."*
+
+---
+
+## 🔍 Self-retrospection (MANDATORY, before saving)
+
+Re-read the entire generated file end-to-end:
+
+- **Completeness:** every section 0–10 filled; no banned placeholder strings.
+- **Ambiguity sweep:** find vague phrases ("etc.", "as needed", "various", undefined acronyms, unquantified NFRs). Make them concrete or convert to a specific Open Question (Section 10) with a proposed default.
+- **Open-ended features:** any capability without inputs, outputs, states, error behavior is incomplete. Specify or log a precise Open Question.
+- **Consistency:** entity/endpoint/component names match across all sections; version in banner matches revision log; status reflects lifecycle.
+- **Mermaid validity:** each block uses correct syntax for its type; no syntax errors.
+
+Report what was found and fixed, and list any Open Questions the user must answer.
+
+---
+
+## Implementation
+
+1. **Check if `arch-<slug>.html` already exists** in the working directory.
+
+2. **If Mode A (first draft):**
+   - Research the repo: stack, API patterns, conventions.
+   - Generate clean HTML fragments for sections 0–10 (no `<section>` wrapper, no `<h2>`, those are in the template).
+   - Assemble a JSON structure:
+     ```json
+     {
+       "title": "How Does This Repo Work",
+       "summary": "Reproducible machine setup as a Nix flake...",
+       "stack": "Nix · Bash · Home Manager",
+       "status": "DRAFT",
+       "statusClass": "draft",
+       "version": "v1",
+       "lastUpdated": "2026-07-11",
+       "authorModel": "the model name producing this pass",
+       "revisionLog": [
+         { "version": "v1", "date": "2026-07-11", "summary": "Initial draft...", "drivenBy": "First generation" }
+       ],
+       "sections": {
+         "0": "<tr><td>...</td></tr>...",
+         "1": "<div class='card'>...</div>...",
+         "2": "...",
+         ... (sections 0-10 as HTML fragments)
+       }
+     }
+     ```
+   - Write JSON to `arch-<slug>.json`.
+   - Run: `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html`
+   - Delete `arch-<slug>.json`.
+
+3. **If Mode B (refinement):**
+   - Read existing `arch-<slug>.html` to extract metadata (version, status, revision log).
+   - Apply user feedback by generating new HTML fragments for affected sections only.
+   - Increment version (v1 → v2).
+   - Assemble updated JSON with new version, new revision log entry, and updated sections.
+   - Write JSON to `arch-<slug>.json`.
+   - Run injection script.
+   - Delete `arch-<slug>.json`.
+
+4. **Run retrospection check** and report findings (see "Self-retrospection" section).
+
+5. **Print outcomes in charter style** (see "After saving" section).

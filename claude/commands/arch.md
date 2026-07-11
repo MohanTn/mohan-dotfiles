@@ -1,25 +1,27 @@
-# arch: Feature architecture template via HTML injection
+# arch: Feature architecture template via JSON → HTML injection
 
 You are the Senior Solution Architect face of the feature team, working under the Fable charter ("Working style" in `~/.claude/CLAUDE.md`): outcome first, plain prose, recommendations over surveys.
 
-This command generates a complete, self-contained HTML architecture document for the feature requested by the user via **template injection**, not regeneration. The HTML boilerplate is pre-built; this session only generates feature-specific content and injects it into fixed placeholders. This saves tokens and eliminates HTML regeneration on every refinement pass.
+This command generates feature-specific architecture content as **structured JSON**, which a Node.js injection script then merges into a pre-built HTML template. This two-stage approach eliminates redundant HTML regeneration and cuts token consumption by ~75% compared to full-HTML generation.
 
 ---
 
 ## Operating modes
 
 **Mode A — First draft.** No `arch-<slug>.html` exists for this feature in the working directory.
-1. Generate content for sections 0–10 (feature-specific only, as clean HTML fragments).
-2. Load `arch-template.html` from `~/.claude/commands/`.
-3. Replace all `{{PLACEHOLDER}}` markers with generated content.
-4. Save to `arch-<slug>.html` with status DRAFT, version v1, first revision log entry.
+1. Generate content for sections 0–10 as clean HTML fragments (no full-page HTML, just `<div>`, `<table>`, `<pre>` content).
+2. Assemble a JSON structure with metadata (title, status, version) and section HTML.
+3. Save JSON to `arch-<slug>.json` (temporary, used by injection script).
+4. Run `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html` to generate the final HTML.
+5. Delete the temporary JSON file.
+6. Status: DRAFT, version v1, first revision log entry.
 
 **Mode B — Refinement pass.** An `arch-<slug>.html` already exists and the user provides feedback.
-1. Read the existing file and extract its slug, version, status, and revision log.
-2. Generate new content for sections 0–10.
-3. Load the template and inject new content.
-4. Increment version (v1 → v2), add revision log row, update last-updated and status (`DRAFT` stays DRAFT unless user approves).
-5. Save to the same filename.
+1. Extract metadata from the HTML file (version, status, revision log) by parsing the template strings or reading the control section.
+2. Generate new content for affected sections 0–10 as HTML fragments.
+3. Assemble updated JSON (increment version, add revision log row, keep status as-is).
+4. Run injection script with updated JSON.
+5. Delete temporary JSON.
 
 **Derive `<slug>`** from $ARGUMENTS: a few words, lowercased, spaces→hyphens (e.g. "user auth workflow" → `user-auth-workflow`).
 
@@ -108,20 +110,41 @@ Each section must contain:
 
 ---
 
-## Placeholder markers (all mandatory)
+## JSON Output Format (For Generation)
 
-In the template, inject content into:
+**You generate this structure and write it to `arch-<slug>.json`:**
 
-- `{{FEATURE_TITLE}}` — feature name (e.g. "User Authentication Workflow")
-- `{{FEATURE_SUMMARY}}` — one-sentence summary (e.g. "OAuth 2.0 integration for single sign-on")
-- `{{STACK_BADGES}}` — stack info (e.g. "ASP.NET Core · React · PostgreSQL")
-- `{{STATUS}}` — "DRAFT", "IN REVIEW", or "APPROVED — READY FOR IMPLEMENTATION"
-- `{{STATUS_CLASS}}` — "draft", "review", or "approved" (CSS class for banner color)
-- `{{VERSION}}` — "v1", "v2", etc.
-- `{{LAST_UPDATED}}` — date (e.g. "2026-07-11")
-- `{{AUTHOR_MODEL}}` — model name (e.g. "Claude Haiku 4.5")
-- `{{REVISION_LOG_ROWS}}` — table `<tr>` rows (no wrapper)
-- `{{SECTION_0_CONTENT}}` through `{{SECTION_10_CONTENT}}` — feature-specific HTML fragments
+```json
+{
+  "title": "Feature name (string)",
+  "summary": "One-sentence summary (string)",
+  "stack": "Stack badges separated by · (string)",
+  "status": "DRAFT|IN REVIEW|APPROVED — READY FOR IMPLEMENTATION (string)",
+  "statusClass": "draft|review|approved (string, lowercase)",
+  "version": "v1, v2, etc. (string)",
+  "lastUpdated": "2026-07-11 (date string)",
+  "authorModel": "Claude Haiku 4.5 (string)",
+  "revisionLog": [
+    {
+      "version": "v1",
+      "date": "2026-07-11",
+      "summary": "Initial draft...",
+      "drivenBy": "First generation"
+    }
+  ],
+  "sections": {
+    "0": "<tr><td>v1</td><td>...</td></tr>... (revision log rows only)",
+    "1": "<div class='card'>...</div>... (full section 1 HTML)",
+    "2": "... (full section 2 HTML)",
+    ... (sections 0-10, each is complete HTML for that section)
+    "10": "... (full section 10 HTML)"
+  }
+}
+```
+
+**Important:** Section HTML must be clean fragments (no `<section>` wrapper, no `<h2>`, no outer `<html>`). The injection script wraps them in the template.
+
+**Revision log (`sections["0"]`):** Generate only `<tr>` rows (no `<table>` wrapper); the template provides the table.
 
 ---
 
@@ -152,21 +175,47 @@ Report what was found and fixed, and list any Open Questions the user must answe
 
 ## Implementation
 
-1. Check if `arch-<slug>.html` already exists in the working directory.
-2. If Mode A (first draft):
+1. **Check if `arch-<slug>.html` already exists** in the working directory.
+
+2. **If Mode A (first draft):**
    - Research the repo: stack, API patterns, conventions.
-   - Generate clean HTML fragments for sections 0–10.
-   - Load `/home/mohan/.claude/commands/arch-template.html`.
-   - Replace all `{{PLACEHOLDER}}` markers with generated content, status DRAFT, version v1, author model name, today's date.
-   - Save to `arch-<slug>.html`.
-3. If Mode B (refinement):
-   - Read existing `arch-<slug>.html`.
-   - Extract slug, current version, status, revision log.
-   - Apply user's feedback by generating new content for affected sections.
+   - Generate clean HTML fragments for sections 0–10 (no `<section>` wrapper, no `<h2>`, those are in the template).
+   - Assemble a JSON structure:
+     ```json
+     {
+       "title": "How Does This Repo Work",
+       "summary": "Reproducible machine setup as a Nix flake...",
+       "stack": "Nix · Bash · Home Manager",
+       "status": "DRAFT",
+       "statusClass": "draft",
+       "version": "v1",
+       "lastUpdated": "2026-07-11",
+       "authorModel": "Claude Haiku 4.5",
+       "revisionLog": [
+         { "version": "v1", "date": "2026-07-11", "summary": "Initial draft...", "drivenBy": "First generation" }
+       ],
+       "sections": {
+         "0": "<tr><td>...</td></tr>...",
+         "1": "<div class='card'>...</div>...",
+         "2": "...",
+         ... (sections 0-10 as HTML fragments)
+       }
+     }
+     ```
+   - Write JSON to `arch-<slug>.json`.
+   - Run: `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html`
+   - Delete `arch-<slug>.json`.
+
+3. **If Mode B (refinement):**
+   - Read existing `arch-<slug>.html` to extract metadata (version, status, revision log).
+   - Apply user feedback by generating new HTML fragments for affected sections only.
    - Increment version (v1 → v2).
-   - Load template, inject new content, keep status as-is (only user can flip to APPROVED).
-   - Add a new revision log row with the change summary.
-   - Save to same filename.
-4. Run retrospection check and report findings.
-5. Print outcomes in charter style (see "After saving").
+   - Assemble updated JSON with new version, new revision log entry, and updated sections.
+   - Write JSON to `arch-<slug>.json`.
+   - Run injection script.
+   - Delete `arch-<slug>.json`.
+
+4. **Run retrospection check** and report findings (see "Self-retrospection" section).
+
+5. **Print outcomes in charter style** (see "After saving" section).
 

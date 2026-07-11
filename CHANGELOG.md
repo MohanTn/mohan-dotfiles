@@ -4,7 +4,19 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Removed
+
+- Removed the `/explore-topic` and `/ui-mock` commands (`claude/commands/`) and their Copilot skill ports (`copilot/skills/`): both generated large, mostly-fixed HTML/CSS/JS boilerplate on every run, and `/arch` now covers the same ground.
+
+### Added
+
+- Added `agents/`, a new common layer for content genuinely shared between Claude Code and Copilot CLI (tool-agnostic utility scripts and templates, never prose), linked whole to `~/.agents` by a new `nix/agents.nix` module. `/arch`'s `arch-template.html`, `arch-inject.js`, and `arch-inject.test.js` moved here from `claude/commands/` and `copilot/skills/arch/`, which no longer keep their own copies; both tools' instruction files now call the single `~/.agents/skills/arch/arch-inject.js`. `claude/CLAUDE.md`'s port-sync rule and the README now document when something belongs in `agents/` versus staying a tool-specific port.
+
 ### Changed
+
+- Creates `agents/` directory as a shared layer between Claude Code and Copilot CLI for tool-independent artifacts like templates and scripts. Refactors `/arch` command from direct HTML generation to JSON-based template injection (cutting token use by ~75%) while removing the deprecated `/explore-topic` and `/ui-mock` commands. Adds infrastructure for chrome-devtools-axi by installing Google Chrome on apt systems and providing a Chromium fallback wrapper.
+- Ported `/arch`'s JSON+script template-injection design to Copilot CLI (`copilot/skills/arch/SKILL.md`), which previously used an older prompt that regenerated the full HTML from scratch on every pass. `arch-inject.js`'s template-path argument is now optional (defaults to the file next to the script instead of a hardcoded `~/.claude/commands/` path), so the one shared copy works unmodified from wherever it's deployed.
+- Added `chrome-devtools-axi` to the npm CLI bootstrap in `nix/pi.nix` and a new `axi` zsh wrapper (`zsh/chrome-devtools-axi.zsh`, sourced by `nix/zsh.nix`) that drives a debug Chromium instance as a fallback on machines without Google Chrome. `setup.sh` now installs Google Chrome natively on apt machines (needed because the chrome-devtools-axi browser bridge only finds Chrome at its native `/opt/google/chrome` path), skipping cleanly elsewhere.
 
 - Removes the magic-nix-cache-action step to reduce external dependencies and adds a 5-minute timeout-minutes constraint to the flake-check job to prevent indefinite hangs.
 - Removed three unused npm global packages (Google Gemini CLI, freebuff, mcp-sonar-analysis) and added smart path truncation to the zsh prompt. Long paths now display as "../last/three/dirs" instead of scrolling the prompt off-screen, while short paths display in full.
