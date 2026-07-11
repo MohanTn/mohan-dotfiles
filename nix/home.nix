@@ -13,6 +13,7 @@ in
     ./maintenance.nix
     ./zsh.nix
     ./git.nix
+    ./agents.nix
     ./claude.nix
     ./copilot.nix
     ./nvim.nix

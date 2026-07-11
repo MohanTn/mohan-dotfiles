@@ -44,6 +44,11 @@
 
       source ${../zsh/prompt.zsh}
 
+      # `axi` wrapper for chrome-devtools-axi: uses Google Chrome when
+      # installed (setup.sh handles that on apt machines), otherwise starts a
+      # debug Chromium and points the bridge at it.
+      source ${../zsh/chrome-devtools-axi.zsh}
+
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
       [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

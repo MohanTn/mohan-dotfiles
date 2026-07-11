@@ -126,6 +126,13 @@
             migrate_pre_nix_dotfiles
             [ ! -e "$HOME/.zshrc.local" ]
 
+            echo "-- ensure_google_chrome: skips cleanly without apt-get"
+            out_msg="$(ensure_google_chrome)"
+            case "$out_msg" in
+              *"skipping Google Chrome"*) ;;
+              *) echo "expected apt-less skip message, got: $out_msg" >&2; exit 1 ;;
+            esac
+
             echo "all setup.sh checks passed" > "$out"
             cat "$out"
           '';

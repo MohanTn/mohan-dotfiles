@@ -3,7 +3,9 @@
 #
 #   ./setup.sh          set up a new machine OR apply config changes:
 #                       installs Nix if missing, activates the Home Manager
-#                       flake, sets the login shell to zsh, then audits for
+#                       flake, sets the login shell to zsh, installs Google
+#                       Chrome if missing (apt machines; used by the
+#                       chrome-devtools-axi browser bridge), then audits for
 #                       drift. Files changed outside Nix are reverted (the
 #                       edited copy is kept next to them as *.hm-backup). On
 #                       first adoption, any pre-existing ~/.zshrc or
@@ -40,7 +42,8 @@ usage: ${0##*/} [command]
 
   (no command)  set up a new machine or apply config changes: installs Nix
                 if missing, activates the Home Manager flake, sets the login
-                shell to zsh, then audits for drift. Files changed outside
+                shell to zsh, installs Google Chrome if missing (apt
+                machines), then audits for drift. Files changed outside
                 Nix are reverted (edited copy kept as *.hm-backup).
   doctor        audit only: verify every managed config is still served from
                 the Nix store. Exits 1 on drift, changes nothing.
@@ -114,6 +117,39 @@ migrate_pre_nix_dotfiles() {
       cat "$f"
     } >> "$local_file"
   done
+}
+
+# The chrome-devtools-axi browser bridge discovers Chrome's stable channel
+# only at its native location (/opt/google/chrome/chrome), so a Nix-store
+# Chrome would not be found. Install Google's .deb natively instead; it also
+# registers Google's apt repo, so the browser self-updates from then on,
+# matching how Claude Code and the npm CLIs are handled. Machines where this
+# is impossible are skipped with a note; the `axi` wrapper in
+# zsh/chrome-devtools-axi.zsh falls back to Chromium there.
+ensure_google_chrome() {
+  if [ -x /opt/google/chrome/chrome ]; then
+    info "google chrome already installed"
+    return 0
+  fi
+  if ! command -v apt-get >/dev/null 2>&1 || ! command -v dpkg >/dev/null 2>&1; then
+    info "no apt-get on this system; skipping Google Chrome (chrome-devtools-axi falls back to Chromium via the axi wrapper)"
+    return 0
+  fi
+  if [ "$(dpkg --print-architecture)" != "amd64" ]; then
+    info "Google ships the Chrome .deb only for amd64; skipping install on $(dpkg --print-architecture)"
+    return 0
+  fi
+  local tmpdir deb
+  tmpdir="$(mktemp -d)"
+  deb="$tmpdir/google-chrome-stable_current_amd64.deb"
+  log "installing Google Chrome for the chrome-devtools-axi browser bridge (may prompt for your password)"
+  if curl -fsSL -o "$deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && sudo apt-get install -y "$deb"; then
+    info "google chrome installed ($(/opt/google/chrome/chrome --version 2>/dev/null || echo 'version check failed'))"
+  else
+    warn "Google Chrome install failed; chrome-devtools-axi will fall back to Chromium via the axi wrapper"
+  fi
+  rm -rf "$tmpdir"
 }
 
 ensure_login_shell() {
@@ -199,6 +235,7 @@ apply() {
   migrate_pre_nix_dotfiles
   switch
   ensure_login_shell
+  ensure_google_chrome
   doctor
   reminders
 }

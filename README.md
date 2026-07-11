@@ -5,7 +5,9 @@ Reproducible machine setup as a Nix flake: Claude Code config, Copilot CLI hooks
 ```
 flake.nix     inputs (pinned nixpkgs + home-manager) and CI checks
 nix/          one Home Manager module per concern:
-              packages, zsh, git, claude, copilot, nvim, pi
+              packages, zsh, git, agents, claude, copilot, nvim, pi
+agents/       ~/.agents (common layer: tool-agnostic utility scripts/templates,
+              e.g. /arch's HTML template + injection script; no prose lives here)
 claude/       ~/.claude/{settings.json,CLAUDE.md,hooks,skills,commands,agents,statusline-usage.py}
 copilot/      ~/.copilot/{copilot-instructions.md,hooks,agents,skills} (Copilot CLI port of the claude/ config)
 zsh/          prompt.zsh: custom async prompt sourced by nix/zsh.nix
@@ -35,7 +37,7 @@ git clone git@github.com:MohanTn/mohan-dotfiles.git ~/REPO/mohan-dotfiles
 
 **Step 2, `setup-packages.sh`,** asks a yes/no question per optional package and writes the answers to `~/.config/mohan-dotfiles/packages-config.nix` (outside the repo, machine-local, never committed). If you skip this step, `nix/default-packages-config.nix` applies and every optional package is off. Re-run `setup-packages.sh` any time to change the selection, then re-run `setup.sh` to apply it.
 
-**Step 3, `setup.sh`,** installs Nix (Determinate Systems installer) if missing, activates the Home Manager configuration (conflicting existing files are kept as `*.hm-backup`), switches the login shell to zsh, and finishes with a drift audit. Everything Nix-installed is pinned by `flake.lock`, so every machine gets identical versions.
+**Step 3, `setup.sh`,** installs Nix (Determinate Systems installer) if missing, activates the Home Manager configuration (conflicting existing files are kept as `*.hm-backup`), switches the login shell to zsh, installs Google Chrome if missing (apt machines only: the chrome-devtools-axi browser bridge finds Chrome solely at its native `/opt/google/chrome` path, and Google's .deb registers the apt repo so the browser self-updates), and finishes with a drift audit. Everything Nix-installed is pinned by `flake.lock`, so every machine gets identical versions. On machines without Google Chrome, the `axi` zsh wrapper (`zsh/chrome-devtools-axi.zsh`) falls back to driving a debug Chromium.
 
 ### Where things are configured
 
@@ -69,6 +71,12 @@ To add a new non-secret environment variable for good, add it to the `home.sessi
 
 Edit `zsh/prompt.zsh` directly (plain zsh, no Nix escaping needed) and re-run `./setup.sh` to change it.
 
+## Common layer (`agents/`)
+
+`agents/` (linked whole to `~/.agents` by `nix/agents.nix`) holds content genuinely shared across Claude Code, Copilot CLI, and Pi, with zero tool-specific wording: utility scripts and templates, not prose. Today that's just `agents/skills/arch/` (`arch-template.html`, `arch-inject.js`, `arch-inject.test.js`), the HTML template and Node.js injection script behind both `claude/commands/arch.md` and `copilot/skills/arch/SKILL.md` — each tool's instruction file generates a small JSON payload and calls `~/.agents/skills/arch/arch-inject.js` on it, so the template/script exist in exactly one place instead of being copy-pasted per tool.
+
+Instruction prose (`arch.md`, `SKILL.md`, the charter files, agent personas) stays in each tool's own directory even where it's largely similar: Claude Code and Copilot CLI expect config at fixed per-tool paths with slightly different conventions (`$ARGUMENTS` vs. natural phrasing, `tools:` frontmatter syntax, `SendMessage` vs. `delegate`), and there's no runtime mechanism here for one tool to include another's file. Only add something to `agents/` when it is a real, executable/renderable artifact with no tool-specific content, not a shortcut for "these two files look similar."
+
 ## Pi agent
 
 `pi/agent/extensions/` holds two extensions for the [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent`), symlinked into `~/.pi/agent/extensions/` by the Nix flake:
@@ -85,7 +93,7 @@ cd pi/agent/extensions/pipeline-panel && npm install && npm test
 
 ## Copilot CLI
 
-Besides the hooks below, `nix/copilot.nix` links three more Copilot ports of the Claude config: `copilot/copilot-instructions.md` → `~/.copilot/copilot-instructions.md` (global user instructions: the same fundamentals, Fable-charter working style, and feature-team workflow as `claude/CLAUDE.md`), `copilot/agents/` → `~/.copilot/agents` (the five feature-team custom agents as `*.agent.md`, selectable with `/agent` or delegated as subagents), and `copilot/skills/` → `~/.copilot/skills` (personal-skill ports of the `claude/commands` prompts: `feature`, `arch`, `explore-topic`, `ui-mock`; Copilot has no custom slash commands, so they trigger by name in a prompt). Keep these in sync with their `claude/` counterparts when one side changes.
+Besides the hooks below, `nix/copilot.nix` links three more Copilot ports of the Claude config: `copilot/copilot-instructions.md` → `~/.copilot/copilot-instructions.md` (global user instructions: the same fundamentals, Fable-charter working style, and feature-team workflow as `claude/CLAUDE.md`), `copilot/agents/` → `~/.copilot/agents` (the five feature-team custom agents as `*.agent.md`, selectable with `/agent` or delegated as subagents), and `copilot/skills/` → `~/.copilot/skills` (personal-skill ports of the `claude/commands` prompts: `feature` and `arch`; Copilot has no custom slash commands, so they trigger by name in a prompt). `arch`'s HTML template and injection script are not duplicated here at all; both this skill and Claude's `/arch` command call the single copy at `~/.agents/skills/arch/` (see "Common layer" above). Keep the prose in sync with the `claude/` counterparts when one side changes.
 
 ### Hooks
 
