@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Added
 
+- Introduces `aiOverview` field for single-source-of-truth implementation summaries and interactive `openQuestions` table that users can answer and copy back to Claude Code for refinement passes, reducing narrative duplication across sections.
 - The changes add two new Copilot hooks that enforce deterministic behavior for scaffold-generated code: a soft nudge after `scaffold generate` if blocks remain unresolved, and a hard block at stop time if any are unresolved. The arch template gains maximize/minimize toggle with keyboard shortcuts and backdrop overlay for better diagram viewing. Both hooks fail open when scaffold isn't installed.
 - Added `agents/`, a new common layer for content genuinely shared between Claude Code and Copilot CLI (tool-agnostic utility scripts and templates, never prose), linked whole to `~/.agents` by a new `nix/agents.nix` module. `/arch`'s `arch-template.html`, `arch-inject.js`, and `arch-inject.test.js` moved here from `claude/commands/` and `copilot/skills/arch/`, which no longer keep their own copies; both tools' instruction files now call the single `~/.agents/skills/arch/arch-inject.js`. `claude/CLAUDE.md`'s port-sync rule and the README now document when something belongs in `agents/` versus staying a tool-specific port.
 

@@ -51,6 +51,7 @@ The AI generates a file like `arch-feature.json`:
   "version": "v1",
   "lastUpdated": "2026-07-11",
   "authorModel": "Claude Haiku 4.5",
+  "aiOverview": "<p>Single condensed summary of what will be implemented — the only place the narrative is stated in full.</p>",
   "revisionLog": [
     {
       "version": "v1",
@@ -59,12 +60,21 @@ The AI generates a file like `arch-feature.json`:
       "drivenBy": "First generation"
     }
   ],
+  "openQuestions": [
+    {
+      "id": "OQ1",
+      "question": "Should tokens be revocable server-side?",
+      "whyItMatters": "Affects logout and session-kill UX",
+      "proposedDefault": "Yes, via a revocation list",
+      "status": "Open"
+    }
+  ],
   "sections": {
     "0": "<tr><td>v1</td><td>2026-07-11</td><td>Initial draft...</td><td>First generation</td></tr>",
     "1": "<div class='card'><h3>Feature Summary</h3><p>...</p></div>...",
     "2": "...",
     ... (sections 0-10)
-    "10": "..."
+    "10": "... (Decisions/ADR + Risks tables only; Open Questions render from openQuestions above)"
   }
 }
 ```
@@ -78,9 +88,9 @@ Output: `arch-feature.html` (fully rendered, ready to share)
 
 ## Files
 
-- **arch-template.html** — Pre-built HTML template with `{{PLACEHOLDER}}` markers for content injection: sticky left-hand table of contents with scrollspy highlighting, a status banner colored by lifecycle stage, card/table styling, and Mermaid diagram rendering.
-- **arch-inject.js** — Node.js script that reads JSON and injects content into the template. Handles HTML escaping and placeholder replacement; the template path is optional and defaults to `arch-template.html` next to the script.
-- **arch-inject.test.js** — Unit tests for the injection script and template contract. Run with `node --test agents/skills/arch/arch-inject.test.js`. Covers HTML escaping, revision log rendering, placeholder completeness, and that section HTML is injected raw (not escaped) while metadata is escaped.
+- **arch-template.html** — Pre-built HTML template with `{{PLACEHOLDER}}` markers for content injection: sticky left-hand table of contents with scrollspy highlighting, a status banner colored by lifecycle stage, a highlighted AI Overview card at the top, card/table styling, an interactive Open Questions table (per-question answer textarea plus a "Copy Q&A for Claude Code" button that copies each question and its typed answer to the clipboard), and Mermaid diagram rendering.
+- **arch-inject.js** — Node.js script that reads JSON and injects content into the template. Handles HTML escaping and placeholder replacement (including the `aiOverview` card and the `openQuestions` interactive rows); the template path is optional and defaults to `arch-template.html` next to the script.
+- **arch-inject.test.js** — Unit tests for the injection script and template contract. Run with `node --test agents/skills/arch/arch-inject.test.js`. Covers HTML escaping, revision log and open-questions rendering, placeholder completeness, and that section/overview HTML is injected raw (not escaped) while metadata is escaped.
 
 The instruction files that drive generation, `claude/commands/arch.md` (Claude Code) and `copilot/skills/arch/SKILL.md` (Copilot CLI), stay in their own tool's directory: they're prose, not shared boilerplate, and differ slightly in voice and path references (`~/.claude/CLAUDE.md` vs `~/.copilot/copilot-instructions.md`, "$ARGUMENTS" vs "the feature the user named"). Both point at this folder's script and template by the same fixed `~/.agents/skills/arch/` path.
 

@@ -18,8 +18,12 @@
  *     "version": "v1",
  *     "lastUpdated": "2026-07-11",
  *     "authorModel": "Claude Haiku 4.5",
+ *     "aiOverview": "<p>Single condensed summary of what will be implemented (HTML fragment).</p>",
  *     "revisionLog": [
  *       { "version": "v1", "date": "2026-07-11", "summary": "Initial draft...", "drivenBy": "First generation" }
+ *     ],
+ *     "openQuestions": [
+ *       { "id": "OQ1", "question": "...", "whyItMatters": "...", "proposedDefault": "...", "status": "Open" }
  *     ],
  *     "sections": {
  *       "0": "<tr><td>...</td></tr>...",
@@ -67,6 +71,12 @@ function buildRevisionLogHtml(entries) {
     .join('\n');
 }
 
+function buildOpenQuestionsHtml(entries) {
+  return entries
+    .map(entry => `<tr><td>${escapeHtml(entry.id)}</td><td>${escapeHtml(entry.question)}</td><td>${escapeHtml(entry.whyItMatters)}</td><td>${escapeHtml(entry.proposedDefault)}</td><td>${escapeHtml(entry.status)}</td><td><textarea class="oq-answer" rows="2" placeholder="Type your answer…"></textarea></td></tr>`)
+    .join('\n');
+}
+
 function injectContent(template, config) {
   let html = template;
 
@@ -88,8 +98,14 @@ function injectContent(template, config) {
   put(/{{LAST_UPDATED}}/g, escapeHtml(config.lastUpdated));
   put(/{{AUTHOR_MODEL}}/g, escapeHtml(config.authorModel));
 
+  // Replace AI overview (raw HTML, assumed safe from input, same as sections)
+  put(/{{AI_OVERVIEW_CONTENT}}/g, config.aiOverview || '');
+
   // Replace revision log (raw HTML, already escaped in input)
   put(/{{REVISION_LOG_ROWS}}/g, buildRevisionLogHtml(config.revisionLog));
+
+  // Replace open questions (raw HTML; entry fields are escaped, textarea is static markup)
+  put(/{{OPEN_QUESTIONS_ROWS}}/g, buildOpenQuestionsHtml(config.openQuestions || []));
 
   // Replace section content (raw HTML, assumed safe from input)
   // IMPORTANT: Section content MUST include Mermaid diagrams wrapped in <div class="mermaid">
@@ -153,4 +169,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { escapeHtml, buildRevisionLogHtml, injectContent, loadTemplate };
+module.exports = { escapeHtml, buildRevisionLogHtml, buildOpenQuestionsHtml, injectContent, loadTemplate };

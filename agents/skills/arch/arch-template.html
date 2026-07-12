@@ -362,6 +362,50 @@
         margin-top: 2rem;
       }
 
+      .ai-overview-card {
+        border-left: 4px solid var(--accent);
+        background: rgba(37, 99, 235, 0.04);
+      }
+
+      .oq-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1rem;
+      }
+
+      .copy-qa-btn {
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .copy-qa-btn:hover {
+        opacity: 0.9;
+      }
+
+      .copy-qa-btn.copied {
+        background: var(--status-approved);
+      }
+
+      textarea.oq-answer {
+        width: 100%;
+        min-width: 220px;
+        min-height: 3rem;
+        padding: 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        color: var(--text);
+        resize: vertical;
+      }
+
       section,
       .card {
         overflow-wrap: break-word;
@@ -405,6 +449,7 @@
   <body>
     <nav id="toc">
       <span class="brand">🏛️ Architecture</span>
+      <a href="#s-overview">★ AI Overview</a>
       <a href="#s0">0 · Document Control</a>
       <a href="#s1">1 · Overview</a>
       <a href="#s2">2 · Use Cases &amp; Scope</a>
@@ -423,6 +468,13 @@
         <h1>🏛️ Architecture — {{FEATURE_TITLE}}</h1>
         <p class="subtitle">{{FEATURE_SUMMARY}} · {{STACK_BADGES}}</p>
       </header>
+
+      <section id="s-overview">
+        <h2>🤖 AI Overview — What Will Be Implemented</h2>
+        <div class="card ai-overview-card">
+          {{AI_OVERVIEW_CONTENT}}
+        </div>
+      </section>
 
       <section id="s0">
         <h2>0 · Document Control</h2>
@@ -505,6 +557,31 @@
 
       <section id="s10">
         <h2>10 · Open Questions, Decisions &amp; Risks</h2>
+        <div class="card">
+          <h3>Open Questions</h3>
+          <div class="oq-toolbar">
+            <button type="button" class="copy-qa-btn" data-target="oq-table">
+              📋 Copy Q&amp;A for Claude Code
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table id="oq-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Question</th>
+                  <th>Why it Matters</th>
+                  <th>Proposed Default</th>
+                  <th>Status</th>
+                  <th>Your Answer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{OPEN_QUESTIONS_ROWS}}
+              </tbody>
+            </table>
+          </div>
+        </div>
         {{SECTION_10_CONTENT}}
       </section>
     </main>
@@ -627,6 +704,33 @@
           if (e.key === "Escape" && activeCard) minimize(activeCard);
         });
       })();
+    </script>
+
+    <script>
+      document.querySelectorAll(".copy-qa-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const table = document.getElementById(btn.dataset.target);
+          if (!table) return;
+          const lines = [];
+          table.querySelectorAll("tbody tr").forEach((row) => {
+            const id = row.children[0]?.textContent.trim() || "";
+            const question = row.children[1]?.textContent.trim() || "";
+            const answer =
+              row.querySelector("textarea")?.value.trim() ||
+              "(no answer provided)";
+            lines.push(`${id}: ${question}\nAnswer: ${answer}`);
+          });
+          navigator.clipboard.writeText(lines.join("\n\n")).then(() => {
+            const original = btn.textContent;
+            btn.textContent = "✓ Copied";
+            btn.classList.add("copied");
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove("copied");
+            }, 1500);
+          });
+        });
+      });
     </script>
   </body>
 </html>

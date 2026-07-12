@@ -12,7 +12,7 @@ Generate feature architecture as structured JSON (injected into HTML template by
 ## Operating modes
 
 **Mode A — First draft.** No `arch-<slug>.html` exists for this feature in the working directory.
-1. Generate content for sections 0–10 as clean HTML fragments (no full-page HTML, just `<div>`, `<table>`, `<pre>` content).
+1. Generate content for sections 0–10 as clean HTML fragments (no full-page HTML, just `<div>`, `<table>`, `<pre>` content), plus a single `aiOverview` summary and a structured `openQuestions` array (see below).
 2. Assemble a JSON structure with metadata (title, status, version) and section HTML.
 3. Save JSON to `arch-<slug>.json` (temporary, used by injection script).
 4. Run `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html` to generate the final HTML.
@@ -21,7 +21,7 @@ Generate feature architecture as structured JSON (injected into HTML template by
 
 **Mode B — Refinement pass.** An `arch-<slug>.html` already exists and the user provides feedback.
 1. Extract metadata from the HTML file (version, status, revision log) by parsing the template strings or reading the control section.
-2. Generate new content for affected sections 0–10 as HTML fragments.
+2. Generate new content for affected sections 0–10 as HTML fragments, updating `aiOverview` and `openQuestions` if the feature shape changed.
 3. Assemble updated JSON (increment version, add revision log row, keep status as-is).
 4. Run injection script with updated JSON.
 5. Delete temporary JSON.
@@ -46,6 +46,12 @@ Generate feature architecture as structured JSON (injected into HTML template by
 4. **Every diagram is valid Mermaid** for its declared type and renders without error.
 5. **No vague phrases:** "etc.", "as needed", "various", "could", "TBD", undefined acronyms, unquantified NFRs are forbidden in body text. Ambiguities go in Section 10 (Open Questions) as specific questions with proposed defaults.
 6. **Concrete over generic:** tie content to this feature and this repo's real components/endpoints/tables, not examples.
+
+---
+
+## AI Overview (the `aiOverview` field, not a numbered section)
+
+Write **one** condensed, human-readable paragraph (or short list) that is the single best summary of what will be implemented: the feature, the approach, the key components touched. This is the only place the full narrative gets restated — Sections 1–9 should stick to their own concern (data model, API, deployment, etc.) instead of re-explaining the feature from scratch each time. It renders in a highlighted card at the very top of the document, above Document Control, so the user reads it first.
 
 ---
 
@@ -106,8 +112,7 @@ Each section must contain:
 - Mermaid sequenceDiagram: New Relic alert → webhook → ServiceNow → on-call → resolution.
 - Dashboard widgets: a bulleted list.
 
-**Section 10 (Open Questions, Decisions & Risks)** — Open questions table, ADR (decision log) table, risks table.
-- Open questions: ID, Question, Why it matters, Proposed default, Status (Open / Resolved-in-vN).
+**Section 10 (Open Questions, Decisions & Risks)** — ADR (decision log) table and risks table only. Open Questions are **not** part of this HTML fragment: the template renders them from the structured `openQuestions` JSON field as an interactive table with a per-question answer box and a "Copy Q&A for Claude Code" button, so the user can fill in answers and paste them straight back into a refinement pass.
 - Decisions: Decision, Options considered, Choice + rationale, Date.
 - Risks: Risk, Likelihood, Impact, Mitigation.
 
@@ -127,6 +132,7 @@ Each section must contain:
   "version": "v1, v2, etc. (string)",
   "lastUpdated": "2026-07-11 (date string)",
   "authorModel": "the model name producing this pass (string)",
+  "aiOverview": "<p>...</p> (HTML fragment, the single condensed implementation summary — write once, don't repeat this narrative in every section)",
   "revisionLog": [
     {
       "version": "v1",
@@ -135,12 +141,21 @@ Each section must contain:
       "drivenBy": "First generation"
     }
   ],
+  "openQuestions": [
+    {
+      "id": "OQ1",
+      "question": "Specific, answerable question (string)",
+      "whyItMatters": "Why this needs an answer (string)",
+      "proposedDefault": "What we'll assume if unanswered (string)",
+      "status": "Open|Resolved-in-vN (string)"
+    }
+  ],
   "sections": {
     "0": "<tr><td>v1</td><td>...</td></tr>... (revision log rows only)",
     "1": "<div class='card'>...</div>... (full section 1 HTML)",
     "2": "... (full section 2 HTML)",
     ... (sections 0-10, each is complete HTML for that section)
-    "10": "... (full section 10 HTML)"
+    "10": "... (Decisions/ADR + Risks tables only; Open Questions come from the openQuestions field above)"
   }
 }
 ```
@@ -165,7 +180,8 @@ Print to chat:
 
 Before saving, verify:
 - Completeness: every section 0–10 filled; no TBD/placeholder strings.
-- No vague phrases; ambiguities are precise Open Questions in Section 10.
+- `aiOverview` is written once and Sections 1–9 don't restate it as a narrative.
+- No vague phrases; ambiguities are precise entries in `openQuestions`, not a table inside `sections["10"]`.
 - Names consistent across sections; version matches revision log.
 - Mermaid syntax valid for each diagram type.
 
@@ -176,6 +192,6 @@ Report findings and the Open Questions the user must resolve.
 ## Implementation
 
 1. Check if `arch-<slug>.html` exists.
-2. If Mode A: research repo, generate section HTML, assemble JSON per schema above, run `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html`, delete JSON.
-3. If Mode B: extract metadata from existing HTML, regenerate affected sections, increment version, assemble updated JSON, run injection script, delete JSON.
+2. If Mode A: research repo, generate section HTML plus `aiOverview` and `openQuestions`, assemble JSON per schema above, run `node ~/.agents/skills/arch/arch-inject.js arch-<slug>.json arch-<slug>.html`, delete JSON.
+3. If Mode B: extract metadata from existing HTML, regenerate affected sections (and `aiOverview`/`openQuestions` if the feature shape changed), increment version, assemble updated JSON, run injection script, delete JSON.
 4. Run retrospection, report findings and Open Questions per "Self-retrospection" section.
