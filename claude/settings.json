@@ -30,12 +30,24 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/scaffold/hooks/user-prompt-submit.mjs\""
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/scaffold/hooks/pre-tool-use.mjs\""
+          },
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/pre-tool-use-edit-guard.sh\"",
