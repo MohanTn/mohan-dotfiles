@@ -22,7 +22,6 @@ TEST_SESSION_ID="manual-test"
 declare -A HOOK_INFO=(
   [session-start.sh]="SessionStart::regenerate + print the project digest"
   [user-prompt-submit.sh]="UserPromptSubmit::inject GOAL reminder, clear prior loop/goal state"
-  [scaffold-intent-capture.sh]="UserPromptSubmit::nudge toward the scaffold Skill in scaffold-configured repos"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
   [pre-tool-use-goal-capture.sh]="PreToolUse (*)::capture the stated GOAL: line from the transcript"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
@@ -41,10 +40,6 @@ default_payload() {
     user-prompt-submit.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"UserPromptSubmit", prompt:"Please investigate and fix the login bug"}'
-      ;;
-    scaffold-intent-capture.sh)
-      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
-        '{session_id:$sid, cwd:$cwd, hook_event_name:"UserPromptSubmit", prompt:"add a new endpoint for invoices"}'
       ;;
     pre-tool-use-edit-guard.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -234,32 +229,6 @@ cmd_selftest() {
 
   expect_exit "session-end-cleanup runs cleanly" \
     session-end-cleanup.sh '{}' 0
-
-  # scaffold-intent-capture: silent in a repo with no .scaffold/config.json
-  local no_scaffold_dir
-  no_scaffold_dir=$(mktemp -d)
-  expect_empty "scaffold-intent-capture skips a repo with no .scaffold/config.json" \
-    scaffold-intent-capture.sh \
-    "$(jq -n --arg cwd "$no_scaffold_dir" '{session_id:"selftest", cwd:$cwd, prompt:"add a new endpoint for invoices"}')"
-  rm -rf "$no_scaffold_dir"
-
-  # scaffold-intent-capture: nudges on a matching prompt in a scaffolded repo,
-  # stays silent on a non-matching one in that same repo
-  local scaffold_dir
-  scaffold_dir=$(mktemp -d)
-  mkdir -p "$scaffold_dir/.scaffold"
-  echo '{}' > "$scaffold_dir/.scaffold/config.json"
-
-  expect_contains "scaffold-intent-capture nudges on a matching prompt" \
-    scaffold-intent-capture.sh \
-    "$(jq -n --arg cwd "$scaffold_dir" '{session_id:"selftest", cwd:$cwd, prompt:"add a new endpoint for invoices"}')" \
-    "scaffold generate"
-
-  expect_empty "scaffold-intent-capture stays quiet on a non-matching prompt" \
-    scaffold-intent-capture.sh \
-    "$(jq -n --arg cwd "$scaffold_dir" '{session_id:"selftest", cwd:$cwd, prompt:"what does this function do exactly"}')"
-
-  rm -rf "$scaffold_dir"
 
   rm -rf "${STATE_HOME:?}/selftest"
 
