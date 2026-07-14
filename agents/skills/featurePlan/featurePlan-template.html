@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Feature Implementation Plan – {{FEATURE_TITLE}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 2rem 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.25rem;
+            color: #0f172a;
+        }
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .card h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #0f172a;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        .card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.5rem 0;
+            color: #1e293b;
+        }
+        label {
+            font-weight: 500;
+            display: block;
+            margin-bottom: 0.3rem;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: #fff;
+        }
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: 2px solid #2563eb;
+            outline-offset: 1px;
+        }
+        textarea {
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .mt-1 {
+            margin-top: 0.75rem;
+        }
+        .mt-2 {
+            margin-top: 1.5rem;
+        }
+        .text-muted {
+            color: #64748b;
+        }
+        .text-small {
+            font-size: 0.85rem;
+        }
+
+        .btn {
+            background: #f1f5f9;
+            border: 1px solid #d1d5db;
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.15s;
+            color: #1e293b;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .btn:hover {
+            background: #e2e8f0;
+        }
+        .btn-primary {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        .btn-danger {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        .btn-success {
+            background: #16a34a;
+            border-color: #16a34a;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #15803d;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px dashed #2563eb;
+            color: #2563eb;
+        }
+        .btn-outline:hover {
+            background: #eff6ff;
+        }
+        .btn-sm {
+            padding: 0.2rem 0.6rem;
+            font-size: 0.8rem;
+        }
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .item-block {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #fafcfc;
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .item-header .item-title {
+            font-weight: 600;
+            font-size: 1rem;
+            flex: 1;
+        }
+        .item-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        .item-fields .full-width {
+            grid-column: 1 / -1;
+        }
+        .item-fields label {
+            font-size: 0.8rem;
+            margin-bottom: 0.1rem;
+            color: #475569;
+        }
+        .pseudo-code {
+            background: #f1f5f9;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+            min-height: 3rem;
+        }
+        @media (max-width:700px) {
+            .item-fields {
+                grid-template-columns: 1fr;
+            }
+            .item-fields .full-width {
+                grid-column: 1;
+            }
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th {
+            background: #f1f5f9;
+            text-align: left;
+            padding: 0.5rem 0.8rem;
+            font-weight: 600;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 0.5rem 0.8rem;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+
+        .approval-gate {
+            background: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: #166534;
+            font-weight: 500;
+        }
+
+        #copy-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        #copy-btn:hover {
+            opacity: 0.9;
+        }
+        #copy-btn.copied {
+            background: #16a34a;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.1rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-create {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        .badge-update {
+            background: #fef3c7;
+            color: #b45309;
+        }
+        .badge-delete {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>⚙️ Feature Implementation Plan – {{FEATURE_TITLE}}</h1>
+    <p class="subtitle">Ultra-detailed, file-by-file plan for building a feature inside an existing codebase. <br>Edit every detail, then copy the plan to feed into an AI or hand off to a developer.</p>
+
+    <!-- OVERVIEW -->
+    <div class="card">
+        <h2>📌 Feature Overview</h2>
+        <div class="flex-row">
+            <div style="flex:2;"><label>Feature Title</label><input id="feature-title" placeholder="e.g. Add two-factor authentication" /></div>
+            <div style="flex:1;"><label>Target Module / Context</label><input id="feature-module" placeholder="e.g. User Service" /></div>
+        </div>
+        <div class="mt-1"><label>User Story / Goal</label><textarea id="feature-goal" rows="2" placeholder="As a user, I want to ... so that ..."></textarea></div>
+        <div class="mt-1"><label>Existing Codebase Context (files, classes, DB schemas that already exist)</label><textarea id="feature-context" rows="2" placeholder="e.g. We already have User.php, AuthService.php, and a 'users' table with columns..."></textarea></div>
+    </div>
+
+    <!-- DESIGN PATTERNS & OVERRIDES (Crucial for tweaking) -->
+    <div class="card">
+        <h2>🧩 Design Patterns & Architectural Overrides</h2>
+        <p class="text-muted text-small">Explicitly state which patterns to use. <strong>Change these to alter the architecture</strong> (e.g., switch from Repository to Service Layer).</p>
+        <div class="flex-row">
+            <div style="flex:1;"><label>Core Pattern</label><input id="pattern-core" placeholder="e.g. MVC, Layered Architecture" value="Layered (Controller -> Service -> Repository)" /></div>
+            <div style="flex:1;"><label>Business Logic Pattern</label><input id="pattern-business" placeholder="e.g. Transaction Script, Domain Model" value="Transaction Script" /></div>
+        </div>
+        <div class="mt-1"><label>Specific Pattern Implementations (e.g., Factory vs Builder, Repository vs DAO)</label>
+            <textarea id="pattern-specific" rows="2" placeholder="e.g. Use Repository pattern for User data. Use Factory pattern to create complex DTOs."></textarea>
+        </div>
+        <div class="mt-1"><label>Explicit Overrides / Constraints (Change these to deviate from standard patterns)</label>
+            <textarea id="pattern-overrides" rows="2" placeholder="e.g. Do NOT create a separate Repository for this; put logic directly in Service. Use Singleton for CacheManager."></textarea>
+        </div>
+    </div>
+
+    <!-- FILE MANIFEST (ORDERED) -->
+    <div class="card">
+        <h2>📂 File Change Manifest (In Order of Execution)</h2>
+        <p class="text-muted text-small">List every file that needs to be created, updated, or deleted. Order them by build sequence. Add pseudo-code for each.</p>
+        <div id="files-container"></div>
+        <button id="add-file-btn" class="btn btn-outline btn-block mt-1">＋ Add file to manifest</button>
+    </div>
+
+    <!-- CORE BUSINESS LOGIC (PSEUDO-CODE) -->
+    <div class="card">
+        <h2>🧠 Core Business Logic (Detailed Pseudo-Code)</h2>
+        <p class="text-muted text-small">The main algorithm or orchestration of the feature. Write this in plain English + pseudo-code so an AI can translate it into actual code.</p>
+        <div id="logic-container"></div>
+        <button id="add-logic-btn" class="btn btn-outline btn-block mt-1">＋ Add logic step</button>
+    </div>
+
+    <!-- API / FUNCTION CONTRACTS -->
+    <div class="card">
+        <h2>📡 Function / API Contracts</h2>
+        <p class="text-muted text-small">Inputs, outputs, signatures for the main entry points (Controllers, Event Handlers, CLI commands).</p>
+        <div id="contracts-container"></div>
+        <button id="add-contract-btn" class="btn btn-outline btn-block mt-1">＋ Add contract</button>
+    </div>
+
+    <!-- EDGE CASES & ERROR HANDLING -->
+    <div class="card">
+        <h2>🚨 Edge Cases & Error Handling</h2>
+        <p class="text-muted text-small">What happens when things go wrong? Specify validation rules, exceptions, and fallbacks.</p>
+        <div id="edges-container"></div>
+        <button id="add-edge-btn" class="btn btn-outline btn-block mt-1">＋ Add edge case</button>
+    </div>
+
+    <!-- TESTING STRATEGY -->
+    <div class="card">
+        <h2>🧪 Testing Strategy</h2>
+        <p class="text-muted text-small">Specific test scenarios per file or logic unit.</p>
+        <div id="tests-container"></div>
+        <button id="add-test-btn" class="btn btn-outline btn-block mt-1">＋ Add test scenario</button>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="card">
+        <h2>📋 Export & Execution</h2>
+        <div class="approval-gate">
+            <strong>✅ Ready to generate code when:</strong> File manifest is ordered, logic is pseudo-coded, and patterns are defined.
+        </div>
+        <div class="flex-row mt-1">
+            <button id="copy-btn">📋 Copy AI-Ready Plan</button>
+            <button id="reset-btn" class="btn btn-danger">Reset all data</button>
+        </div>
+        <p class="text-muted text-small mt-1">The copied text is a structured prompt perfect for ChatGPT, Claude, or any coding AI.</p>
+    </div>
+
+    <script>
+        // Filled by featurePlan-inject.js from the AI's plan. Falls back to an
+        // empty plan when opened without injection (e.g. developing the template).
+        const INITIAL_DATA = {{INITIAL_DATA_JSON}};
+    </script>
+    <script>
+        // ------------------------------------------------------------------
+        // Data Layer
+        // ------------------------------------------------------------------
+        const STORAGE_KEY = 'feature-impl-plan:' + document.title;
+
+        // One-time migration from the previous single-key localStorage layout
+        // used by the original pasted template ('feature-impl-plan-data'). If
+        // the per-document key is empty but the old global key has data, copy
+        // it across and clear it so the user's edits survive the upgrade.
+        function migrateLegacyStorage() {
+            try {
+                if (localStorage.getItem(STORAGE_KEY)) return;
+                const legacy = localStorage.getItem('feature-impl-plan-data');
+                if (!legacy) return;
+                localStorage.setItem(STORAGE_KEY, legacy);
+                localStorage.removeItem('feature-impl-plan-data');
+            } catch (e) { /* ignore */ }
+        }
+        migrateLegacyStorage();
+
+        let data = loadData();
+
+        function emptyData() {
+            return {
+                title: '',
+                module: '',
+                goal: '',
+                context: '',
+                patternCore: 'Layered (Controller -> Service -> Repository)',
+                patternBusiness: 'Transaction Script',
+                patternSpecific: '',
+                patternOverrides: '',
+                files: [],
+                logicSteps: [],
+                contracts: [],
+                edgeCases: [],
+                testScenarios: []
+            };
+        }
+
+        function loadData() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    return normalize(parsed);
+                }
+            } catch (e) { /* ignore */ }
+            return normalize(INITIAL_DATA || emptyData());
+        }
+
+        // Fills in any missing top-level keys so a sparse persisted or seeded
+        // payload still renders a valid page.
+        function normalize(parsed) {
+            const base = emptyData();
+            if (!parsed || typeof parsed !== 'object') parsed = {};
+            for (let key in base) {
+                if (parsed[key] === undefined) parsed[key] = base[key];
+            }
+            return parsed;
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) { /* ignore */ }
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        }
+
+        // ------------------------------------------------------------------
+        // Rendering Helpers
+        // ------------------------------------------------------------------
+        function renderAll() {
+            renderFiles();
+            renderLogic();
+            renderContracts();
+            renderEdges();
+            renderTests();
+
+            document.getElementById('feature-title').value = data.title || '';
+            document.getElementById('feature-module').value = data.module || '';
+            document.getElementById('feature-goal').value = data.goal || '';
+            document.getElementById('feature-context').value = data.context || '';
+            document.getElementById('pattern-core').value = data.patternCore || '';
+            document.getElementById('pattern-business').value = data.patternBusiness || '';
+            document.getElementById('pattern-specific').value = data.patternSpecific || '';
+            document.getElementById('pattern-overrides').value = data.patternOverrides || '';
+        }
+
+        // Generic render for simple item lists (logic, contracts, edges, tests)
+        function renderSimpleList(containerId, items, fields, labelSingular, btnId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            items.forEach((item, index) => {
+                const block = document.createElement('div');
+                block.className = 'item-block';
+
+                const header = document.createElement('div');
+                header.className = 'item-header';
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'item-title';
+                titleSpan.textContent = `${labelSingular} #${index+1}`;
+                header.appendChild(titleSpan);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕ Remove';
+                removeBtn.addEventListener('click', () => {
+                    items.splice(index, 1);
+                    saveData();
+                    renderAll();
+                });
+                header.appendChild(removeBtn);
+                block.appendChild(header);
+
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'item-fields';
+
+                fields.forEach(f => {
+                    const wrapper = document.createElement('div');
+                    if (f.fullWidth) wrapper.className = 'full-width';
+
+                    const label = document.createElement('label');
+                    label.textContent = f.label;
+                    wrapper.appendChild(label);
+
+                    let input;
+                    if (f.type === 'textarea') {
+                        input = document.createElement('textarea');
+                        input.rows = f.rows || 3;
+                        input.placeholder = f.placeholder || '';
+                        input.value = item[f.key] || '';
+                        input.addEventListener('input', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    } else if (f.type === 'select') {
+                        input = document.createElement('select');
+                        f.options.forEach(opt => {
+                            const option = document.createElement('option');
+                            option.value = opt.value;
+                            option.textContent = opt.label;
+                            if (item[f.key] === opt.value) option.selected = true;
+                            input.appendChild(option);
+                        });
+                        input.addEventListener('change', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    } else {
+                        input = document.createElement('input');
+                        input.type = f.type || 'text';
+                        input.placeholder = f.placeholder || '';
+                        input.value = item[f.key] || '';
+                        input.addEventListener('input', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    }
+                    wrapper.appendChild(input);
+                    fieldDiv.appendChild(wrapper);
+                });
+
+                block.appendChild(fieldDiv);
+                container.appendChild(block);
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Render Files (with sorting by order)
+        // ------------------------------------------------------------------
+        function renderFiles() {
+            const container = document.getElementById('files-container');
+            container.innerHTML = '';
+            // Sort by order
+            const sorted = [...data.files].sort((a, b) => (a.order || 999) - (b.order || 999));
+
+            sorted.forEach((item, idx) => {
+                // find original index for removal
+                const origIndex = data.files.indexOf(item);
+                const block = document.createElement('div');
+                block.className = 'item-block';
+
+                const header = document.createElement('div');
+                header.className = 'item-header';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'item-title';
+                const badge = document.createElement('span');
+                const action = item.action || 'update';
+                badge.className = `badge badge-${action}`;
+                badge.textContent = action.toUpperCase();
+                titleSpan.appendChild(badge);
+                titleSpan.appendChild(document.createTextNode(` ${item.path || 'Untitled file'}`));
+                header.appendChild(titleSpan);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕ Remove';
+                removeBtn.addEventListener('click', () => {
+                    data.files.splice(origIndex, 1);
+                    saveData();
+                    renderAll();
+                });
+                header.appendChild(removeBtn);
+                block.appendChild(header);
+
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'item-fields';
+
+                // Order
+                const orderWrap = document.createElement('div');
+                const orderLabel = document.createElement('label');
+                orderLabel.textContent = 'Order';
+                orderWrap.appendChild(orderLabel);
+                const orderInput = document.createElement('input');
+                orderInput.type = 'number';
+                orderInput.min = 1;
+                orderInput.value = item.order || idx + 1;
+                orderInput.addEventListener('input', () => {
+                    item.order = parseInt(orderInput.value) || 999;
+                    saveData();
+                    renderFiles(); // re-sort
+                });
+                orderWrap.appendChild(orderInput);
+                fieldDiv.appendChild(orderWrap);
+
+                // Action
+                const actionWrap = document.createElement('div');
+                const actionLabel = document.createElement('label');
+                actionLabel.textContent = 'Action';
+                actionWrap.appendChild(actionLabel);
+                const actionSelect = document.createElement('select');
+                ['create', 'update', 'delete'].forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a;
+                    opt.textContent = a.charAt(0).toUpperCase() + a.slice(1);
+                    if (item.action === a) opt.selected = true;
+                    actionSelect.appendChild(opt);
+                });
+                actionSelect.addEventListener('change', () => {
+                    item.action = actionSelect.value;
+                    saveData();
+                    renderFiles();
+                });
+                actionWrap.appendChild(actionSelect);
+                fieldDiv.appendChild(actionWrap);
+
+                // Path
+                const pathWrap = document.createElement('div');
+                const pathLabel = document.createElement('label');
+                pathLabel.textContent = 'File Path';
+                pathWrap.appendChild(pathLabel);
+                const pathInput = document.createElement('input');
+                pathInput.type = 'text';
+                pathInput.placeholder = 'src/Service/NewService.php';
+                pathInput.value = item.path || '';
+                pathInput.addEventListener('input', () => {
+                    item.path = pathInput.value;
+                    saveData();
+                    renderFiles();
+                });
+                pathWrap.appendChild(pathInput);
+                fieldDiv.appendChild(pathWrap);
+
+                // Description
+                const descWrap = document.createElement('div');
+                descWrap.className = 'full-width';
+                const descLabel = document.createElement('label');
+                descLabel.textContent = 'Purpose / Description';
+                descWrap.appendChild(descLabel);
+                const descInput = document.createElement('textarea');
+                descInput.rows = 1;
+                descInput.placeholder = 'What does this file do?';
+                descInput.value = item.description || '';
+                descInput.addEventListener('input', () => {
+                    item.description = descInput.value;
+                    saveData();
+                });
+                descWrap.appendChild(descInput);
+                fieldDiv.appendChild(descWrap);
+
+                // Pseudo-code
+                const codeWrap = document.createElement('div');
+                codeWrap.className = 'full-width';
+                const codeLabel = document.createElement('label');
+                codeLabel.textContent = 'Pseudo-code / Expected Signature (write code stubs here)';
+                codeWrap.appendChild(codeLabel);
+                const codeInput = document.createElement('textarea');
+                codeInput.rows = 4;
+                codeInput.placeholder = "e.g.\nclass NewService {\n  public function execute($input) {\n    // 1. Validate input\n    // 2. Call repository\n  }\n}";
+                codeInput.value = item.pseudoCode || '';
+                codeInput.addEventListener('input', () => {
+                    item.pseudoCode = codeInput.value;
+                    saveData();
+                });
+                codeWrap.appendChild(codeInput);
+                fieldDiv.appendChild(codeWrap);
+
+                block.appendChild(fieldDiv);
+                container.appendChild(block);
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Render specific sections
+        // ------------------------------------------------------------------
+        function renderLogic() {
+            const fields = [
+                { key: 'step', label: 'Step Title', type: 'text', placeholder: 'e.g. Validate user input' },
+                { key: 'pseudo', label: 'Detailed Pseudo-code / Logic', type: 'textarea', rows: 4, fullWidth: true }
+            ];
+            renderSimpleList('logic-container', data.logicSteps, fields, 'Logic Step', 'add-logic-btn');
+        }
+
+        function renderContracts() {
+            const fields = [
+                { key: 'name', label: 'Function / Endpoint Name', type: 'text', placeholder: 'POST /api/v2/verify-2fa' },
+                { key: 'inputs', label: 'Inputs / Parameters', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'outputs', label: 'Outputs / Returns', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('contracts-container', data.contracts, fields, 'Contract', 'add-contract-btn');
+        }
+
+        function renderEdges() {
+            const fields = [
+                { key: 'condition', label: 'Condition / Scenario', type: 'text', placeholder: 'e.g. User enters wrong OTP' },
+                { key: 'handling', label: 'Expected Handling', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('edges-container', data.edgeCases, fields, 'Edge Case', 'add-edge-btn');
+        }
+
+        function renderTests() {
+            const fields = [
+                { key: 'target', label: 'Target File / Method', type: 'text', placeholder: 'NewService::execute()' },
+                { key: 'scenario', label: 'Test Scenario', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('tests-container', data.testScenarios, fields, 'Test', 'add-test-btn');
+        }
+
+        // ------------------------------------------------------------------
+        // Event Bindings for Add Buttons
+        //
+        // NOTE: The inline default items below MUST stay in sync with the
+        // ITEM_FIELD_DEFAULTS table in agents/skills/featurePlan/featurePlan-inject.js
+        // — both describe the same per-section field schema, and adding or
+        // renaming a field requires changes in both places.
+        // ------------------------------------------------------------------
+        function bindAdd(btnId, arrayKey, defaultItem) {
+            document.getElementById(btnId).addEventListener('click', () => {
+                data[arrayKey].push({ ...defaultItem, id: generateId() });
+                saveData();
+                renderAll();
+            });
+        }
+
+        bindAdd('add-file-btn', 'files', { order: data.files.length + 1, action: 'create', path: '', description: '',
+            pseudoCode: '' });
+        bindAdd('add-logic-btn', 'logicSteps', { step: '', pseudo: '' });
+        bindAdd('add-contract-btn', 'contracts', { name: '', inputs: '', outputs: '' });
+        bindAdd('add-edge-btn', 'edgeCases', { condition: '', handling: '' });
+        bindAdd('add-test-btn', 'testScenarios', { target: '', scenario: '' });
+
+        // Input bindings for top-level fields
+        document.getElementById('feature-title').addEventListener('input', (e) => { data.title = e.target.value;
+            saveData(); });
+        document.getElementById('feature-module').addEventListener('input', (e) => { data.module = e.target.value;
+            saveData(); });
+        document.getElementById('feature-goal').addEventListener('input', (e) => { data.goal = e.target.value;
+            saveData(); });
+        document.getElementById('feature-context').addEventListener('input', (e) => { data.context = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-core').addEventListener('input', (e) => { data.patternCore = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-business').addEventListener('input', (e) => { data.patternBusiness = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-specific').addEventListener('input', (e) => { data.patternSpecific = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-overrides').addEventListener('input', (e) => { data.patternOverrides = e.target.value;
+            saveData(); });
+
+        // ------------------------------------------------------------------
+        // Export
+        // ------------------------------------------------------------------
+        function buildExportText() {
+            const lines = [];
+            lines.push('FEATURE IMPLEMENTATION PLAN (AI-READY PROMPT)');
+            lines.push('==============================================');
+            lines.push('');
+            lines.push(`FEATURE TITLE: ${data.title || 'Not set'}`);
+            lines.push(`TARGET MODULE: ${data.module || 'Not set'}`);
+            lines.push(`USER STORY: ${data.goal || 'Not set'}`);
+            lines.push(`EXISTING CONTEXT: ${data.context || 'Not set'}`);
+            lines.push('');
+
+            lines.push('--- DESIGN PATTERNS & OVERRIDES ---');
+            lines.push(`Core Pattern: ${data.patternCore || 'Not set'}`);
+            lines.push(`Business Logic Pattern: ${data.patternBusiness || 'Not set'}`);
+            lines.push(`Specific Implementations: ${data.patternSpecific || 'None'}`);
+            lines.push(`Explicit Overrides: ${data.patternOverrides || 'None'}`);
+            lines.push('');
+
+            // Files
+            lines.push('--- FILE CHANGE MANIFEST (IN ORDER) ---');
+            const sortedFiles = [...data.files].sort((a, b) => (a.order || 999) - (b.order || 999));
+            if (sortedFiles.length === 0) {
+                lines.push('(No files defined)');
+            } else {
+                sortedFiles.forEach((f, idx) => {
+                    lines.push(`[${idx+1}] ${f.action.toUpperCase()} | ${f.path || 'Untitled'}`);
+                    if (f.description) lines.push(`    Description: ${f.description}`);
+                    if (f.pseudoCode) {
+                        lines.push(`    Pseudo-code:`);
+                        f.pseudoCode.split('\n').forEach(line => {
+                            lines.push(`      ${line}`);
+                        });
+                    }
+                    lines.push('');
+                });
+            }
+
+            // Logic
+            lines.push('--- CORE BUSINESS LOGIC (PSEUDO-CODE) ---');
+            if (data.logicSteps.length === 0) {
+                lines.push('(No logic steps defined)');
+            } else {
+                data.logicSteps.forEach((l, idx) => {
+                    lines.push(`Step ${idx+1}: ${l.step || 'Untitled'}`);
+                    if (l.pseudo) {
+                        l.pseudo.split('\n').forEach(line => {
+                            lines.push(`  ${line}`);
+                        });
+                    }
+                    lines.push('');
+                });
+            }
+
+            // Contracts
+            lines.push('--- FUNCTION / API CONTRACTS ---');
+            if (data.contracts.length === 0) {
+                lines.push('(No contracts defined)');
+            } else {
+                data.contracts.forEach(c => {
+                    lines.push(`Signature: ${c.name || 'Unnamed'}`);
+                    if (c.inputs) lines.push(`  Inputs: ${c.inputs}`);
+                    if (c.outputs) lines.push(`  Outputs: ${c.outputs}`);
+                    lines.push('');
+                });
+            }
+
+            // Edge Cases
+            lines.push('--- EDGE CASES & ERROR HANDLING ---');
+            if (data.edgeCases.length === 0) {
+                lines.push('(No edge cases defined)');
+            } else {
+                data.edgeCases.forEach(e => {
+                    lines.push(`Condition: ${e.condition || 'Untitled'}`);
+                    if (e.handling) lines.push(`  Handling: ${e.handling}`);
+                    lines.push('');
+                });
+            }
+
+            // Tests
+            lines.push('--- TESTING STRATEGY ---');
+            if (data.testScenarios.length === 0) {
+                lines.push('(No tests defined)');
+            } else {
+                data.testScenarios.forEach(t => {
+                    lines.push(`Target: ${t.target || 'Untitled'}`);
+                    if (t.scenario) lines.push(`  Scenario: ${t.scenario}`);
+                    lines.push('');
+                });
+            }
+
+            lines.push('--- END OF PLAN ---');
+            lines.push('Generate the actual code based strictly on the above plan.');
+            return lines.join('\n');
+        }
+
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            const text = buildExportText();
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copy-btn');
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy AI-Ready Plan';
+                    btn.classList.remove('copied');
+                }, 2500);
+            }).catch(() => {
+                alert('Could not copy. Please select and copy manually.');
+            });
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if (confirm('Reset all data? This cannot be undone.')) {
+                data = emptyData();
+                saveData();
+                renderAll();
+            }
+        });
+
+        // ------------------------------------------------------------------
+        // Initial Render
+        // ------------------------------------------------------------------
+        renderAll();
+    </script>
+
+</body>
+</html>

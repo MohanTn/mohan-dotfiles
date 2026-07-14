@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
- * arch-inject.js — Injects an architecture & solution plan into the HTML template.
+ * featurePlan-inject.js — Injects a feature implementation plan into the HTML template.
  *
- * The plan is a working document: project overview, system context (actors),
- * containers, integrations, data model, ADRs, quality attributes, security,
- * deployment, risks, and roadmap. All editing happens client-side in the
- * template; this script's only job is to seed the initial data so the human
- * isn't starting from a blank page.
+ * The plan is a file-by-file, code-level plan for building a feature inside an
+ * existing codebase: file change manifest (ordered by build sequence), core
+ * business logic pseudo-code, function/API contracts, edge cases, and testing
+ * strategy. All editing happens client-side in the template; this script's
+ * only job is to seed the initial data so the human isn't starting from a
+ * blank page.
  *
- * Usage: node arch-inject.js <input-json> <output-html> [template-path]
+ * Usage: node featurePlan-inject.js <input-json> <output-html> [template-path]
  *
- * See claude/commands/arch.md / copilot/skills/arch/SKILL.md for the JSON schema.
+ * See claude/commands/featurePlan.md / copilot/skills/featurePlan/SKILL.md
+ * for the JSON schema.
  */
 
 const fs = require('fs');
@@ -47,21 +49,16 @@ function loadTemplate(templatePath) {
 // String fields a section item accepts. Each entry maps a JSON key to its
 // default value (empty for free text, the first option for selects).
 //
-// NOTE: This table MUST stay in sync with the bindAddButton() inline
-// defaults in agents/skills/arch/arch-template.html — both describe the
+// NOTE: This table MUST stay in sync with the bindAdd() inline defaults in
+// agents/skills/featurePlan/featurePlan-template.html — both describe the
 // same per-section field schema, and adding or renaming a field requires
 // changes in both places.
 const ITEM_FIELD_DEFAULTS = {
-  actors:       { name: '', type: 'User', description: '' },
-  containers:   { name: '', tech: '', responsibilities: '', dataStores: '' },
-  integrations: { name: '', from: '', to: '', protocol: 'REST', sync: 'Sync', description: '' },
-  entities:     { name: '', attributes: '', relationships: '', storage: '' },
-  adrs:         { name: '', context: '', decision: '', rationale: '', tradeoffs: '', status: 'Proposed' },
-  qualities:    { name: '', target: '', measurement: '', details: '' },
-  security:     { name: '', detail: '' },
-  deployment:   { name: '', detail: '' },
-  risks:        { name: '', impact: '', probability: '', mitigation: '' },
-  roadmap:      { name: '', features: '', timeline: '' }
+  files:         { order: 0, action: 'create', path: '', description: '', pseudoCode: '' },
+  logicSteps:    { step: '', pseudo: '' },
+  contracts:     { name: '', inputs: '', outputs: '' },
+  edgeCases:     { condition: '', handling: '' },
+  testScenarios: { target: '', scenario: '' }
 };
 
 // Sections are top-level arrays in the config + the emptyData() template.
@@ -70,19 +67,26 @@ const SECTIONS = Object.keys(ITEM_FIELD_DEFAULTS);
 
 // Applies ITEM_FIELD_DEFAULTS to a single item, preserving its `id` and any
 // unrecognized keys the caller added. Missing fields get the section default;
-// present fields pass through unchanged.
+// present fields pass through unchanged. `order` is coerced to a Number so the
+// template's numeric sort works on injected items too.
 function normalizeItem(sectionKey, raw) {
   const defaults = ITEM_FIELD_DEFAULTS[sectionKey];
   const out = { ...defaults, ...(raw || {}) };
   if (raw && raw.id !== undefined) out.id = raw.id;
+  if ('order' in (raw || {})) out.order = Number(raw.order) || 0;
   return out;
 }
 
 function normalizePlan(config) {
   const normalized = {
-    projectName:    config.title || '',
-    projectDesc:    config.description || '',
-    projectContext: config.context || ''
+    title:            config.title || '',
+    module:           config.module || '',
+    goal:             config.goal || '',
+    context:          config.context || '',
+    patternCore:      config.patternCore || 'Layered (Controller -> Service -> Repository)',
+    patternBusiness:  config.patternBusiness || 'Transaction Script',
+    patternSpecific:  config.patternSpecific || '',
+    patternOverrides: config.patternOverrides || ''
   };
 
   for (const section of SECTIONS) {
@@ -104,7 +108,7 @@ function injectContent(template, config) {
     html = html.replace(pattern, () => value);
   };
 
-  put(/{{PROJECT_TITLE}}/g, escapeHtml(config.title || 'Untitled'));
+  put(/{{FEATURE_TITLE}}/g, escapeHtml(config.title || 'Untitled'));
   put(/{{INITIAL_DATA_JSON}}/, toScriptJson(normalizePlan(config)));
 
   return html;
@@ -114,20 +118,20 @@ function main() {
   const args = process.argv.slice(2);
 
   if (args.length < 2) {
-    console.error('Usage: node arch-inject.js <input-json> <output-html> [template-path]');
+    console.error('Usage: node featurePlan-inject.js <input-json> <output-html> [template-path]');
     console.error('');
     console.error('Arguments:');
-    console.error('  <input-json>    JSON with title, description, context, actors, containers,');
-    console.error('                  integrations, entities, adrs, qualities, security,');
-    console.error('                  deployment, risks, roadmap');
-    console.error('  <output-html>   Path to write the final architecture plan document');
-    console.error('  [template-path] HTML template (default: arch-template.html next to this script)');
+    console.error('  <input-json>    JSON with title, module, goal, context, patternCore,');
+    console.error('                  patternBusiness, patternSpecific, patternOverrides,');
+    console.error('                  files, logicSteps, contracts, edgeCases, testScenarios');
+    console.error('  <output-html>   Path to write the final feature plan document');
+    console.error('  [template-path] HTML template (default: featurePlan-template.html next to this script)');
     process.exit(1);
   }
 
   const inputJsonPath = args[0];
   const outputHtmlPath = args[1];
-  const templatePath = args[2] || path.join(__dirname, 'arch-template.html');
+  const templatePath = args[2] || path.join(__dirname, 'featurePlan-template.html');
 
   try {
     if (!fs.existsSync(inputJsonPath)) {

@@ -1,13 +1,18 @@
-# token-efficiency: Audit and optimize token consumption in agent prompts and hooks
+---
+name: token-efficiency
+description: Audit and optimize token consumption in Copilot CLI configs: agent prompts, skill files, and hook injection scripts. Use when reviewing config for redundancy, narrative bloat, or per-turn hook costs.
+---
 
-Apply evidence-based token-reduction techniques to agent prompt files, hook injection scripts, and command instructions. Identify waste without sacrificing clarity or functionality.
+# token-efficiency: Audit and optimize token consumption in Copilot CLI configs
+
+Apply evidence-based token-reduction techniques to Copilot CLI agent prompts, skill files, and hook injection scripts. Identify waste without sacrificing clarity or functionality.
 
 ## Scope
 
 This skill targets:
-- Agent prompt files (`claude/agents/*.md`, `copilot/agents/*.agent.md`)
-- Command prompts (`claude/commands/*.md`, `copilot/skills/*/SKILL.md`)
-- Hook scripts that inject context into every turn or session (`claude/hooks/*.sh`, `copilot/hooks/scripts/*.sh`)
+- Agent prompt files (`copilot/agents/*.agent.md`)
+- Skill files (`copilot/skills/<x>/SKILL.md`)
+- Hook scripts that inject context into every turn or session (`copilot/hooks/scripts/*.sh`)
 - Config JSON files loaded at startup (not injected into model context)
 
 **Out of scope:** Code logic, test content, runtime behavior. Only text that enters the model's context window.
@@ -55,33 +60,34 @@ This skill targets:
 ### Step 1: Map the text cost per invocation
 
 For each file:
-- **Agent prompts** (`claude/agents/scout.md`, `implementer.md`, etc.): loaded once per feature-team run. Infrequent but high-context.
-- **Command prompts** (`claude/commands/arch.md`): loaded on every `/arch` invocation. Frequent for that command.
-- **Hooks** (`user-prompt-submit.sh`, `session-start.sh`): injected on every turn (per-turn hooks) or once per session (startup hooks). Recurring cost across all projects.
+- **Agent prompts** (`copilot/agents/*.agent.md`): loaded once per feature-team run. Infrequent but high-context.
+- **Skill files** (`copilot/skills/arch/SKILL.md`, `copilot/skills/featurePlan/SKILL.md`): loaded when the skill is invoked or discovered at startup, depending on the tool's discovery rules.
+- **Hook scripts** (`copilot/hooks/scripts/user-prompt-submit.sh`, `copilot/hooks/scripts/session-start.sh`): injected on every turn (per-turn hooks) or once per session (startup hooks). Recurring cost across all projects.
 
 ### Step 2: Search for candidate bloat
 
 Grep for patterns:
 - Redundant block: `grep -n "^##" file.md | uniq -d` or manually scan for section titles and check for repeated content blocks.
 - Verbose preamble: look for narrative paragraphs (lines starting with story-like language: "This command...", "You are...") followed by directive bullets that say the same thing.
-- Hook redundancy: search hook scripts for repeated prose in multiple files; same injected text in Claude and Copilot variants.
+- Hook redundancy: search hook scripts for repeated prose in multiple files; same injected text across Copilot hooks.
 - Explanatory overhead: `wc -w` sections and compare dense (bullet list) vs. narrative (paragraph) versions of the same idea.
 
 ### Step 3: Verify safety before cutting
 
 For each candidate:
 1. **Redundancy test:** Does a shorter version still convey the essential information? Can it be replaced with a reference ("per the schema above")?
-2. **Parsing test:** For hooks, does `grep`, `sed`, or regex logic depend on this exact wording? (Check test files: `test-hook.sh`, `test-*.js`.)
+2. **Parsing test:** For hooks, does `grep`, `sed`, or regex logic depend on this exact wording? (Check `copilot/hooks/test-hook.sh`.)
 3. **Necessity test:** Is this a "MANDATORY" section or acceptance criterion? Keep it intact.
-4. **Port test:** If you cut something in `claude/commands/arch.md`, the same cut must land in `copilot/skills/arch/SKILL.md` to keep ports in sync.
+4. **Port test:** If you cut something in `copilot/skills/arch/SKILL.md`, the same cut must land in `claude/commands/arch.md` to keep ports in sync.
 
 ### Step 4: Apply and verify
 
 1. Make the edit.
-2. Run relevant test suite (`*test.sh selftest`, `node --test *.test.js`).
-3. Run `nix flake check --impure` if in this repo.
-4. Spot-check by running the command/agent once with real input and verify output is still correct.
-5. Measure: `wc -w` before/after and report savings in tokens (assume ~1 token per 1.3 words).
+2. Run `copilot/hooks/test-hook.sh selftest` if hooks changed.
+3. Run `copilot/hooks/test-hook.sh list` to confirm HOOK_INFO still matches.
+4. Run `nix flake check --impure` if in this repo.
+5. Spot-check by running the command/agent once with real input and verify output is still correct.
+6. Measure: `wc -w` before/after and report savings in tokens (assume ~1 token per 1.3 words).
 
 ## Patterns seen in mohan-dotfiles
 
@@ -89,9 +95,9 @@ For each candidate:
 
 **Pattern:** A prompt file specifies a JSON output shape in an "Output Format" section, then shows the same schema again as a worked example in an "Implementation" or "Example" section.
 
-**Example:** `claude/commands/arch.md` lines 113-143 (schema definition) + lines 184-204 (schema in Mode A example).
+**Example:** `copilot/skills/arch/SKILL.md` JSON Output Format section followed by the schema repeated in a worked example.
 
-**Fix:** Keep the canonical definition in "Output Format." In examples, replace the full skeleton with a pointer: "Assemble the JSON structure per the schema in 'JSON Output Format' above, populated with this feature's real content."
+**Fix:** Keep the canonical definition in "JSON Output Format." In examples, replace the full skeleton with a pointer: "Assemble the JSON structure per the schema in 'JSON Output Format' above, populated with this feature's real content."
 
 **Savings:** ~30-50 words per file (schema block is typically dense).
 
@@ -99,7 +105,7 @@ For each candidate:
 
 ### Hook output trimming (safe, per-turn cost)
 
-**Pattern:** Hook scripts inject context into every substantive turn across all projects (e.g., `user-prompt-submit.sh`). Trimming saves tokens on every single turn.
+**Pattern:** Hook scripts inject context into every substantive turn across all projects (e.g., `copilot/hooks/scripts/user-prompt-submit.sh`). Trimming saves tokens on every single turn.
 
 **Example:** Original "State your working goal for this turn as a single line: GOAL: <one-sentence objective>..." → trimmed "State this turn's goal: GOAL: <one-sentence objective>".
 
@@ -107,11 +113,11 @@ For each candidate:
 
 **Savings:** ~67 chars per turn (~17 tokens), multiplied by number of turns per session, across all projects.
 
-**Verification:** Run `hooks/test-hook.sh selftest` to confirm parsing still works.
+**Verification:** Run `copilot/hooks/test-hook.sh selftest` to confirm parsing still works.
 
 ### Preamble condensing (safe, moderate savings)
 
-**Pattern:** Command or agent prompt begins with conversational narrative explaining what it does, followed by bullet points that say the same thing more concisely.
+**Pattern:** Skill or agent prompt begins with conversational narrative explaining what it does, followed by bullet points that say the same thing more concisely.
 
 **Example:** Original 4-line preamble + explanation vs. one-sentence directive: "Generate feature architecture as structured JSON (injected into HTML template by a deterministic script, not regenerated each pass)."
 
@@ -119,7 +125,7 @@ For each candidate:
 
 **Savings:** ~150-300 words per file.
 
-**Verification:** Run the command/agent once and verify output quality hasn't degraded.
+**Verification:** Run the skill/agent once and verify output quality hasn't degraded.
 
 ## Red flags: Don't optimize these
 
@@ -172,17 +178,17 @@ Generate feature architecture as structured JSON (injected into HTML template by
 
 ---
 
-### Candidate 3: Duplicate JSON schema (lines 117-143 + 184-204)
+### Candidate 3: Duplicate JSON schema (line ranges in JSON Output Format + worked example)
 
-**Before:** Full schema shown twice (30 lines each).
+**Before:** Full schema shown twice in the same Copilot skill file (the frontmatter description block, then a worked example below).
 
-**After:** Lines 184-204 become: "Assemble the JSON structure per the schema in 'JSON Output Format' above, populated with this feature's real content."
+**After:** Worked example becomes: "Assemble the JSON structure per the schema in 'JSON Output Format' above, populated with this feature's real content."
 
-**Safe?** Yes, with verification. Model needs to understand the shape; pointing to a definition 60 lines up works if the definition is clear. Verify by running the command once and checking output is valid. ✅
+**Safe?** Yes, with verification. Model needs to understand the shape; pointing to a definition above works if the definition is clear. Verify by running once and checking output is valid. ✅
 
 ---
 
-### Candidate 4: "Self-retrospection" preamble (lines 162-170)
+### Candidate 4: "Self-check" preamble
 
 **Before:**
 ```
@@ -213,7 +219,7 @@ Before shipping any token-reduction edit:
 
 - [ ] Identified the specific waste (redundancy, narrative, verbose prose).
 - [ ] Verified it's safe to cut (not a constraint, not parsed logic, not few-shot example).
-- [ ] Applied the same cut to all ports (`claude/commands/arch.md` → `copilot/skills/arch/SKILL.md`).
-- [ ] Ran test suites; all pass.
-- [ ] Spot-checked the command/agent with real input; output quality unchanged.
+- [ ] Applied the same cut to all ports (`copilot/skills/<x>/SKILL.md` → `claude/commands/<x>.md`).
+- [ ] Ran test suites (`copilot/hooks/test-hook.sh selftest` etc.); all pass.
+- [ ] Spot-checked the skill/agent with real input; output quality unchanged.
 - [ ] Measured word reduction and noted in PR/commit.

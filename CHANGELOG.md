@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Changed
+
+- This refactor splits the previous `/arch` skill (which covered both system architecture and code-level planning in one tool with topics/options) into two: `/arch` now provides full architecture & solution planning with system context, containers, ADRs, quality attributes, security, deployment, risks, and roadmap; the new `/featurePlan` skill handles code-level implementation planning with file manifests, pseudo-code, contracts, edge cases, and tests. Additionally, prose files (`token-efficiency/SKILL.md`) are moved from the shared `agents/` layer to per-tool directories (`claude/skills/`, `copilot/skills/`) to enforce the rule that `agents/` contains only executable/renderable artifacts (templates, scripts), not prose.
+- Refactor: move `agents/skills/token-efficiency/SKILL.md` (prose) into the per-tool ports at `claude/skills/token-efficiency/SKILL.md` and `copilot/skills/token-efficiency/SKILL.md`, both with YAML `name:`/`description:` frontmatter to match the existing skill convention. The `agents/` common layer now holds only executable/renderable artifacts (`arch-template.html` + `arch-inject.js`, `featurePlan-template.html` + `featurePlan-inject.js`); prose lives per-tool. CLAUDE.md's port-rule paragraph and README's "Common layer" section document the rule and point at the new files. Inject tests for the unchanged common-layer scripts still pass (38/38).
+
 ### Removed
 
 - Removed the `/explore-topic` and `/ui-mock` commands (`claude/commands/`) and their Copilot skill ports (`copilot/skills/`): both generated large, mostly-fixed HTML/CSS/JS boilerplate on every run, and `/arch` now covers the same ground.

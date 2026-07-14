@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Feature Plan – {{FEATURE_TITLE}}</title>
+    <title>Architecture &amp; Solution Plan – {{PROJECT_TITLE}}</title>
     <style>
         * {
             margin: 0;
@@ -15,7 +15,7 @@
             background: #f8fafc;
             color: #1e293b;
             padding: 2rem 1.5rem;
-            max-width: 1100px;
+            max-width: 1200px;
             margin: 0 auto;
             line-height: 1.5;
         }
@@ -58,19 +58,21 @@
             font-size: 0.9rem;
             color: #334155;
         }
-        textarea, input[type="text"] {
+        input, textarea, select {
             width: 100%;
-            padding: 0.6rem;
+            padding: 0.5rem;
             border: 1px solid #d1d5db;
             border-radius: 6px;
             font-family: inherit;
-            font-size: 0.95rem;
-            resize: vertical;
+            font-size: 0.9rem;
             background: #fff;
         }
-        textarea:focus, input:focus {
+        input:focus, textarea:focus, select:focus {
             outline: 2px solid #2563eb;
             outline-offset: 1px;
+        }
+        textarea {
+            resize: vertical;
         }
         .flex-row {
             display: flex;
@@ -79,6 +81,7 @@
             align-items: center;
         }
         .mt-1 { margin-top: 0.75rem; }
+        .mt-2 { margin-top: 1.5rem; }
         .text-muted { color: #64748b; }
         .text-small { font-size: 0.85rem; }
 
@@ -92,96 +95,81 @@
             cursor: pointer;
             transition: 0.15s;
             color: #1e293b;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
         }
-        .btn:hover {
-            background: #e2e8f0;
-        }
+        .btn:hover { background: #e2e8f0; }
         .btn-primary {
             background: #2563eb;
             border-color: #2563eb;
             color: white;
         }
-        .btn-primary:hover {
-            background: #1d4ed8;
-        }
+        .btn-primary:hover { background: #1d4ed8; }
         .btn-danger {
             background: #ef4444;
             border-color: #ef4444;
             color: white;
         }
-        .btn-danger:hover {
-            background: #dc2626;
-        }
+        .btn-danger:hover { background: #dc2626; }
         .btn-success {
             background: #16a34a;
             border-color: #16a34a;
             color: white;
         }
-        .btn-success:hover {
-            background: #15803d;
-        }
+        .btn-success:hover { background: #15803d; }
         .btn-outline {
             background: transparent;
             border: 1px dashed #2563eb;
             color: #2563eb;
         }
-        .btn-outline:hover {
-            background: #eff6ff;
-        }
-        .btn-sm {
-            padding: 0.2rem 0.6rem;
-            font-size: 0.8rem;
-        }
-        .btn-block {
-            width: 100%;
-            justify-content: center;
-        }
+        .btn-outline:hover { background: #eff6ff; }
+        .btn-sm { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+        .btn-block { width: 100%; justify-content: center; }
 
-        .topic-block {
+        .item-block {
             border: 1px solid #e2e8f0;
             border-radius: 8px;
-            padding: 1.2rem;
-            margin-bottom: 1.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
             background: #fafcfc;
         }
-        .topic-header {
+        .item-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 0.5rem;
+            margin-bottom: 0.5rem;
         }
-        .topic-header .topic-name {
+        .item-header .item-name {
             font-weight: 600;
             font-size: 1rem;
+            flex: 1;
         }
-        .topic-questions textarea {
-            min-height: 2.5rem;
-        }
-        .option-row {
+        .item-fields {
             display: grid;
-            grid-template-columns: 1.5fr 2fr 2fr 0.8fr;
+            grid-template-columns: 1fr 1fr;
             gap: 0.5rem;
-            align-items: start;
-            padding: 0.6rem 0;
-            border-bottom: 1px solid #f1f5f9;
         }
-        .option-row .opt-pros, .option-row .opt-cons {
-            font-size: 0.9rem;
+        .item-fields .full-width {
+            grid-column: 1 / -1;
         }
-        .option-row .opt-select {
-            text-align: center;
+        .item-fields label {
+            font-size: 0.8rem;
+            margin-bottom: 0.1rem;
+            color: #475569;
         }
-        .option-row.selected {
-            background: #eff6ff;
-            border-left: 3px solid #2563eb;
-            padding-left: 0.5rem;
+        @media (max-width:700px) {
+            .item-fields {
+                grid-template-columns: 1fr;
+            }
+            .item-fields .full-width {
+                grid-column: 1;
+            }
         }
 
-        .table-wrap {
-            overflow-x: auto;
-            margin: 1rem 0;
-        }
+        .table-wrap { overflow-x: auto; margin: 1rem 0; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -190,30 +178,21 @@
         th {
             background: #f1f5f9;
             text-align: left;
-            padding: 0.6rem 0.8rem;
+            padding: 0.5rem 0.8rem;
             font-weight: 600;
             border-bottom: 2px solid #e2e8f0;
         }
         td {
-            padding: 0.6rem 0.8rem;
+            padding: 0.5rem 0.8rem;
             border-bottom: 1px solid #e2e8f0;
-            vertical-align: top;
+            vertical-align: middle;
         }
-        .count-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-            margin: 1rem 0;
-        }
-        .count-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .count-item input {
-            width: 4rem;
+        td input, td select {
+            width: 100%;
             padding: 0.3rem;
-            text-align: center;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 0.85rem;
         }
 
         .approval-gate {
@@ -237,86 +216,111 @@
         }
         #copy-btn:hover { opacity: 0.9; }
         #copy-btn.copied { background: #16a34a; }
-
-        @media (max-width:700px) {
-            .option-row {
-                grid-template-columns: 1fr;
-                gap: 0.3rem;
-                padding: 0.8rem 0;
-            }
-            .option-row .opt-select {
-                text-align: left;
-            }
-            .topic-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-        }
     </style>
 </head>
 <body>
 
-    <h1>🧩 Feature Plan – {{FEATURE_TITLE}}</h1>
-    <p class="subtitle">Break down your feature, weigh options, and plan implementation.</p>
+    <h1>🏛️ Architecture &amp; Solution Plan – {{PROJECT_TITLE}}</h1>
+    <p class="subtitle">Define the full architectural picture: context, containers, decisions, qualities, and execution.</p>
 
+    <!-- Project Info -->
     <div class="card">
-        <h2>📌 User Prompt</h2>
-        <p class="text-muted text-small">The feature request this plan is for. Edit if it drifted.</p>
-        <textarea id="user-prompt" rows="3" placeholder="I want to build a feature that…"></textarea>
-    </div>
-
-    <div class="card">
-        <h2>📂 Topics / Areas</h2>
-        <p class="text-muted text-small">Each area has open questions and options with pros/cons. Pick the option you want for each.</p>
-        <div id="topics-container"></div>
-        <button id="add-topic-btn" class="btn btn-outline btn-block mt-1">＋ Add topic / area</button>
-    </div>
-
-    <div class="card">
-        <h2>✅ Decision Summary</h2>
-        <p class="text-muted text-small">Selected options for each topic are shown here.</p>
-        <div id="decision-summary"><em>No decisions made yet.</em></div>
-    </div>
-
-    <div class="card">
-        <h2>🛠️ Technical Details</h2>
-        <p class="text-muted text-small">Implementation actions (create/update files, etc.)</p>
-        <div class="table-wrap">
-            <table id="tech-table">
-                <thead>
-                    <tr>
-                        <th style="width:12%">Action</th>
-                        <th style="width:25%">File Name</th>
-                        <th style="width:50%">Comment</th>
-                        <th style="width:13%">Remove</th>
-                    </tr>
-                </thead>
-                <tbody id="tech-tbody"></tbody>
-            </table>
+        <h2>📌 Project Overview</h2>
+        <div class="flex-row">
+            <div style="flex:2;"><label>Project / Solution Name</label><input id="project-name" placeholder="e.g. E‑commerce Platform" /></div>
+            <div style="flex:3;"><label>Brief Description</label><input id="project-desc" placeholder="High‑level goal of this architecture" /></div>
         </div>
-        <div class="flex-row mt-1">
-            <input type="text" id="new-action" placeholder="Action (e.g. create, update)" style="width:120px;">
-            <input type="text" id="new-file" placeholder="File name" style="width:180px;">
-            <input type="text" id="new-comment" placeholder="Comment" style="flex:1;">
-            <button id="add-tech-row" class="btn btn-primary">Add row</button>
-        </div>
-
-        <h3 class="mt-1">Counts</h3>
-        <div class="count-grid">
-            <div class="count-item"><label>Files to create:</label><input type="number" id="count-create" value="0" min="0"></div>
-            <div class="count-item"><label>Files to update:</label><input type="number" id="count-update" value="0" min="0"></div>
-            <div class="count-item"><label>Unit tests:</label><input type="number" id="count-unit" value="0" min="0"></div>
-            <div class="count-item"><label>Integration tests:</label><input type="number" id="count-integration" value="0" min="0"></div>
-        </div>
+        <div class="mt-1"><label>Context / Background</label><textarea id="project-context" rows="2" placeholder="Business drivers, existing systems, constraints…"></textarea></div>
     </div>
 
+    <!-- System Context (Actors & External Systems) -->
     <div class="card">
-        <h2>📋 Approval & Export</h2>
+        <h2>🧑‍💻 System Context – Actors &amp; External Systems</h2>
+        <p class="text-muted text-small">Users, external services, and other systems that interact with your solution.</p>
+        <div id="actors-container"></div>
+        <button id="add-actor-btn" class="btn btn-outline btn-block mt-1">＋ Add actor / external system</button>
+    </div>
+
+    <!-- Containers (Services / Deployable Units) -->
+    <div class="card">
+        <h2>📦 Containers / Services</h2>
+        <p class="text-muted text-small">Deployable units (web apps, APIs, workers, databases).</p>
+        <div id="containers-container"></div>
+        <button id="add-container-btn" class="btn btn-outline btn-block mt-1">＋ Add container / service</button>
+    </div>
+
+    <!-- Integrations (Communication Paths) -->
+    <div class="card">
+        <h2>🔗 Integrations &amp; Data Flows</h2>
+        <p class="text-muted text-small">Connections between containers, actors, or external systems.</p>
+        <div id="integrations-container"></div>
+        <button id="add-integration-btn" class="btn btn-outline btn-block mt-1">＋ Add integration</button>
+    </div>
+
+    <!-- Data Model -->
+    <div class="card">
+        <h2>📊 Data Model</h2>
+        <p class="text-muted text-small">Core entities, relationships, and data stores.</p>
+        <div id="data-entities-container"></div>
+        <button id="add-entity-btn" class="btn btn-outline btn-block mt-1">＋ Add entity / data store</button>
+    </div>
+
+    <!-- Architectural Decisions (ADRs) -->
+    <div class="card">
+        <h2>🧠 Architectural Decisions (ADRs)</h2>
+        <p class="text-muted text-small">Key decisions with rationale and trade‑offs.</p>
+        <div id="adrs-container"></div>
+        <button id="add-adr-btn" class="btn btn-outline btn-block mt-1">＋ Add decision</button>
+    </div>
+
+    <!-- Quality Attributes -->
+    <div class="card">
+        <h2>📈 Quality Attributes (Non‑Functional Requirements)</h2>
+        <p class="text-muted text-small">Performance, availability, scalability, etc.</p>
+        <div id="qualities-container"></div>
+        <button id="add-quality-btn" class="btn btn-outline btn-block mt-1">＋ Add quality attribute</button>
+    </div>
+
+    <!-- Security & Compliance -->
+    <div class="card">
+        <h2>🔐 Security &amp; Compliance</h2>
+        <p class="text-muted text-small">Authentication, authorisation, encryption, standards.</p>
+        <div id="security-container"></div>
+        <button id="add-security-btn" class="btn btn-outline btn-block mt-1">＋ Add security / compliance item</button>
+    </div>
+
+    <!-- Deployment & Infrastructure -->
+    <div class="card">
+        <h2>☁️ Deployment &amp; Infrastructure</h2>
+        <p class="text-muted text-small">Cloud, regions, sizing, scaling, disaster recovery.</p>
+        <div id="deployment-container"></div>
+        <button id="add-deployment-btn" class="btn btn-outline btn-block mt-1">＋ Add deployment detail</button>
+    </div>
+
+    <!-- Risks & Mitigations -->
+    <div class="card">
+        <h2>⚠️ Risks &amp; Mitigations</h2>
+        <p class="text-muted text-small">Potential risks, impact, probability, and countermeasures.</p>
+        <div id="risks-container"></div>
+        <button id="add-risk-btn" class="btn btn-outline btn-block mt-1">＋ Add risk</button>
+    </div>
+
+    <!-- Implementation Roadmap -->
+    <div class="card">
+        <h2>🗓️ Implementation Roadmap</h2>
+        <p class="text-muted text-small">Phases, deliverables, and timelines.</p>
+        <div id="roadmap-container"></div>
+        <button id="add-roadmap-btn" class="btn btn-outline btn-block mt-1">＋ Add phase</button>
+    </div>
+
+    <!-- Export & Reset -->
+    <div class="card">
+        <h2>📋 Export &amp; Governance</h2>
         <div class="approval-gate">
-            <strong>✅ Ready to implement when:</strong> all topics have a selected option and technical details are complete.
+            <strong>✅ Ready for review when:</strong> all sections contain at least the key elements and decisions are recorded.
         </div>
         <div class="flex-row mt-1">
-            <button id="copy-btn">📋 Copy plan for AI</button>
+            <button id="copy-btn">📋 Copy plan as text</button>
             <button id="reset-btn" class="btn btn-danger">Reset all data</button>
         </div>
     </div>
@@ -327,31 +331,65 @@
         const INITIAL_DATA = {{INITIAL_DATA_JSON}};
     </script>
     <script>
+        // ------------------------------------------------------------------
+        // Data Layer
+        // ------------------------------------------------------------------
         const STORAGE_KEY = 'arch-plan:' + document.title;
+
+        // One-time migration from the previous single-key localStorage layout
+        // used by the original pasted template ('arch-plan-data'). If the
+        // per-document key is empty but the old global key has data, copy it
+        // across and clear it so the user's edits survive the upgrade.
+        function migrateLegacyStorage() {
+            try {
+                if (localStorage.getItem(STORAGE_KEY)) return;
+                const legacy = localStorage.getItem('arch-plan-data');
+                if (!legacy) return;
+                localStorage.setItem(STORAGE_KEY, legacy);
+                localStorage.removeItem('arch-plan-data');
+            } catch (e) { /* ignore */ }
+        }
+        migrateLegacyStorage();
 
         let data = loadData();
 
         function emptyData() {
             return {
-                prompt: '',
-                topics: [],
-                techRows: [],
-                counts: { create: 0, update: 0, unit: 0, integration: 0 }
+                projectName: '',
+                projectDesc: '',
+                projectContext: '',
+                actors: [],
+                containers: [],
+                integrations: [],
+                entities: [],
+                adrs: [],
+                qualities: [],
+                security: [],
+                deployment: [],
+                risks: [],
+                roadmap: []
             };
         }
 
         function loadData() {
             try {
                 const raw = localStorage.getItem(STORAGE_KEY);
-                if (raw) return normalize(JSON.parse(raw));
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    return normalize(parsed);
+                }
             } catch (e) { /* ignore */ }
             return normalize(INITIAL_DATA || emptyData());
         }
 
+        // Fills in any missing top-level keys so a sparse persisted or seeded
+        // payload still renders a valid page.
         function normalize(parsed) {
-            if (!parsed.topics) parsed.topics = [];
-            if (!parsed.techRows) parsed.techRows = [];
-            if (!parsed.counts) parsed.counts = { create: 0, update: 0, unit: 0, integration: 0 };
+            const base = emptyData();
+            if (!parsed || typeof parsed !== 'object') parsed = {};
+            for (let key in base) {
+                if (parsed[key] === undefined) parsed[key] = base[key];
+            }
             return parsed;
         }
 
@@ -365,241 +403,320 @@
             return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         }
 
+        // ------------------------------------------------------------------
+        // Rendering helpers
+        // ------------------------------------------------------------------
         function renderAll() {
-            renderTopics();
-            renderDecisionSummary();
-            renderTechTable();
-            renderCounts();
-            document.getElementById('user-prompt').value = data.prompt || '';
+            renderActors();
+            renderContainers();
+            renderIntegrations();
+            renderEntities();
+            renderADRs();
+            renderQualities();
+            renderSecurity();
+            renderDeployment();
+            renderRisks();
+            renderRoadmap();
+            // project info
+            document.getElementById('project-name').value = data.projectName || '';
+            document.getElementById('project-desc').value = data.projectDesc || '';
+            document.getElementById('project-context').value = data.projectContext || '';
         }
 
-        function renderTopics() {
-            const container = document.getElementById('topics-container');
+        function renderItemList(containerId, items, fields, itemLabel, addBtnId, renderFn) {
+            const container = document.getElementById(containerId);
             container.innerHTML = '';
-            data.topics.forEach((topic) => {
-                const div = document.createElement('div');
-                div.className = 'topic-block';
-                div.dataset.topicId = topic.id;
+            items.forEach((item, index) => {
+                const block = document.createElement('div');
+                block.className = 'item-block';
+                block.dataset.index = index;
 
                 const header = document.createElement('div');
-                header.className = 'topic-header';
-                const nameInput = document.createElement('input');
-                nameInput.type = 'text';
-                nameInput.value = topic.name || '';
-                nameInput.placeholder = 'Topic name';
-                nameInput.className = 'topic-name';
-                nameInput.style.fontWeight = '600';
-                nameInput.style.flex = '1';
-                nameInput.addEventListener('input', () => {
-                    topic.name = nameInput.value;
-                    saveData();
-                    renderDecisionSummary();
-                });
-                const removeTopicBtn = document.createElement('button');
-                removeTopicBtn.className = 'btn btn-danger btn-sm';
-                removeTopicBtn.textContent = '✕ Remove topic';
-                removeTopicBtn.addEventListener('click', () => {
-                    data.topics = data.topics.filter(t => t.id !== topic.id);
-                    saveData();
-                    renderAll();
-                });
-                header.append(nameInput, removeTopicBtn);
-                div.appendChild(header);
-
-                const qSection = document.createElement('div');
-                qSection.className = 'topic-questions mt-1';
-                const qLabel = document.createElement('label');
-                qLabel.textContent = 'Open questions (one per line)';
-                qSection.appendChild(qLabel);
-                const qTextarea = document.createElement('textarea');
-                qTextarea.rows = 2;
-                qTextarea.value = (topic.questions || []).join('\n');
-                qTextarea.placeholder = 'e.g.\nWhat is the expected latency?\nHow do we handle errors?';
-                qTextarea.addEventListener('input', () => {
-                    topic.questions = qTextarea.value.split('\n').filter(s => s.trim() !== '');
-                    saveData();
-                });
-                qSection.appendChild(qTextarea);
-                div.appendChild(qSection);
-
-                const optSection = document.createElement('div');
-                optSection.className = 'mt-1';
-                const optLabel = document.createElement('h3');
-                optLabel.textContent = 'Options (pros / cons)';
-                optSection.appendChild(optLabel);
-
-                const optList = document.createElement('div');
-                topic.options.forEach((opt) => {
-                    const row = document.createElement('div');
-                    row.className = 'option-row' + (topic.selectedOptionId === opt.id ? ' selected' : '');
-                    row.dataset.optId = opt.id;
-
-                    const nameDiv = document.createElement('div');
-                    const nameInputOpt = document.createElement('input');
-                    nameInputOpt.type = 'text';
-                    nameInputOpt.value = opt.name || '';
-                    nameInputOpt.placeholder = 'Option name';
-                    nameInputOpt.addEventListener('input', () => {
-                        opt.name = nameInputOpt.value;
+                header.className = 'item-header';
+                const nameField = fields.find(f => f.key === 'name');
+                if (nameField) {
+                    const nameInput = document.createElement('input');
+                    nameInput.className = 'item-name';
+                    nameInput.type = 'text';
+                    nameInput.placeholder = nameField.placeholder || 'Name';
+                    nameInput.value = item.name || '';
+                    nameInput.addEventListener('input', () => {
+                        item.name = nameInput.value;
                         saveData();
                     });
-                    nameDiv.appendChild(nameInputOpt);
-
-                    const prosDiv = document.createElement('div');
-                    const prosInput = document.createElement('input');
-                    prosInput.type = 'text';
-                    prosInput.value = opt.pros || '';
-                    prosInput.placeholder = 'Pros (comma separated)';
-                    prosInput.addEventListener('input', () => {
-                        opt.pros = prosInput.value;
-                        saveData();
-                    });
-                    prosDiv.appendChild(prosInput);
-
-                    const consDiv = document.createElement('div');
-                    const consInput = document.createElement('input');
-                    consInput.type = 'text';
-                    consInput.value = opt.cons || '';
-                    consInput.placeholder = 'Cons (comma separated)';
-                    consInput.addEventListener('input', () => {
-                        opt.cons = consInput.value;
-                        saveData();
-                    });
-                    consDiv.appendChild(consInput);
-
-                    const selectDiv = document.createElement('div');
-                    selectDiv.className = 'opt-select';
-                    const selectBtn = document.createElement('button');
-                    selectBtn.className = 'btn btn-sm' + (topic.selectedOptionId === opt.id ? ' btn-success' : ' btn-outline');
-                    selectBtn.textContent = topic.selectedOptionId === opt.id ? '✓ Selected' : 'Select';
-                    selectBtn.addEventListener('click', () => {
-                        topic.selectedOptionId = topic.selectedOptionId === opt.id ? null : opt.id;
-                        saveData();
-                        renderAll();
-                    });
-                    const removeOptBtn = document.createElement('button');
-                    removeOptBtn.className = 'btn btn-danger btn-sm';
-                    removeOptBtn.textContent = '✕';
-                    removeOptBtn.style.marginLeft = '0.3rem';
-                    removeOptBtn.addEventListener('click', () => {
-                        topic.options = topic.options.filter(o => o.id !== opt.id);
-                        if (topic.selectedOptionId === opt.id) topic.selectedOptionId = null;
-                        saveData();
-                        renderAll();
-                    });
-                    selectDiv.append(selectBtn, removeOptBtn);
-
-                    row.append(nameDiv, prosDiv, consDiv, selectDiv);
-                    optList.appendChild(row);
-                });
-                optSection.appendChild(optList);
-
-                const addOptBtn = document.createElement('button');
-                addOptBtn.className = 'btn btn-outline btn-sm mt-1';
-                addOptBtn.textContent = '＋ Add option';
-                addOptBtn.addEventListener('click', () => {
-                    topic.options.push({ id: generateId(), name: '', pros: '', cons: '' });
-                    saveData();
-                    renderAll();
-                });
-                optSection.appendChild(addOptBtn);
-                div.appendChild(optSection);
-
-                container.appendChild(div);
-            });
-        }
-
-        function renderDecisionSummary() {
-            const container = document.getElementById('decision-summary');
-            if (data.topics.length === 0) {
-                container.innerHTML = '<em>No topics defined.</em>';
-                return;
-            }
-            const list = document.createElement('ul');
-            data.topics.forEach(topic => {
-                const li = document.createElement('li');
-                const selectedOpt = topic.options.find(o => o.id === topic.selectedOptionId);
-                const name = topic.name || 'Untitled topic';
-                if (selectedOpt) {
-                    li.textContent = `${name} → ${selectedOpt.name || 'Option'}`;
+                    header.appendChild(nameInput);
                 } else {
-                    li.textContent = `${name} → (no selection)`;
-                    li.style.color = '#dc2626';
+                    const span = document.createElement('span');
+                    span.className = 'item-name';
+                    span.textContent = itemLabel + ' #' + (index+1);
+                    header.appendChild(span);
                 }
-                list.appendChild(li);
-            });
-            container.innerHTML = '';
-            container.appendChild(list);
-        }
-
-        function renderTechTable() {
-            const tbody = document.getElementById('tech-tbody');
-            tbody.innerHTML = '';
-            data.techRows.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><input type="text" value="${row.action || ''}" placeholder="Action" style="width:100%;"></td>
-                    <td><input type="text" value="${row.file || ''}" placeholder="File name" style="width:100%;"></td>
-                    <td><input type="text" value="${row.comment || ''}" placeholder="Comment" style="width:100%;"></td>
-                    <td><button class="btn btn-danger btn-sm remove-tech-row" data-id="${row.id}">✕</button></td>
-                `;
-                const inputs = tr.querySelectorAll('input');
-                inputs[0].addEventListener('input', () => { row.action = inputs[0].value; saveData(); });
-                inputs[1].addEventListener('input', () => { row.file = inputs[1].value; saveData(); });
-                inputs[2].addEventListener('input', () => { row.comment = inputs[2].value; saveData(); });
-                tr.querySelector('.remove-tech-row').addEventListener('click', () => {
-                    data.techRows = data.techRows.filter(r => r.id !== row.id);
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕ Remove';
+                removeBtn.addEventListener('click', () => {
+                    items.splice(index, 1);
                     saveData();
-                    renderTechTable();
+                    renderAll();
                 });
-                tbody.appendChild(tr);
+                header.appendChild(removeBtn);
+                block.appendChild(header);
+
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'item-fields';
+                fields.forEach(f => {
+                    if (f.key === 'name') return; // already handled
+                    const wrapper = document.createElement('div');
+                    if (f.fullWidth) wrapper.className = 'full-width';
+                    const label = document.createElement('label');
+                    label.textContent = f.label;
+                    wrapper.appendChild(label);
+
+                    let input;
+                    if (f.type === 'textarea') {
+                        input = document.createElement('textarea');
+                        input.rows = f.rows || 2;
+                        input.placeholder = f.placeholder || '';
+                        input.value = item[f.key] || '';
+                        input.addEventListener('input', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    } else if (f.type === 'select') {
+                        input = document.createElement('select');
+                        f.options.forEach(opt => {
+                            const option = document.createElement('option');
+                            option.value = opt.value;
+                            option.textContent = opt.label;
+                            if (item[f.key] === opt.value) option.selected = true;
+                            input.appendChild(option);
+                        });
+                        input.addEventListener('change', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    } else {
+                        input = document.createElement('input');
+                        input.type = f.type || 'text';
+                        input.placeholder = f.placeholder || '';
+                        input.value = item[f.key] || '';
+                        input.addEventListener('input', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    }
+                    wrapper.appendChild(input);
+                    fieldDiv.appendChild(wrapper);
+                });
+                block.appendChild(fieldDiv);
+                container.appendChild(block);
             });
         }
 
-        function renderCounts() {
-            document.getElementById('count-create').value = data.counts.create || 0;
-            document.getElementById('count-update').value = data.counts.update || 0;
-            document.getElementById('count-unit').value = data.counts.unit || 0;
-            document.getElementById('count-integration').value = data.counts.integration || 0;
+        // ------------------------------------------------------------------
+        // Section specific render functions
+        // ------------------------------------------------------------------
+        function renderActors() {
+            const fields = [
+                { key: 'name', label: 'Name', placeholder: 'e.g. Customer' },
+                { key: 'type', label: 'Type', type: 'select', options: [
+                    { value: 'User', label: 'User' },
+                    { value: 'External System', label: 'External System' },
+                    { value: 'Internal System', label: 'Internal System' }
+                ]},
+                { key: 'description', label: 'Description', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderItemList('actors-container', data.actors, fields, 'Actor', 'add-actor-btn');
         }
 
-        document.getElementById('user-prompt').addEventListener('input', (e) => {
-            data.prompt = e.target.value;
-            saveData();
-        });
+        function renderContainers() {
+            const fields = [
+                { key: 'name', label: 'Container Name', placeholder: 'e.g. API Gateway' },
+                { key: 'tech', label: 'Technology Stack', placeholder: 'e.g. .NET 8, Node.js' },
+                { key: 'responsibilities', label: 'Responsibilities', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'dataStores', label: 'Data Stores (if any)', placeholder: 'e.g. PostgreSQL, Redis' }
+            ];
+            renderItemList('containers-container', data.containers, fields, 'Container', 'add-container-btn');
+        }
 
-        document.getElementById('add-topic-btn').addEventListener('click', () => {
-            data.topics.push({ id: generateId(), name: '', questions: [], options: [], selectedOptionId: null });
-            saveData();
-            renderAll();
-        });
+        function renderIntegrations() {
+            const fields = [
+                { key: 'name', label: 'Integration Name', placeholder: 'e.g. Order API call' },
+                { key: 'from', label: 'From', placeholder: 'Source component' },
+                { key: 'to', label: 'To', placeholder: 'Target component' },
+                { key: 'protocol', label: 'Protocol', type: 'select', options: [
+                    { value: 'REST', label: 'REST' },
+                    { value: 'gRPC', label: 'gRPC' },
+                    { value: 'GraphQL', label: 'GraphQL' },
+                    { value: 'WebSocket', label: 'WebSocket' },
+                    { value: 'Message Queue', label: 'Message Queue' },
+                    { value: 'Event Bus', label: 'Event Bus' },
+                    { value: 'File Transfer', label: 'File Transfer' }
+                ]},
+                { key: 'sync', label: 'Sync/Async', type: 'select', options: [
+                    { value: 'Sync', label: 'Synchronous' },
+                    { value: 'Async', label: 'Asynchronous' }
+                ]},
+                { key: 'description', label: 'Description', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderItemList('integrations-container', data.integrations, fields, 'Integration', 'add-integration-btn');
+        }
 
-        document.getElementById('add-tech-row').addEventListener('click', () => {
-            const action = document.getElementById('new-action').value.trim();
-            const file = document.getElementById('new-file').value.trim();
-            const comment = document.getElementById('new-comment').value.trim();
-            if (!action && !file && !comment) return;
-            data.techRows.push({
-                id: generateId(),
-                action: action || 'update',
-                file: file || 'file',
-                comment: comment || ''
-            });
-            document.getElementById('new-action').value = '';
-            document.getElementById('new-file').value = '';
-            document.getElementById('new-comment').value = '';
-            saveData();
-            renderTechTable();
-        });
+        function renderEntities() {
+            const fields = [
+                { key: 'name', label: 'Entity / Data Store', placeholder: 'e.g. Order' },
+                { key: 'attributes', label: 'Attributes / Schema', placeholder: 'e.g. id, userId, total' },
+                { key: 'relationships', label: 'Relationships', placeholder: 'e.g. belongs to User, has many Items' },
+                { key: 'storage', label: 'Storage Technology', placeholder: 'e.g. PostgreSQL, S3' }
+            ];
+            renderItemList('data-entities-container', data.entities, fields, 'Entity', 'add-entity-btn');
+        }
 
-        ['count-create', 'count-update', 'count-unit', 'count-integration'].forEach(id => {
-            document.getElementById(id).addEventListener('change', (e) => {
-                const val = parseInt(e.target.value) || 0;
-                const key = id.replace('count-', '');
-                data.counts[key] = val;
+        function renderADRs() {
+            const fields = [
+                { key: 'name', label: 'Decision ID & Title', placeholder: 'e.g. ADR-001: Use PostgreSQL' },
+                { key: 'context', label: 'Context / Problem', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'decision', label: 'Decision Made', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'rationale', label: 'Rationale', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'tradeoffs', label: 'Trade‑offs / Consequences', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'status', label: 'Status', type: 'select', options: [
+                    { value: 'Proposed', label: 'Proposed' },
+                    { value: 'Accepted', label: 'Accepted' },
+                    { value: 'Deprecated', label: 'Deprecated' },
+                    { value: 'Superseded', label: 'Superseded' }
+                ]}
+            ];
+            renderItemList('adrs-container', data.adrs, fields, 'ADR', 'add-adr-btn');
+        }
+
+        function renderQualities() {
+            const fields = [
+                { key: 'name', label: 'Quality Attribute', placeholder: 'e.g. Availability' },
+                { key: 'target', label: 'Target / SLO', placeholder: 'e.g. 99.99% uptime' },
+                { key: 'measurement', label: 'Measurement Method', placeholder: 'e.g. Prometheus metrics' },
+                { key: 'details', label: 'Details / Constraints', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderItemList('qualities-container', data.qualities, fields, 'Quality', 'add-quality-btn');
+        }
+
+        function renderSecurity() {
+            const fields = [
+                { key: 'name', label: 'Security / Compliance Item', placeholder: 'e.g. OAuth2 for APIs' },
+                { key: 'detail', label: 'Details / Implementation', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderItemList('security-container', data.security, fields, 'Security', 'add-security-btn');
+        }
+
+        function renderDeployment() {
+            const fields = [
+                { key: 'name', label: 'Deployment Aspect', placeholder: 'e.g. Cloud Provider' },
+                { key: 'detail', label: 'Details / Configuration', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderItemList('deployment-container', data.deployment, fields, 'Deployment', 'add-deployment-btn');
+        }
+
+        function renderRisks() {
+            const fields = [
+                { key: 'name', label: 'Risk Description', placeholder: 'e.g. Payment gateway downtime' },
+                { key: 'impact', label: 'Impact', placeholder: 'High/Medium/Low' },
+                { key: 'probability', label: 'Probability', placeholder: 'High/Medium/Low' },
+                { key: 'mitigation', label: 'Mitigation Strategy', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderItemList('risks-container', data.risks, fields, 'Risk', 'add-risk-btn');
+        }
+
+        function renderRoadmap() {
+            const fields = [
+                { key: 'name', label: 'Phase Name', placeholder: 'e.g. Phase 1 – MVP' },
+                { key: 'features', label: 'Features / Deliverables', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'timeline', label: 'Timeline', placeholder: 'e.g. Q3 2026' }
+            ];
+            renderItemList('roadmap-container', data.roadmap, fields, 'Phase', 'add-roadmap-btn');
+        }
+
+        // ------------------------------------------------------------------
+        // Event bindings for add buttons
+        // ------------------------------------------------------------------
+        function bindAddButton(btnId, arrayKey, defaultItem) {
+            document.getElementById(btnId).addEventListener('click', () => {
+                data[arrayKey].push({ ...defaultItem, id: generateId() });
                 saveData();
+                renderAll();
             });
-        });
+        }
+
+        bindAddButton('add-actor-btn', 'actors', { name: '', type: 'User', description: '' });
+        bindAddButton('add-container-btn', 'containers', { name: '', tech: '', responsibilities: '', dataStores: '' });
+        bindAddButton('add-integration-btn', 'integrations', { name: '', from: '', to: '', protocol: 'REST', sync: 'Sync', description: '' });
+        bindAddButton('add-entity-btn', 'entities', { name: '', attributes: '', relationships: '', storage: '' });
+        bindAddButton('add-adr-btn', 'adrs', { name: '', context: '', decision: '', rationale: '', tradeoffs: '', status: 'Proposed' });
+        bindAddButton('add-quality-btn', 'qualities', { name: '', target: '', measurement: '', details: '' });
+        bindAddButton('add-security-btn', 'security', { name: '', detail: '' });
+        bindAddButton('add-deployment-btn', 'deployment', { name: '', detail: '' });
+        bindAddButton('add-risk-btn', 'risks', { name: '', impact: '', probability: '', mitigation: '' });
+        bindAddButton('add-roadmap-btn', 'roadmap', { name: '', features: '', timeline: '' });
+
+        // NOTE: The inline default items above MUST stay in sync with the
+        // ITEM_FIELD_DEFAULTS table in agents/skills/arch/arch-inject.js —
+        // both describe the same per-section field schema, and adding or
+        // renaming a field requires changes in both places.
+
+        // Project info binding
+        document.getElementById('project-name').addEventListener('input', (e) => { data.projectName = e.target.value; saveData(); });
+        document.getElementById('project-desc').addEventListener('input', (e) => { data.projectDesc = e.target.value; saveData(); });
+        document.getElementById('project-context').addEventListener('input', (e) => { data.projectContext = e.target.value; saveData(); });
+
+        // ------------------------------------------------------------------
+        // Export & Reset
+        // ------------------------------------------------------------------
+        function buildExportText() {
+            const lines = [];
+            lines.push('🏛️ ARCHITECTURE & SOLUTION PLAN');
+            lines.push('==============================');
+            lines.push('');
+            lines.push(`Project: ${data.projectName || '(not set)'}`);
+            lines.push(`Description: ${data.projectDesc || '(not set)'}`);
+            lines.push(`Context: ${data.projectContext || '(not set)'}`);
+            lines.push('');
+
+            const sections = [
+                { label: 'ACTORS / EXTERNAL SYSTEMS', key: 'actors', fields: ['name', 'type', 'description'] },
+                { label: 'CONTAINERS / SERVICES', key: 'containers', fields: ['name', 'tech', 'responsibilities', 'dataStores'] },
+                { label: 'INTEGRATIONS', key: 'integrations', fields: ['name', 'from', 'to', 'protocol', 'sync', 'description'] },
+                { label: 'DATA MODEL', key: 'entities', fields: ['name', 'attributes', 'relationships', 'storage'] },
+                { label: 'ARCHITECTURAL DECISIONS (ADRs)', key: 'adrs', fields: ['name', 'context', 'decision', 'rationale', 'tradeoffs', 'status'] },
+                { label: 'QUALITY ATTRIBUTES', key: 'qualities', fields: ['name', 'target', 'measurement', 'details'] },
+                { label: 'SECURITY & COMPLIANCE', key: 'security', fields: ['name', 'detail'] },
+                { label: 'DEPLOYMENT & INFRASTRUCTURE', key: 'deployment', fields: ['name', 'detail'] },
+                { label: 'RISKS & MITIGATIONS', key: 'risks', fields: ['name', 'impact', 'probability', 'mitigation'] },
+                { label: 'IMPLEMENTATION ROADMAP', key: 'roadmap', fields: ['name', 'features', 'timeline'] }
+            ];
+
+            sections.forEach(section => {
+                const items = data[section.key] || [];
+                lines.push(section.label);
+                lines.push('-'.repeat(section.label.length));
+                if (items.length === 0) {
+                    lines.push('  (none)');
+                } else {
+                    items.forEach((item, idx) => {
+                        lines.push(`  ${idx+1}.`);
+                        section.fields.forEach(field => {
+                            const val = item[field] || '';
+                            if (val.trim()) {
+                                lines.push(`     ${field}: ${val}`);
+                            }
+                        });
+                        lines.push('');
+                    });
+                }
+                lines.push('');
+            });
+
+            lines.push('---');
+            lines.push('Generated from Architecture Plan Tool.');
+            return lines.join('\n');
+        }
 
         document.getElementById('copy-btn').addEventListener('click', () => {
             const text = buildExportText();
@@ -608,9 +725,9 @@
                 btn.textContent = '✓ Copied!';
                 btn.classList.add('copied');
                 setTimeout(() => {
-                    btn.textContent = '📋 Copy plan for AI';
+                    btn.textContent = '📋 Copy plan as text';
                     btn.classList.remove('copied');
-                }, 2000);
+                }, 2500);
             }).catch(() => {
                 alert('Could not copy. Please select and copy manually.');
             });
@@ -624,63 +741,9 @@
             }
         });
 
-        function buildExportText() {
-            const lines = [];
-            lines.push('FEATURE PLAN');
-            lines.push('============');
-            lines.push('');
-            lines.push('USER PROMPT:');
-            lines.push(data.prompt || '(not provided)');
-            lines.push('');
-
-            data.topics.forEach((topic, idx) => {
-                lines.push(`TOPIC ${idx+1}: ${topic.name || 'Untitled'}`);
-                if (topic.questions && topic.questions.length) {
-                    lines.push('  Open questions:');
-                    topic.questions.forEach(q => lines.push(`    - ${q}`));
-                } else {
-                    lines.push('  Open questions: (none)');
-                }
-                lines.push('  Options:');
-                topic.options.forEach((opt, oi) => {
-                    const selected = topic.selectedOptionId === opt.id ? ' [SELECTED]' : '';
-                    lines.push(`    ${String.fromCharCode(65+oi)}) ${opt.name || 'Option'}${selected}`);
-                    if (opt.pros) lines.push(`       Pros: ${opt.pros}`);
-                    if (opt.cons) lines.push(`       Cons: ${opt.cons}`);
-                });
-                if (topic.options.length === 0) lines.push('    (no options)');
-                lines.push('');
-            });
-
-            lines.push('DECISION SUMMARY:');
-            data.topics.forEach(topic => {
-                const selected = topic.options.find(o => o.id === topic.selectedOptionId);
-                const name = topic.name || 'Untitled';
-                lines.push(selected ? `  ${name} → ${selected.name || 'Option'}` : `  ${name} → (no selection)`);
-            });
-            lines.push('');
-
-            lines.push('TECHNICAL DETAILS:');
-            if (data.techRows.length) {
-                lines.push('  Action | File | Comment');
-                data.techRows.forEach(row => {
-                    lines.push(`  ${row.action || 'update'} | ${row.file || ''} | ${row.comment || ''}`);
-                });
-            } else {
-                lines.push('  (none)');
-            }
-            lines.push('');
-            lines.push(`Files to create: ${data.counts.create || 0}`);
-            lines.push(`Files to update: ${data.counts.update || 0}`);
-            lines.push(`Unit tests: ${data.counts.unit || 0}`);
-            lines.push(`Integration tests: ${data.counts.integration || 0}`);
-            lines.push('');
-            lines.push('---');
-            lines.push('Generated from Feature Plan Tool.');
-
-            return lines.join('\n');
-        }
-
+        // ------------------------------------------------------------------
+        // Initial render
+        // ------------------------------------------------------------------
         renderAll();
     </script>
 
