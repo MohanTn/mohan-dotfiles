@@ -1,1751 +1,688 @@
 <!doctype html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shared Understanding — {{FEATURE_TITLE}}</title>
+    <title>Feature Plan – {{FEATURE_TITLE}}</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      :root {
-        --accent: #2563eb;
-        --bg: #f8fafc;
-        --card-bg: #ffffff;
-        --text: #1e293b;
-        --text-muted: #64748b;
-        --border: #e2e8f0;
-        --status-draft: #64748b;
-        --status-review: #f59e0b;
-        --status-approved: #16a34a;
-        --wrong: #e11d48;
-        --warn: #b45309;
-      }
-
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial, sans-serif;
-        line-height: 1.6;
-        color: var(--text);
-        background: var(--bg);
-        min-height: 100vh;
-      }
-
-      nav#toc {
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: 240px;
-        height: 100vh;
-        background: var(--card-bg);
-        border-right: 1px solid var(--border);
-        overflow-y: auto;
-        z-index: 100;
-        padding: 2rem 1rem;
-      }
-
-      nav#toc .brand {
-        font-weight: bold;
-        font-size: 1.1rem;
-        color: var(--accent);
-        margin-bottom: 2rem;
-        display: block;
-      }
-
-      nav#toc a {
-        display: block;
-        padding: 0.5rem 0.75rem;
-        margin: 0.5rem 0;
-        color: var(--text);
-        text-decoration: none;
-        border-radius: 6px;
-        font-size: 0.95rem;
-        transition: all 0.2s;
-      }
-
-      nav#toc a:hover {
-        background: var(--bg);
-        color: var(--accent);
-      }
-
-      nav#toc a.active {
-        background: var(--accent);
-        color: white;
-        font-weight: 500;
-      }
-
-      main {
-        margin-left: 240px;
-        padding: 3rem 2rem;
-        margin-right: auto;
-      }
-
-      header {
-        margin-bottom: 3rem;
-      }
-
-      header h1 {
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
-        color: var(--text);
-      }
-
-      header .subtitle {
-        color: var(--text-muted);
-        font-size: 0.95rem;
-      }
-
-      .status-banner {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
-        padding: 1rem 1.5rem;
-        border-radius: 12px;
-        margin-bottom: 2rem;
-        font-size: 0.9rem;
-        font-weight: 500;
-      }
-
-      .status-banner.draft {
-        background: rgba(100, 116, 139, 0.1);
-        color: var(--status-draft);
-        border-left: 4px solid var(--status-draft);
-      }
-
-      .status-banner.review {
-        background: rgba(245, 158, 11, 0.1);
-        color: var(--status-review);
-        border-left: 4px solid var(--status-review);
-      }
-
-      .status-banner.approved {
-        background: rgba(22, 163, 74, 0.1);
-        color: var(--status-approved);
-        border-left: 4px solid var(--status-approved);
-      }
-
-      section {
-        margin-bottom: 3rem;
-        scroll-margin-top: 2rem;
-      }
-
-      section h2 {
-        font-size: 1.4rem;
-        margin-bottom: 1.5rem;
-        padding-left: 1rem;
-        border-left: 4px solid var(--accent);
-        color: var(--text);
-      }
-
-      .card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-      }
-
-      .card h3 {
-        font-size: 1.1rem;
-        margin-bottom: 1rem;
-        color: var(--text);
-      }
-
-      .card h4 {
-        font-size: 1rem;
-        margin-top: 1.5rem;
-        margin-bottom: 0.75rem;
-        color: var(--accent);
-      }
-
-      .card h4:first-child {
-        margin-top: 0;
-      }
-
-      .card p {
-        margin-bottom: 1rem;
-        color: var(--text);
-      }
-
-      .card ul,
-      .card ol {
-        margin-left: 1.5rem;
-        margin-bottom: 1rem;
-      }
-
-      .card li {
-        margin-bottom: 0.5rem;
-        color: var(--text);
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 1rem;
-      }
-
-      table thead {
-        background: var(--bg);
-        border-bottom: 2px solid var(--border);
-      }
-
-      table th {
-        padding: 1rem;
-        text-align: left;
-        font-weight: 600;
-        color: var(--text);
-        font-size: 0.9rem;
-        white-space: nowrap;
-      }
-
-      table td {
-        padding: 1rem;
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-        font-size: 0.95rem;
-        white-space: nowrap;
-      }
-
-      table tbody tr:nth-child(even) {
-        background: rgba(100, 116, 139, 0.02);
-      }
-
-      .table-wrap {
-        overflow-x: auto;
-        margin-bottom: 1rem;
-      }
-
-      /* Interactive tables hold sentences, not identifiers: let them wrap. */
-      #u-table td,
-      #oq-table td {
-        white-space: normal;
-        vertical-align: top;
-      }
-
-      #u-table .u-statement {
-        min-width: 320px;
-      }
-
-      #u-table .u-verdict {
-        min-width: 210px;
-      }
-
-      #oq-table td:nth-child(2) {
-        min-width: 260px;
-      }
-
-      .badge {
-        display: inline-block;
-        padding: 0.15rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        white-space: nowrap;
-      }
-
-      .badge.src-user {
-        background: rgba(37, 99, 235, 0.12);
-        color: var(--accent);
-      }
-      .badge.src-code {
-        background: rgba(22, 163, 74, 0.12);
-        color: var(--status-approved);
-      }
-      .badge.src-inferred {
-        background: rgba(245, 158, 11, 0.15);
-        color: var(--warn);
-      }
-      .badge.src-assumed {
-        background: rgba(225, 29, 72, 0.12);
-        color: #be123c;
-      }
-      .badge.conf-high {
-        background: rgba(22, 163, 74, 0.12);
-        color: var(--status-approved);
-      }
-      .badge.conf-medium {
-        background: rgba(245, 158, 11, 0.15);
-        color: var(--warn);
-      }
-      .badge.conf-low {
-        background: rgba(225, 29, 72, 0.12);
-        color: #be123c;
-      }
-      .badge.kind-example {
-        background: rgba(22, 163, 74, 0.12);
-        color: var(--status-approved);
-      }
-      .badge.kind-counter {
-        background: rgba(225, 29, 72, 0.12);
-        color: #be123c;
-      }
-      .badge.tension-badge {
-        background: rgba(245, 158, 11, 0.15);
-        color: var(--warn);
-      }
-
-      .u-evidence {
-        margin-top: 0.35rem;
-        font-size: 0.8rem;
-        color: var(--text-muted);
-      }
-
-      .u-impact {
-        margin-top: 0.25rem;
-        font-size: 0.8rem;
-        color: var(--warn);
-      }
-
-      .priority-flag {
-        margin-top: 0.4rem;
-        display: inline-block;
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: #be123c;
-        background: rgba(225, 29, 72, 0.09);
-        border: 1px solid rgba(225, 29, 72, 0.25);
-        border-radius: 999px;
-        padding: 0.1rem 0.55rem;
-      }
-
-      .fork-hint {
-        margin-top: 0.4rem;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: var(--accent);
-      }
-
-      .u-hint {
-        color: var(--text-muted);
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-      }
-
-      /* Verdict buttons (claims + examples) */
-      .verdict-group {
-        display: flex;
-        gap: 0.35rem;
-        margin-bottom: 0.4rem;
-      }
-
-      .verdict-btn {
-        width: 2rem;
-        height: 2rem;
-        border: 1px solid var(--border);
-        background: var(--card-bg);
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.95rem;
-        line-height: 1;
-        color: var(--text-muted);
-        transition: all 0.15s;
-      }
-
-      .verdict-btn:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-
-      .verdict-btn.v-yes.selected {
-        background: var(--status-approved);
-        border-color: var(--status-approved);
-        color: white;
-      }
-      .verdict-btn.v-partly.selected {
-        background: var(--status-review);
-        border-color: var(--status-review);
-        color: white;
-      }
-      .verdict-btn.v-no.selected {
-        background: var(--wrong);
-        border-color: var(--wrong);
-        color: white;
-      }
-
-      /* Row state colouring (agreed / flagged) for claims */
-      #u-table tbody tr[data-state="agreed"] {
-        background: rgba(22, 163, 74, 0.07);
-      }
-      #u-table tbody tr[data-state="flagged"] {
-        background: rgba(225, 29, 72, 0.07);
-      }
-      #u-table tbody tr[data-priority="high"] td:first-child {
-        box-shadow: inset 3px 0 0 #be123c;
-      }
-
-      /* Fork radio options */
-      .fork-opt,
-      .tension-opt {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.45rem;
-        font-size: 0.88rem;
-        padding: 0.3rem 0.4rem;
-        border-radius: 6px;
-        cursor: pointer;
-        margin-bottom: 0.2rem;
-      }
-      .fork-opt:hover,
-      .tension-opt:hover {
-        background: var(--bg);
-      }
-      .fork-opt input,
-      .tension-opt input {
-        margin-top: 0.28rem;
-      }
-      .fork-neither span {
-        color: var(--text-muted);
-      }
-
-      /* Structured correction options */
-      .u-correction {
-        margin-top: 0.25rem;
-      }
-      .correction-options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
-        align-items: center;
-        margin-bottom: 0.5rem;
-      }
-      .correction-label {
-        font-size: 0.78rem;
-        color: var(--text-muted);
-        margin-right: 0.15rem;
-      }
-      .correction-opt {
-        border: 1px solid var(--border);
-        background: var(--card-bg);
-        border-radius: 6px;
-        padding: 0.25rem 0.6rem;
-        font-size: 0.82rem;
-        cursor: pointer;
-        color: var(--text);
-        transition: all 0.15s;
-      }
-      .correction-opt:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-      .correction-opt.selected {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: white;
-      }
-
-      /* Add-a-claim */
-      .add-claim-row {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 0.5rem;
-      }
-      .ghost-btn {
-        background: var(--card-bg);
-        border: 1px dashed var(--accent);
-        color: var(--accent);
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .ghost-btn:hover {
-        background: rgba(37, 99, 235, 0.06);
-      }
-      #u-table tbody tr.added-row {
-        background: rgba(37, 99, 235, 0.05);
-      }
-      textarea.added-text {
-        width: 100%;
-        min-width: 260px;
-        min-height: 2.5rem;
-        padding: 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-family: inherit;
-        font-size: 0.9rem;
-        color: var(--text);
-        resize: vertical;
-      }
-      .remove-added {
-        background: none;
-        border: none;
-        color: var(--wrong);
-        cursor: pointer;
-        font-size: 0.8rem;
-      }
-      .remove-added:hover {
-        text-decoration: underline;
-      }
-
-      /* Recall / success statement */
-      .recall-card {
-        border-left: 4px solid var(--status-review);
-        background: rgba(245, 158, 11, 0.05);
-      }
-      .recall-card h3 {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      textarea#recall-box {
-        width: 100%;
-        min-height: 4rem;
-        padding: 0.6rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-family: inherit;
-        font-size: 0.95rem;
-        color: var(--text);
-        resize: vertical;
-      }
-
-      /* Tensions */
-      .tension-card {
-        border-left: 4px solid var(--status-review);
-      }
-      .tension-head {
-        font-weight: 600;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .tension-cols {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin-bottom: 1rem;
-      }
-      .tension-col {
-        padding: 0.85rem 1rem;
-        border-radius: 8px;
-        background: var(--bg);
-      }
-      .tension-col.want {
-        border-top: 3px solid var(--accent);
-      }
-      .tension-col.code {
-        border-top: 3px solid var(--wrong);
-      }
-      .tension-col h4 {
-        margin: 0 0 0.4rem 0;
-      }
-      .tension-col p {
-        margin: 0;
-        font-size: 0.92rem;
-      }
-      .tension-rec {
-        font-size: 0.9rem;
-        background: rgba(37, 99, 235, 0.05);
-        border-radius: 8px;
-        padding: 0.6rem 0.85rem;
-        margin-bottom: 1rem;
-      }
-      .tension-resolve {
-        border-top: 1px solid var(--border);
-        padding-top: 0.85rem;
-      }
-      .resolve-label {
-        display: block;
-        font-weight: 600;
-        font-size: 0.88rem;
-        margin-bottom: 0.5rem;
-      }
-      .tension-card[data-choice] {
-        border-left-color: var(--status-approved);
-      }
-
-      /* Acceptance examples */
-      .example-card {
-        border-left: 4px solid var(--status-approved);
-      }
-      .example-card.ex-counter {
-        border-left-color: var(--wrong);
-      }
-      .ex-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 0.85rem;
-      }
-      .ex-verdict {
-        margin-bottom: 0;
-      }
-      .ex-gwt > div {
-        padding: 0.35rem 0;
-        font-size: 0.93rem;
-        border-bottom: 1px dashed var(--border);
-      }
-      .ex-gwt > div:last-child {
-        border-bottom: none;
-      }
-      .gwt-k {
-        display: inline-block;
-        width: 3.6rem;
-        font-weight: 700;
-        color: var(--text-muted);
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-      }
-      .ex-refs {
-        margin-top: 0.5rem;
-        font-size: 0.78rem;
-        color: var(--text-muted);
-      }
-      .example-card[data-verdict="yes"] {
-        background: rgba(22, 163, 74, 0.06);
-      }
-      .example-card[data-verdict="no"] {
-        background: rgba(225, 29, 72, 0.06);
-      }
-
-      .mermaid-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 400px;
-        position: relative;
-      }
-
-      .mermaid {
-        display: flex;
-        justify-content: center;
-      }
-
-      .diagram-toggle-btn {
-        position: absolute;
-        top: 0.75rem;
-        right: 0.75rem;
-        width: 2rem;
-        height: 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        color: var(--text-muted);
-        font-size: 1rem;
-        line-height: 1;
-        cursor: pointer;
-        z-index: 2;
-        transition: all 0.2s;
-      }
-
-      .diagram-toggle-btn:hover {
-        color: var(--accent);
-        border-color: var(--accent);
-      }
-
-      .diagram-backdrop {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, 0.6);
-        z-index: 999;
-      }
-
-      .diagram-backdrop.active {
-        display: block;
-      }
-
-      body.diagram-lock {
-        overflow: hidden;
-      }
-
-      .mermaid-card.diagram-maximized {
-        position: fixed;
-        inset: 2rem;
-        z-index: 1000;
-        overflow: auto;
-        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35);
-      }
-
-      .mermaid-card.diagram-maximized .mermaid {
-        width: 100%;
-        height: 100%;
-      }
-
-      .mermaid-card.diagram-maximized .mermaid svg {
-        width: 100% !important;
-        height: 100% !important;
-        max-width: 100% !important;
-        max-height: 100% !important;
-      }
-
-      pre,
-      code {
-        white-space: pre-wrap;
-        word-break: break-all;
-        max-width: 100%;
-        font-family: "Courier New", Courier, monospace;
-      }
-
-      pre {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 1rem;
-        overflow-x: auto;
-        margin-bottom: 1rem;
-        font-size: 0.85rem;
-        line-height: 1.4;
-      }
-
-      code {
-        background: rgba(100, 116, 139, 0.1);
-        padding: 0.2rem 0.4rem;
-        border-radius: 4px;
-        color: #e11d48;
-        font-size: 0.9rem;
-      }
-
-      pre code {
-        background: none;
-        padding: 0;
-        color: var(--text);
-      }
-
-      details {
-        margin-bottom: 1.5rem;
-      }
-
-      details summary {
-        cursor: pointer;
-        font-weight: 600;
-        color: var(--accent);
-        padding: 0.75rem;
-        user-select: none;
-        transition: all 0.2s;
-      }
-
-      details summary:hover {
-        background: var(--bg);
-        border-radius: 6px;
-      }
-
-      details[open] summary {
-        margin-bottom: 1rem;
-      }
-
-      details pre {
-        margin-top: 1rem;
-      }
-
-      .approval-gate {
-        background: rgba(22, 163, 74, 0.1);
-        border-left: 4px solid var(--status-approved);
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        color: var(--status-approved);
-        font-weight: 500;
-        margin-top: 2rem;
-      }
-
-      .ai-overview-card {
-        border-left: 4px solid var(--accent);
-        background: rgba(37, 99, 235, 0.04);
-      }
-
-      .copy-qa-btn {
-        background: var(--accent);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .copy-qa-btn:hover {
-        opacity: 0.9;
-      }
-      .copy-qa-btn.copied {
-        background: var(--status-approved);
-      }
-
-      textarea.oq-answer,
-      textarea.u-note,
-      textarea.t-note,
-      textarea.ex-note {
-        width: 100%;
-        min-width: 200px;
-        min-height: 3rem;
-        padding: 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-family: inherit;
-        font-size: 0.9rem;
-        color: var(--text);
-        resize: vertical;
-      }
-      textarea.u-note,
-      textarea.t-note,
-      textarea.ex-note {
-        min-width: 180px;
-        margin-top: 0.35rem;
-      }
-
-      #sync-widget {
-        position: fixed;
-        right: 1.25rem;
-        bottom: 1.25rem;
-        z-index: 500;
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-        padding: 0.9rem 1rem;
-        width: 250px;
-        font-size: 0.85rem;
-      }
-      #sync-widget .sync-title {
-        font-weight: 600;
-        margin-bottom: 0.35rem;
-      }
-      #sync-widget .sync-counts {
-        color: var(--text-muted);
-        margin-bottom: 0.5rem;
-      }
-      #sync-widget .sync-bar {
-        height: 6px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        overflow: hidden;
-        margin-bottom: 0.5rem;
-      }
-      #sync-bar-fill {
-        height: 100%;
-        width: 0;
-        background: var(--status-approved);
-        transition: width 0.2s;
-      }
-      .sync-gate {
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-bottom: 0.6rem;
-        color: var(--text-muted);
-      }
-      .sync-gate.warn {
-        color: #be123c;
-      }
-      .sync-gate.ok {
-        color: var(--status-approved);
-      }
-      #copy-review-btn {
-        width: 100%;
-      }
-
-      section,
-      .card {
-        overflow-wrap: break-word;
-        word-break: break-word;
-      }
-
-      @media (max-width: 900px) {
-        nav#toc {
-          position: static;
-          width: 100%;
-          height: auto;
-          border-right: none;
-          border-bottom: 1px solid var(--border);
-          padding: 1rem;
-          margin-bottom: 1rem;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        nav#toc .brand {
-          display: inline-block;
-          margin-right: 2rem;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 2rem 1.5rem;
+            max-width: 1100px;
+            margin: 0 auto;
+            line-height: 1.5;
         }
-        nav#toc a {
-          display: inline-block;
-          margin: 0 0.5rem;
-          padding: 0.4rem 0.6rem;
-          font-size: 0.85rem;
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.25rem;
+            color: #0f172a;
         }
-        main {
-          margin-left: 0;
-          padding: 2rem 1rem;
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
         }
-        header h1 {
-          font-size: 1.5rem;
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .tension-cols {
-          grid-template-columns: 1fr;
+        .card h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #0f172a;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.5rem;
         }
-        #sync-widget {
-          right: 0.75rem;
-          bottom: 0.75rem;
-          width: 210px;
-          padding: 0.7rem 0.8rem;
+        .card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.5rem 0;
+            color: #1e293b;
         }
-      }
+        label {
+            font-weight: 500;
+            display: block;
+            margin-bottom: 0.3rem;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 0.6rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: vertical;
+            background: #fff;
+        }
+        textarea:focus, input:focus {
+            outline: 2px solid #2563eb;
+            outline-offset: 1px;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .mt-1 { margin-top: 0.75rem; }
+        .text-muted { color: #64748b; }
+        .text-small { font-size: 0.85rem; }
+
+        .btn {
+            background: #f1f5f9;
+            border: 1px solid #d1d5db;
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.15s;
+            color: #1e293b;
+        }
+        .btn:hover {
+            background: #e2e8f0;
+        }
+        .btn-primary {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        .btn-danger {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        .btn-success {
+            background: #16a34a;
+            border-color: #16a34a;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #15803d;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px dashed #2563eb;
+            color: #2563eb;
+        }
+        .btn-outline:hover {
+            background: #eff6ff;
+        }
+        .btn-sm {
+            padding: 0.2rem 0.6rem;
+            font-size: 0.8rem;
+        }
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .topic-block {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.2rem;
+            margin-bottom: 1.5rem;
+            background: #fafcfc;
+        }
+        .topic-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .topic-header .topic-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .topic-questions textarea {
+            min-height: 2.5rem;
+        }
+        .option-row {
+            display: grid;
+            grid-template-columns: 1.5fr 2fr 2fr 0.8fr;
+            gap: 0.5rem;
+            align-items: start;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .option-row .opt-pros, .option-row .opt-cons {
+            font-size: 0.9rem;
+        }
+        .option-row .opt-select {
+            text-align: center;
+        }
+        .option-row.selected {
+            background: #eff6ff;
+            border-left: 3px solid #2563eb;
+            padding-left: 0.5rem;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th {
+            background: #f1f5f9;
+            text-align: left;
+            padding: 0.6rem 0.8rem;
+            font-weight: 600;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 0.6rem 0.8rem;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+        .count-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+        .count-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .count-item input {
+            width: 4rem;
+            padding: 0.3rem;
+            text-align: center;
+        }
+
+        .approval-gate {
+            background: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: #166534;
+            font-weight: 500;
+        }
+
+        #copy-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        #copy-btn:hover { opacity: 0.9; }
+        #copy-btn.copied { background: #16a34a; }
+
+        @media (max-width:700px) {
+            .option-row {
+                grid-template-columns: 1fr;
+                gap: 0.3rem;
+                padding: 0.8rem 0;
+            }
+            .option-row .opt-select {
+                text-align: left;
+            }
+            .topic-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
     </style>
-  </head>
-  <body>
-    <nav id="toc">
-      <span class="brand">🧠 Understanding</span>
-      <a href="#s-overview">★ At a Glance</a>
-      <a href="#s0">0 · Document Control</a>
-      <a href="#s1">1 · The Concept</a>
-      <a href="#s2">2 · The Code Today</a>
-      <a href="#s3">3 · The Change</a>
-      <a href="#s4">4 · Acceptance Examples</a>
-      <a href="#s5">5 · Understanding Checklist</a>
-      <a href="#s6">6 · Tensions</a>
-      <a href="#s7">7 · Scope</a>
-      <a href="#s8">8 · Open Questions</a>
-      <a href="#s9">9 · Risks</a>
-      <a href="#s10">10 · Implementation Sketch</a>
-    </nav>
+</head>
+<body>
 
-    <main>
-      <header>
-        <h1>🧠 Shared Understanding — {{FEATURE_TITLE}}</h1>
-        <p class="subtitle">{{FEATURE_SUMMARY}} · {{STACK_BADGES}}</p>
-      </header>
+    <h1>🧩 Feature Plan – {{FEATURE_TITLE}}</h1>
+    <p class="subtitle">Break down your feature, weigh options, and plan implementation.</p>
 
-      <section id="s-overview">
-        <h2>🤖 At a Glance — Do We Agree on the Goal?</h2>
-        <div class="card ai-overview-card">
-          <h3>My understanding of what you want</h3>
-          {{AI_OVERVIEW_CONTENT}}
-        </div>
-        <div class="card recall-card">
-          <h3>✍️ Your turn — success in your own words</h3>
-          <p class="u-hint">
-            Before trusting my summary, write what a correct result looks like
-            to you, in a sentence or two. If your words and mine diverge, that
-            gap is the most important thing on this page. Your text is included
-            in the copied review so I can reconcile the two.
-          </p>
-          <textarea
-            id="recall-box"
-            placeholder="In my words, this is done when…"
-          ></textarea>
-        </div>
-      </section>
-
-      <section id="s0">
-        <h2>0 · Document Control</h2>
-        <div class="status-banner {{STATUS_CLASS}}">
-          <strong>Status:</strong> {{STATUS}} ·
-          <strong>Version:</strong> {{VERSION}} ·
-          <strong>Last Updated:</strong> {{LAST_UPDATED}} ·
-          <strong>Author:</strong> {{AUTHOR_MODEL}}
-        </div>
-
-        <div class="card">
-          <h3>Revision Log</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Version</th>
-                  <th>Date</th>
-                  <th>Summary of Changes</th>
-                  <th>Driven By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {{REVISION_LOG_ROWS}}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="approval-gate">
-          <strong>Approval Gate:</strong> Implementation begins only after every
-          high-stakes claim in Section 5 is verdicted, every tension is resolved,
-          the acceptance examples you approve are agreed as binding, and you flip
-          this document to APPROVED. Matching mental models is the deliverable
-          here; code comes later.
-        </div>
-      </section>
-
-      <section id="s1">
-        <h2>1 · The Concept, In My Own Words</h2>
-        {{SECTION_1_CONTENT}}
-      </section>
-
-      <section id="s2">
-        <h2>2 · What the Code Does Today</h2>
-        {{SECTION_2_CONTENT}}
-      </section>
-
-      <section id="s3">
-        <h2>3 · The Change — Before → After</h2>
-        {{SECTION_3_CONTENT}}
-      </section>
-
-      <section id="s4">
-        <h2>4 · Acceptance Examples — Sign Off the Behaviour</h2>
-        <p class="u-hint">
-          Each example is a concrete input → outcome I believe you want (or, for a
-          counter-example, one that must NOT happen). Mark ✓ if that's the behaviour
-          you expect, ✗ if the outcome is wrong. The ones you ✓ become the binding
-          acceptance criteria the implementation is graded against — this is where
-          understanding turns into something testable.
-        </p>
-        {{EXAMPLES_CONTENT}}
-      </section>
-
-      <section id="s5">
-        <h2>5 · Understanding Checklist — Confirm, Correct, or Fork Each Claim</h2>
-        <div class="card">
-          <p class="u-hint">
-            Each row is one claim I hold about your concept or your code. Mark it
-            ✓ correct, ≈ partly right, or ✗ wrong (and pick the right answer or
-            leave a note). Some rows are <strong>forks</strong> — I read them more
-            than one way, so choose the intended reading. Rows flagged
-            <strong>high stakes</strong> matter most: confirm those first. If I
-            missed something entirely, add it with the button below the table.
-          </p>
-          <div class="table-wrap">
-            <table id="u-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Area</th>
-                  <th>What I Understand</th>
-                  <th>Source</th>
-                  <th>Confidence</th>
-                  <th>Your Verdict</th>
-                </tr>
-              </thead>
-              <tbody>
-                {{UNDERSTANDING_ROWS}}
-              </tbody>
-            </table>
-          </div>
-          <div class="add-claim-row">
-            <button type="button" id="add-claim-btn" class="ghost-btn">
-              ＋ Add a claim I missed
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section id="s6">
-        <h2>6 · Tensions — What You Want vs. What the Code Allows</h2>
-        <p class="u-hint">
-          Reading the code, I found places where your intent and the current
-          reality pull against each other. Rather than silently pick for you, I'm
-          surfacing them: choose how each should resolve. An unresolved tension is
-          a likely source of a surprise later.
-        </p>
-        {{TENSIONS_CONTENT}}
-      </section>
-
-      <section id="s7">
-        <h2>7 · Scope Boundaries</h2>
-        {{SECTION_7_CONTENT}}
-      </section>
-
-      <section id="s8">
-        <h2>8 · Open Questions</h2>
-        <div class="card">
-          <p class="u-hint">Answers typed here are included in the copied review.</p>
-          <div class="table-wrap">
-            <table id="oq-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Question</th>
-                  <th>Why it Matters</th>
-                  <th>Proposed Default</th>
-                  <th>Status</th>
-                  <th>Your Answer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {{OPEN_QUESTIONS_ROWS}}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="s9">
-        <h2>9 · Risks &amp; Sharp Edges</h2>
-        {{SECTION_9_CONTENT}}
-      </section>
-
-      <section id="s10">
-        <h2>10 · Implementation Sketch (Non-Binding)</h2>
-        {{SECTION_10_CONTENT}}
-      </section>
-    </main>
-
-    <div
-      id="sync-widget"
-      data-doc="{{FEATURE_TITLE}}"
-      data-version="{{VERSION}}"
-      data-status="{{STATUS}}"
-    >
-      <div class="sync-title">Understanding sync</div>
-      <div class="sync-counts">
-        <span id="sync-confirmed">0</span> agreed ·
-        <span id="sync-flagged">0</span> to fix ·
-        <span id="sync-pending">0</span> pending
-      </div>
-      <div class="sync-bar"><div id="sync-bar-fill"></div></div>
-      <div id="sync-gate" class="sync-gate">Review the claims above</div>
-      <button type="button" id="copy-review-btn" class="copy-qa-btn">
-        📋 Copy review for the AI
-      </button>
+    <div class="card">
+        <h2>📌 User Prompt</h2>
+        <p class="text-muted text-small">The feature request this plan is for. Edit if it drifted.</p>
+        <textarea id="user-prompt" rows="3" placeholder="I want to build a feature that…"></textarea>
     </div>
 
-    <script type="module">
-      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
-      mermaid.initialize({
-        startOnLoad: true,
-        theme: "default",
-        securityLevel: "loose",
-      });
-    </script>
+    <div class="card">
+        <h2>📂 Topics / Areas</h2>
+        <p class="text-muted text-small">Each area has open questions and options with pros/cons. Pick the option you want for each.</p>
+        <div id="topics-container"></div>
+        <button id="add-topic-btn" class="btn btn-outline btn-block mt-1">＋ Add topic / area</button>
+    </div>
+
+    <div class="card">
+        <h2>✅ Decision Summary</h2>
+        <p class="text-muted text-small">Selected options for each topic are shown here.</p>
+        <div id="decision-summary"><em>No decisions made yet.</em></div>
+    </div>
+
+    <div class="card">
+        <h2>🛠️ Technical Details</h2>
+        <p class="text-muted text-small">Implementation actions (create/update files, etc.)</p>
+        <div class="table-wrap">
+            <table id="tech-table">
+                <thead>
+                    <tr>
+                        <th style="width:12%">Action</th>
+                        <th style="width:25%">File Name</th>
+                        <th style="width:50%">Comment</th>
+                        <th style="width:13%">Remove</th>
+                    </tr>
+                </thead>
+                <tbody id="tech-tbody"></tbody>
+            </table>
+        </div>
+        <div class="flex-row mt-1">
+            <input type="text" id="new-action" placeholder="Action (e.g. create, update)" style="width:120px;">
+            <input type="text" id="new-file" placeholder="File name" style="width:180px;">
+            <input type="text" id="new-comment" placeholder="Comment" style="flex:1;">
+            <button id="add-tech-row" class="btn btn-primary">Add row</button>
+        </div>
+
+        <h3 class="mt-1">Counts</h3>
+        <div class="count-grid">
+            <div class="count-item"><label>Files to create:</label><input type="number" id="count-create" value="0" min="0"></div>
+            <div class="count-item"><label>Files to update:</label><input type="number" id="count-update" value="0" min="0"></div>
+            <div class="count-item"><label>Unit tests:</label><input type="number" id="count-unit" value="0" min="0"></div>
+            <div class="count-item"><label>Integration tests:</label><input type="number" id="count-integration" value="0" min="0"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📋 Approval & Export</h2>
+        <div class="approval-gate">
+            <strong>✅ Ready to implement when:</strong> all topics have a selected option and technical details are complete.
+        </div>
+        <div class="flex-row mt-1">
+            <button id="copy-btn">📋 Copy plan for AI</button>
+            <button id="reset-btn" class="btn btn-danger">Reset all data</button>
+        </div>
+    </div>
 
     <script>
-      const toc = document.getElementById("toc");
-      const sections = document.querySelectorAll('section[id^="s"]');
+        // Filled by arch-inject.js from the AI's plan. Falls back to an empty
+        // plan when opened without injection (e.g. developing the template).
+        const INITIAL_DATA = {{INITIAL_DATA_JSON}};
+    </script>
+    <script>
+        const STORAGE_KEY = 'arch-plan:' + document.title;
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              const id = entry.target.id;
-              const link = toc.querySelector(`a[href="#${id}"]`);
-              toc
-                .querySelectorAll("a")
-                .forEach((a) => a.classList.remove("active"));
-              if (link) link.classList.add("active");
+        let data = loadData();
+
+        function emptyData() {
+            return {
+                prompt: '',
+                topics: [],
+                techRows: [],
+                counts: { create: 0, update: 0, unit: 0, integration: 0 }
+            };
+        }
+
+        function loadData() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) return normalize(JSON.parse(raw));
+            } catch (e) { /* ignore */ }
+            return normalize(INITIAL_DATA || emptyData());
+        }
+
+        function normalize(parsed) {
+            if (!parsed.topics) parsed.topics = [];
+            if (!parsed.techRows) parsed.techRows = [];
+            if (!parsed.counts) parsed.counts = { create: 0, update: 0, unit: 0, integration: 0 };
+            return parsed;
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) { /* ignore */ }
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        }
+
+        function renderAll() {
+            renderTopics();
+            renderDecisionSummary();
+            renderTechTable();
+            renderCounts();
+            document.getElementById('user-prompt').value = data.prompt || '';
+        }
+
+        function renderTopics() {
+            const container = document.getElementById('topics-container');
+            container.innerHTML = '';
+            data.topics.forEach((topic) => {
+                const div = document.createElement('div');
+                div.className = 'topic-block';
+                div.dataset.topicId = topic.id;
+
+                const header = document.createElement('div');
+                header.className = 'topic-header';
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.value = topic.name || '';
+                nameInput.placeholder = 'Topic name';
+                nameInput.className = 'topic-name';
+                nameInput.style.fontWeight = '600';
+                nameInput.style.flex = '1';
+                nameInput.addEventListener('input', () => {
+                    topic.name = nameInput.value;
+                    saveData();
+                    renderDecisionSummary();
+                });
+                const removeTopicBtn = document.createElement('button');
+                removeTopicBtn.className = 'btn btn-danger btn-sm';
+                removeTopicBtn.textContent = '✕ Remove topic';
+                removeTopicBtn.addEventListener('click', () => {
+                    data.topics = data.topics.filter(t => t.id !== topic.id);
+                    saveData();
+                    renderAll();
+                });
+                header.append(nameInput, removeTopicBtn);
+                div.appendChild(header);
+
+                const qSection = document.createElement('div');
+                qSection.className = 'topic-questions mt-1';
+                const qLabel = document.createElement('label');
+                qLabel.textContent = 'Open questions (one per line)';
+                qSection.appendChild(qLabel);
+                const qTextarea = document.createElement('textarea');
+                qTextarea.rows = 2;
+                qTextarea.value = (topic.questions || []).join('\n');
+                qTextarea.placeholder = 'e.g.\nWhat is the expected latency?\nHow do we handle errors?';
+                qTextarea.addEventListener('input', () => {
+                    topic.questions = qTextarea.value.split('\n').filter(s => s.trim() !== '');
+                    saveData();
+                });
+                qSection.appendChild(qTextarea);
+                div.appendChild(qSection);
+
+                const optSection = document.createElement('div');
+                optSection.className = 'mt-1';
+                const optLabel = document.createElement('h3');
+                optLabel.textContent = 'Options (pros / cons)';
+                optSection.appendChild(optLabel);
+
+                const optList = document.createElement('div');
+                topic.options.forEach((opt) => {
+                    const row = document.createElement('div');
+                    row.className = 'option-row' + (topic.selectedOptionId === opt.id ? ' selected' : '');
+                    row.dataset.optId = opt.id;
+
+                    const nameDiv = document.createElement('div');
+                    const nameInputOpt = document.createElement('input');
+                    nameInputOpt.type = 'text';
+                    nameInputOpt.value = opt.name || '';
+                    nameInputOpt.placeholder = 'Option name';
+                    nameInputOpt.addEventListener('input', () => {
+                        opt.name = nameInputOpt.value;
+                        saveData();
+                    });
+                    nameDiv.appendChild(nameInputOpt);
+
+                    const prosDiv = document.createElement('div');
+                    const prosInput = document.createElement('input');
+                    prosInput.type = 'text';
+                    prosInput.value = opt.pros || '';
+                    prosInput.placeholder = 'Pros (comma separated)';
+                    prosInput.addEventListener('input', () => {
+                        opt.pros = prosInput.value;
+                        saveData();
+                    });
+                    prosDiv.appendChild(prosInput);
+
+                    const consDiv = document.createElement('div');
+                    const consInput = document.createElement('input');
+                    consInput.type = 'text';
+                    consInput.value = opt.cons || '';
+                    consInput.placeholder = 'Cons (comma separated)';
+                    consInput.addEventListener('input', () => {
+                        opt.cons = consInput.value;
+                        saveData();
+                    });
+                    consDiv.appendChild(consInput);
+
+                    const selectDiv = document.createElement('div');
+                    selectDiv.className = 'opt-select';
+                    const selectBtn = document.createElement('button');
+                    selectBtn.className = 'btn btn-sm' + (topic.selectedOptionId === opt.id ? ' btn-success' : ' btn-outline');
+                    selectBtn.textContent = topic.selectedOptionId === opt.id ? '✓ Selected' : 'Select';
+                    selectBtn.addEventListener('click', () => {
+                        topic.selectedOptionId = topic.selectedOptionId === opt.id ? null : opt.id;
+                        saveData();
+                        renderAll();
+                    });
+                    const removeOptBtn = document.createElement('button');
+                    removeOptBtn.className = 'btn btn-danger btn-sm';
+                    removeOptBtn.textContent = '✕';
+                    removeOptBtn.style.marginLeft = '0.3rem';
+                    removeOptBtn.addEventListener('click', () => {
+                        topic.options = topic.options.filter(o => o.id !== opt.id);
+                        if (topic.selectedOptionId === opt.id) topic.selectedOptionId = null;
+                        saveData();
+                        renderAll();
+                    });
+                    selectDiv.append(selectBtn, removeOptBtn);
+
+                    row.append(nameDiv, prosDiv, consDiv, selectDiv);
+                    optList.appendChild(row);
+                });
+                optSection.appendChild(optList);
+
+                const addOptBtn = document.createElement('button');
+                addOptBtn.className = 'btn btn-outline btn-sm mt-1';
+                addOptBtn.textContent = '＋ Add option';
+                addOptBtn.addEventListener('click', () => {
+                    topic.options.push({ id: generateId(), name: '', pros: '', cons: '' });
+                    saveData();
+                    renderAll();
+                });
+                optSection.appendChild(addOptBtn);
+                div.appendChild(optSection);
+
+                container.appendChild(div);
+            });
+        }
+
+        function renderDecisionSummary() {
+            const container = document.getElementById('decision-summary');
+            if (data.topics.length === 0) {
+                container.innerHTML = '<em>No topics defined.</em>';
+                return;
             }
-          });
-        },
-        { threshold: 0.3, rootMargin: "-50% 0px -50% 0px" },
-      );
+            const list = document.createElement('ul');
+            data.topics.forEach(topic => {
+                const li = document.createElement('li');
+                const selectedOpt = topic.options.find(o => o.id === topic.selectedOptionId);
+                const name = topic.name || 'Untitled topic';
+                if (selectedOpt) {
+                    li.textContent = `${name} → ${selectedOpt.name || 'Option'}`;
+                } else {
+                    li.textContent = `${name} → (no selection)`;
+                    li.style.color = '#dc2626';
+                }
+                list.appendChild(li);
+            });
+            container.innerHTML = '';
+            container.appendChild(list);
+        }
 
-      sections.forEach((section) => observer.observe(section));
+        function renderTechTable() {
+            const tbody = document.getElementById('tech-tbody');
+            tbody.innerHTML = '';
+            data.techRows.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="text" value="${row.action || ''}" placeholder="Action" style="width:100%;"></td>
+                    <td><input type="text" value="${row.file || ''}" placeholder="File name" style="width:100%;"></td>
+                    <td><input type="text" value="${row.comment || ''}" placeholder="Comment" style="width:100%;"></td>
+                    <td><button class="btn btn-danger btn-sm remove-tech-row" data-id="${row.id}">✕</button></td>
+                `;
+                const inputs = tr.querySelectorAll('input');
+                inputs[0].addEventListener('input', () => { row.action = inputs[0].value; saveData(); });
+                inputs[1].addEventListener('input', () => { row.file = inputs[1].value; saveData(); });
+                inputs[2].addEventListener('input', () => { row.comment = inputs[2].value; saveData(); });
+                tr.querySelector('.remove-tech-row').addEventListener('click', () => {
+                    data.techRows = data.techRows.filter(r => r.id !== row.id);
+                    saveData();
+                    renderTechTable();
+                });
+                tbody.appendChild(tr);
+            });
+        }
 
-      toc.querySelectorAll("a").forEach((link) => {
-        link.addEventListener("click", (e) => {
-          e.preventDefault();
-          const target = document.querySelector(link.getAttribute("href"));
-          if (target) {
-            target.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
+        function renderCounts() {
+            document.getElementById('count-create').value = data.counts.create || 0;
+            document.getElementById('count-update').value = data.counts.update || 0;
+            document.getElementById('count-unit').value = data.counts.unit || 0;
+            document.getElementById('count-integration').value = data.counts.integration || 0;
+        }
+
+        document.getElementById('user-prompt').addEventListener('input', (e) => {
+            data.prompt = e.target.value;
+            saveData();
         });
-      });
-    </script>
 
-    <script>
-      document.querySelectorAll("table").forEach((table) => {
-        if (table.closest(".table-wrap")) return;
-        const wrap = document.createElement("div");
-        wrap.className = "table-wrap";
-        table.parentNode.insertBefore(wrap, table);
-        wrap.appendChild(table);
-      });
-    </script>
+        document.getElementById('add-topic-btn').addEventListener('click', () => {
+            data.topics.push({ id: generateId(), name: '', questions: [], options: [], selectedOptionId: null });
+            saveData();
+            renderAll();
+        });
 
-    <script>
-      (function () {
-        const backdrop = document.createElement("div");
-        backdrop.className = "diagram-backdrop";
-        document.body.appendChild(backdrop);
+        document.getElementById('add-tech-row').addEventListener('click', () => {
+            const action = document.getElementById('new-action').value.trim();
+            const file = document.getElementById('new-file').value.trim();
+            const comment = document.getElementById('new-comment').value.trim();
+            if (!action && !file && !comment) return;
+            data.techRows.push({
+                id: generateId(),
+                action: action || 'update',
+                file: file || 'file',
+                comment: comment || ''
+            });
+            document.getElementById('new-action').value = '';
+            document.getElementById('new-file').value = '';
+            document.getElementById('new-comment').value = '';
+            saveData();
+            renderTechTable();
+        });
 
-        let activeCard = null;
+        ['count-create', 'count-update', 'count-unit', 'count-integration'].forEach(id => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                const val = parseInt(e.target.value) || 0;
+                const key = id.replace('count-', '');
+                data.counts[key] = val;
+                saveData();
+            });
+        });
 
-        function minimize(card) {
-          card.classList.remove("diagram-maximized");
-          const btn = card.querySelector(".diagram-toggle-btn");
-          if (btn) {
-            btn.textContent = "⛶";
-            btn.title = "Maximize diagram";
-          }
-          backdrop.classList.remove("active");
-          document.body.classList.remove("diagram-lock");
-          activeCard = null;
-        }
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            const text = buildExportText();
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copy-btn');
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy plan for AI';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(() => {
+                alert('Could not copy. Please select and copy manually.');
+            });
+        });
 
-        function maximize(card) {
-          if (activeCard && activeCard !== card) minimize(activeCard);
-          card.classList.add("diagram-maximized");
-          const btn = card.querySelector(".diagram-toggle-btn");
-          if (btn) {
-            btn.textContent = "✕";
-            btn.title = "Minimize diagram";
-          }
-          backdrop.classList.add("active");
-          document.body.classList.add("diagram-lock");
-          activeCard = card;
-        }
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if (confirm('Reset all data? This cannot be undone.')) {
+                data = emptyData();
+                saveData();
+                renderAll();
+            }
+        });
 
-        document.querySelectorAll("div.mermaid").forEach((diagram) => {
-          let card = diagram.closest(".mermaid-card");
-          if (!card) {
-            card = document.createElement("div");
-            card.className = "mermaid-card";
-            diagram.parentNode.insertBefore(card, diagram);
-            card.appendChild(diagram);
-          }
-          if (card.querySelector(".diagram-toggle-btn")) return;
+        function buildExportText() {
+            const lines = [];
+            lines.push('FEATURE PLAN');
+            lines.push('============');
+            lines.push('');
+            lines.push('USER PROMPT:');
+            lines.push(data.prompt || '(not provided)');
+            lines.push('');
 
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "diagram-toggle-btn";
-          btn.textContent = "⛶";
-          btn.title = "Maximize diagram";
-          btn.addEventListener("click", () => {
-            if (card.classList.contains("diagram-maximized")) {
-              minimize(card);
+            data.topics.forEach((topic, idx) => {
+                lines.push(`TOPIC ${idx+1}: ${topic.name || 'Untitled'}`);
+                if (topic.questions && topic.questions.length) {
+                    lines.push('  Open questions:');
+                    topic.questions.forEach(q => lines.push(`    - ${q}`));
+                } else {
+                    lines.push('  Open questions: (none)');
+                }
+                lines.push('  Options:');
+                topic.options.forEach((opt, oi) => {
+                    const selected = topic.selectedOptionId === opt.id ? ' [SELECTED]' : '';
+                    lines.push(`    ${String.fromCharCode(65+oi)}) ${opt.name || 'Option'}${selected}`);
+                    if (opt.pros) lines.push(`       Pros: ${opt.pros}`);
+                    if (opt.cons) lines.push(`       Cons: ${opt.cons}`);
+                });
+                if (topic.options.length === 0) lines.push('    (no options)');
+                lines.push('');
+            });
+
+            lines.push('DECISION SUMMARY:');
+            data.topics.forEach(topic => {
+                const selected = topic.options.find(o => o.id === topic.selectedOptionId);
+                const name = topic.name || 'Untitled';
+                lines.push(selected ? `  ${name} → ${selected.name || 'Option'}` : `  ${name} → (no selection)`);
+            });
+            lines.push('');
+
+            lines.push('TECHNICAL DETAILS:');
+            if (data.techRows.length) {
+                lines.push('  Action | File | Comment');
+                data.techRows.forEach(row => {
+                    lines.push(`  ${row.action || 'update'} | ${row.file || ''} | ${row.comment || ''}`);
+                });
             } else {
-              maximize(card);
+                lines.push('  (none)');
             }
-          });
-          card.appendChild(btn);
-        });
+            lines.push('');
+            lines.push(`Files to create: ${data.counts.create || 0}`);
+            lines.push(`Files to update: ${data.counts.update || 0}`);
+            lines.push(`Unit tests: ${data.counts.unit || 0}`);
+            lines.push(`Integration tests: ${data.counts.integration || 0}`);
+            lines.push('');
+            lines.push('---');
+            lines.push('Generated from Feature Plan Tool.');
 
-        backdrop.addEventListener("click", () => {
-          if (activeCard) minimize(activeCard);
-        });
+            return lines.join('\n');
+        }
 
-        document.addEventListener("keydown", (e) => {
-          if (e.key === "Escape" && activeCard) minimize(activeCard);
-        });
-      })();
+        renderAll();
     </script>
 
-    <script>
-      // Co-authoring engine: verdicts, forks, structured corrections, added
-      // claims, tension resolutions, example sign-off, recall, live sync, and
-      // the review export. All state persists per browser keyed by doc+version.
-      (function () {
-        const widget = document.getElementById("sync-widget");
-        if (!widget) return;
-
-        const docName = widget.dataset.doc || "";
-        const docVersion = widget.dataset.version || "";
-        const docStatus = widget.dataset.status || "";
-        const storeKey = "arch-review:" + docName + ":" + docVersion;
-
-        const state = load();
-        state.recall = state.recall || "";
-        state.claims = state.claims || {};
-        state.added = Array.isArray(state.added) ? state.added : [];
-        state.tensions = state.tensions || {};
-        state.examples = state.examples || {};
-        state.answers = state.answers || {};
-
-        function load() {
-          try {
-            return JSON.parse(localStorage.getItem(storeKey)) || {};
-          } catch (e) {
-            return {};
-          }
-        }
-        function save() {
-          try {
-            localStorage.setItem(storeKey, JSON.stringify(state));
-          } catch (e) {
-            /* private mode: review still works, just not persisted */
-          }
-        }
-        const txt = (el) => (el ? el.value.trim() : "");
-        const setText = (sel, val) => {
-          const el = document.querySelector(sel);
-          if (el) el.textContent = val;
-        };
-
-        // ---------- Recall / success statement ----------
-        const recall = document.getElementById("recall-box");
-        if (recall) {
-          recall.value = state.recall;
-          recall.addEventListener("input", () => {
-            state.recall = recall.value;
-            save();
-          });
-        }
-
-        // ---------- Understanding rows ----------
-        const uTableBody = document.querySelector("#u-table tbody");
-        const claimRows = () =>
-          Array.from(document.querySelectorAll("#u-table tbody tr[data-id]"));
-
-        function rowState(row) {
-          if (row.dataset.fork === "true") {
-            const c = row.dataset.forkChoice;
-            if (c && c !== "neither") return "agreed";
-            if (c === "neither") return "flagged";
-            return "pending";
-          }
-          const v = row.dataset.verdict;
-          if (v === "yes") return "agreed";
-          if (v === "no" || v === "partly") return "flagged";
-          return "pending";
-        }
-        function paintRow(row) {
-          row.dataset.state = rowState(row);
-        }
-
-        function applyVerdict(row, verdict) {
-          if (verdict) row.dataset.verdict = verdict;
-          else row.removeAttribute("data-verdict");
-          row.querySelectorAll(".verdict-btn").forEach((b) => {
-            b.classList.toggle("selected", b.dataset.verdict === verdict);
-          });
-          const correction = row.querySelector(".u-correction");
-          if (correction)
-            correction.hidden = !(verdict === "no" || verdict === "partly");
-          paintRow(row);
-        }
-
-        function wireClaim(row) {
-          const id = row.dataset.id;
-          const note = row.querySelector(".u-note");
-
-          if (row.dataset.fork === "true") {
-            row.querySelectorAll('input[type="radio"]').forEach((radio) => {
-              radio.addEventListener("change", () => {
-                row.dataset.forkChoice = radio.value;
-                if (note) note.hidden = radio.value !== "neither";
-                state.claims[id] = { fork: radio.value, note: txt(note) };
-                paintRow(row);
-                save();
-                refresh();
-              });
-            });
-            if (note)
-              note.addEventListener("input", () => {
-                state.claims[id] = {
-                  fork: row.dataset.forkChoice || "",
-                  note: note.value,
-                };
-                save();
-              });
-            const s = state.claims[id];
-            if (s && s.fork) {
-              row.querySelectorAll('input[type="radio"]').forEach((r) => {
-                if (r.value === s.fork) r.checked = true;
-              });
-              row.dataset.forkChoice = s.fork;
-              if (note) {
-                note.hidden = s.fork !== "neither";
-                note.value = s.note || "";
-              }
-            }
-            paintRow(row);
-            return;
-          }
-
-          row.querySelectorAll(".verdict-btn").forEach((btn) => {
-            btn.addEventListener("click", () => {
-              const next =
-                row.dataset.verdict === btn.dataset.verdict
-                  ? ""
-                  : btn.dataset.verdict;
-              applyVerdict(row, next);
-              const cur = state.claims[id] || {};
-              state.claims[id] = {
-                verdict: next,
-                note: txt(note),
-                correction: cur.correction || "",
-              };
-              save();
-              refresh();
-            });
-          });
-          row.querySelectorAll(".correction-opt").forEach((opt) => {
-            opt.addEventListener("click", () => {
-              const cur = state.claims[id] || {};
-              const nextVal =
-                cur.correction === opt.dataset.value ? "" : opt.dataset.value;
-              row.querySelectorAll(".correction-opt").forEach((o) =>
-                o.classList.toggle("selected", o.dataset.value === nextVal),
-              );
-              state.claims[id] = {
-                verdict: row.dataset.verdict || "",
-                note: txt(note),
-                correction: nextVal,
-              };
-              save();
-            });
-          });
-          if (note)
-            note.addEventListener("input", () => {
-              const cur = state.claims[id] || {};
-              state.claims[id] = {
-                verdict: row.dataset.verdict || "",
-                note: note.value,
-                correction: cur.correction || "",
-              };
-              save();
-            });
-
-          const s = state.claims[id];
-          if (s) {
-            if (note) note.value = s.note || "";
-            if (s.correction)
-              row.querySelectorAll(".correction-opt").forEach((o) =>
-                o.classList.toggle("selected", o.dataset.value === s.correction),
-              );
-            applyVerdict(row, s.verdict || "");
-          }
-        }
-
-        // ---------- Added claims (human authors what the AI missed) ----------
-        function renderAdded(item) {
-          const tr = document.createElement("tr");
-          tr.className = "added-row";
-          tr.dataset.addedId = item.id;
-          tr.innerHTML =
-            `<td>${item.id}</td><td>you</td>` +
-            `<td class="u-statement"><textarea class="added-text" name="added-${item.id}" placeholder="The thing I missed…"></textarea></td>` +
-            `<td><span class="badge src-user">you said</span></td>` +
-            `<td><span class="badge conf-high">high</span></td>` +
-            `<td><button type="button" class="remove-added">✕ remove</button></td>`;
-          uTableBody.appendChild(tr);
-          const ta = tr.querySelector(".added-text");
-          ta.value = item.text || "";
-          ta.addEventListener("input", () => {
-            item.text = ta.value;
-            save();
-          });
-          tr.querySelector(".remove-added").addEventListener("click", () => {
-            state.added = state.added.filter((x) => x.id !== item.id);
-            tr.remove();
-            save();
-            refresh();
-          });
-        }
-        const addBtn = document.getElementById("add-claim-btn");
-        if (addBtn) {
-          state.added.forEach(renderAdded);
-          addBtn.addEventListener("click", () => {
-            let n = state.added.length + 1;
-            let id = "A" + n;
-            while (state.added.some((x) => x.id === id)) id = "A" + ++n;
-            const item = { id: id, text: "" };
-            state.added.push(item);
-            renderAdded(item);
-            save();
-          });
-        }
-
-        // ---------- Tensions ----------
-        const tensionCards = Array.from(
-          document.querySelectorAll(".tension-card[data-id]"),
-        );
-        tensionCards.forEach((card) => {
-          const id = card.dataset.id;
-          const note = card.querySelector(".t-note");
-          card.querySelectorAll('input[type="radio"]').forEach((radio) => {
-            radio.addEventListener("change", () => {
-              card.dataset.choice = radio.value;
-              if (note) note.hidden = radio.value !== "other";
-              state.tensions[id] = { choice: radio.value, note: txt(note) };
-              save();
-              refresh();
-            });
-          });
-          if (note)
-            note.addEventListener("input", () => {
-              state.tensions[id] = {
-                choice: card.dataset.choice || "",
-                note: note.value,
-              };
-              save();
-            });
-          const s = state.tensions[id];
-          if (s && s.choice) {
-            card.querySelectorAll('input[type="radio"]').forEach((r) => {
-              if (r.value === s.choice) r.checked = true;
-            });
-            card.dataset.choice = s.choice;
-            if (note) {
-              note.hidden = s.choice !== "other";
-              note.value = s.note || "";
-            }
-          }
-        });
-
-        // ---------- Acceptance examples ----------
-        const exCards = Array.from(
-          document.querySelectorAll(".example-card[data-id]"),
-        );
-        exCards.forEach((card) => {
-          const id = card.dataset.id;
-          const note = card.querySelector(".ex-note");
-          card.querySelectorAll(".verdict-btn").forEach((btn) => {
-            btn.addEventListener("click", () => {
-              const next =
-                card.dataset.verdict === btn.dataset.verdict
-                  ? ""
-                  : btn.dataset.verdict;
-              if (next) card.dataset.verdict = next;
-              else card.removeAttribute("data-verdict");
-              card.querySelectorAll(".verdict-btn").forEach((b) =>
-                b.classList.toggle("selected", b.dataset.verdict === next),
-              );
-              if (note) note.hidden = next !== "no";
-              state.examples[id] = { verdict: next, note: txt(note) };
-              save();
-              refresh();
-            });
-          });
-          if (note)
-            note.addEventListener("input", () => {
-              state.examples[id] = {
-                verdict: card.dataset.verdict || "",
-                note: note.value,
-              };
-              save();
-            });
-          const s = state.examples[id];
-          if (s) {
-            if (s.verdict) card.dataset.verdict = s.verdict;
-            card.querySelectorAll(".verdict-btn").forEach((b) =>
-              b.classList.toggle("selected", b.dataset.verdict === s.verdict),
-            );
-            if (note) {
-              note.hidden = s.verdict !== "no";
-              note.value = s.note || "";
-            }
-          }
-        });
-
-        // ---------- Open questions ----------
-        const oqRows = Array.from(
-          document.querySelectorAll("#oq-table tbody tr[data-id]"),
-        );
-        oqRows.forEach((row) => {
-          const id = row.dataset.id;
-          const ta = row.querySelector("textarea");
-          if (!ta) return;
-          if (state.answers[id]) ta.value = state.answers[id];
-          ta.addEventListener("input", () => {
-            state.answers[id] = ta.value;
-            save();
-          });
-        });
-
-        // ---------- Live sync tally + approval gate ----------
-        function refresh() {
-          let agreed = 0;
-          let flagged = 0;
-          let pending = 0;
-          let highPending = 0;
-
-          claimRows().forEach((row) => {
-            paintRow(row);
-            const s = rowState(row);
-            if (s === "agreed") agreed++;
-            else if (s === "flagged") flagged++;
-            else {
-              pending++;
-              if (row.dataset.priority === "high") highPending++;
-            }
-          });
-          tensionCards.forEach((card) => {
-            if (card.dataset.choice) agreed++;
-            else {
-              pending++;
-              highPending++;
-            }
-          });
-          exCards.forEach((card) => {
-            const v = card.dataset.verdict;
-            if (v === "yes") agreed++;
-            else if (v === "no") flagged++;
-            else pending++;
-          });
-
-          const total = agreed + flagged + pending;
-          setText("#sync-confirmed", agreed);
-          setText("#sync-flagged", flagged);
-          setText("#sync-pending", pending);
-          document.getElementById("sync-bar-fill").style.width = total
-            ? (agreed / total) * 100 + "%"
-            : "0%";
-
-          const gate = document.getElementById("sync-gate");
-          if (highPending > 0) {
-            gate.textContent =
-              "⚠ " +
-              highPending +
-              " high-stakes item" +
-              (highPending > 1 ? "s" : "") +
-              " need a decision";
-            gate.className = "sync-gate warn";
-          } else if (pending > 0) {
-            gate.textContent =
-              pending + " item" + (pending > 1 ? "s" : "") + " left to review";
-            gate.className = "sync-gate";
-          } else if (flagged > 0) {
-            gate.textContent =
-              "✓ all reviewed · " + flagged + " to revise next pass";
-            gate.className = "sync-gate";
-          } else {
-            gate.textContent = "✓ fully synced — ready to approve";
-            gate.className = "sync-gate ok";
-          }
-        }
-
-        claimRows().forEach(wireClaim);
-        refresh();
-
-        // ---------- Review export (the manifest carried to the next pass) ----------
-        function labelFor(input) {
-          const label = input && input.closest("label");
-          const span = label && label.querySelector("span");
-          return span ? span.textContent.trim() : "";
-        }
-        function checkedLabel(container, name) {
-          const input = container.querySelector(
-            'input[name="' + name + '"]:checked',
-          );
-          return input ? labelFor(input) : "";
-        }
-
-        function buildReview() {
-          const confirmed = [];
-          const forks = [];
-          const corrections = [];
-          const unreviewed = [];
-
-          claimRows().forEach((row) => {
-            const id = row.dataset.id;
-            const stmt = row.dataset.statement || "";
-            if (row.dataset.fork === "true") {
-              const c = row.dataset.forkChoice;
-              if (!c) {
-                unreviewed.push(id);
-              } else if (c === "neither") {
-                const note = txt(row.querySelector(".u-note"));
-                corrections.push(
-                  `${id} [FORK: none fit] "${stmt}"\n  Right reading: ${note || "(no note)"}`,
-                );
-              } else {
-                forks.push(`${id} → "${checkedLabel(row, "fork-" + id)}"`);
-                confirmed.push(id);
-              }
-              return;
-            }
-            const v = row.dataset.verdict;
-            const cur = state.claims[id] || {};
-            if (v === "yes") {
-              confirmed.push(id);
-            } else if (v === "no" || v === "partly") {
-              const tag = v === "no" ? "WRONG" : "PARTLY";
-              const fix = cur.correction
-                ? `right answer: "${cur.correction}"  (structured)`
-                : `note: ${txt(row.querySelector(".u-note")) || "(no note)"}  (prose)`;
-              corrections.push(`${id} [${tag}] "${stmt}"\n  ${fix}`);
-            } else {
-              unreviewed.push(id);
-            }
-          });
-
-          const added = state.added
-            .filter((a) => (a.text || "").trim())
-            .map((a) => `+${a.id}: ${a.text.trim()}`);
-
-          const tensions = tensionCards.map((card) => {
-            const id = card.dataset.id;
-            const c = card.dataset.choice;
-            if (!c) return `${id}: UNRESOLVED`;
-            if (c === "other")
-              return `${id} → other: ${txt(card.querySelector(".t-note")) || "(no note)"}`;
-            return `${id} → ${checkedLabel(card, "tension-" + id)}`;
-          });
-
-          const exApproved = [];
-          const exRejected = [];
-          const exUnreviewed = [];
-          exCards.forEach((card) => {
-            const id = card.dataset.id;
-            const v = card.dataset.verdict;
-            if (v === "yes") exApproved.push(id);
-            else if (v === "no")
-              exRejected.push(
-                `${id}: ${card.dataset.example}\n  should be: ${txt(card.querySelector(".ex-note")) || "(no note)"}`,
-              );
-            else exUnreviewed.push(id);
-          });
-
-          const answers = oqRows.map((row) => {
-            const q = row.children[1] ? row.children[1].textContent.trim() : "";
-            const a = txt(row.querySelector("textarea"));
-            return `${row.dataset.id}: ${q}\n→ ${a || "(no answer)"}`;
-          });
-
-          return [
-            `ARCH REVIEW — ${docName} ${docVersion} [${docStatus.toUpperCase()}]`,
-            "",
-            "YOUR SUCCESS STATEMENT (your words):",
-            state.recall.trim() || "(not provided)",
-            "(reconcile this against the AI Overview at the top of the doc)",
-            "",
-            `CONFIRMED CLAIMS: ${confirmed.join(", ") || "none"}`,
-            "",
-            forks.length ? "FORK CHOICES:\n" + forks.join("\n") : "FORK CHOICES: none",
-            "",
-            "CORRECTIONS (apply these):",
-            corrections.length ? corrections.join("\n") : "none",
-            "",
-            added.length
-              ? "NEW CLAIMS YOU ADDED:\n" + added.join("\n")
-              : "NEW CLAIMS YOU ADDED: none",
-            "",
-            "TENSIONS:",
-            tensions.length ? tensions.join("\n") : "none",
-            "",
-            "ACCEPTANCE EXAMPLES:",
-            `  APPROVED (binding): ${exApproved.join(", ") || "none"}`,
-            exRejected.length
-              ? "  REJECTED:\n    " + exRejected.join("\n    ")
-              : "  REJECTED: none",
-            `  UNREVIEWED: ${exUnreviewed.join(", ") || "none"}`,
-            "",
-            "OPEN QUESTION ANSWERS:",
-            answers.length ? answers.join("\n") : "none",
-            "",
-            `UNREVIEWED CLAIMS: ${unreviewed.join(", ") || "none"}`,
-            "",
-            "NEXT: reconcile my overview with your success statement; apply the corrections, fork choices, new claims, tension resolutions, and rejected-example fixes to the arch JSON; bump the version and add a revision-log row; regenerate with arch-inject.js. On APPROVED, the CONFIRMED claims + APPROVED examples are the acceptance criteria the implementation must satisfy — carry them into /feature as verification anchors.",
-          ].join("\n");
-        }
-
-        document
-          .getElementById("copy-review-btn")
-          .addEventListener("click", (e) => {
-            const btn = e.currentTarget;
-            navigator.clipboard.writeText(buildReview()).then(() => {
-              const original = btn.textContent;
-              btn.textContent = "✓ Copied";
-              btn.classList.add("copied");
-              setTimeout(() => {
-                btn.textContent = original;
-                btn.classList.remove("copied");
-              }, 1500);
-            });
-          });
-      })();
-    </script>
-  </body>
+</body>
 </html>

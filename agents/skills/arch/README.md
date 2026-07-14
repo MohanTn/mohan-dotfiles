@@ -4,18 +4,17 @@ The common layer behind Claude Code's `/arch` command (`claude/commands/arch.md`
 
 ## What the document is for
 
-`/arch` produces a **co-authored shared-understanding document**, not a solution spec. The AI takes a concept the user has in mind, describes it back grounded in the real code, and lays out every claim, fork, tension, and expected behaviour so the human can confirm, correct, and *contribute* — with the goal that the eventual implementation is 90%+ aligned with what the user actually meant. The rendered file is a two-author surface, not a read-only report:
+`/arch` produces a **feature plan decision tool**, not a spec you read passively. The AI breaks the feature into topics/areas, gives each a set of options with pros and cons, and seeds a technical-details table — then the human picks an option per topic, edits the table, and exports the result. It's a working page, not a review artifact: everything (topics, options, tech rows, counts) is editable and persists per browser via `localStorage`.
 
-- **Understanding checklist (Section 5)** — one row per claim, tagged by **source** (you said / in code / inferred / assumed) and **confidence**. Each gets ✓ / ≈ / ✗ verdicts. A claim can be a **fork** (radio options when the AI had to guess a reading) or carry **structured-correction options** (pick the right value instead of writing prose). Claims that are uncertain *and* impactful, plus all forks, are flagged **high stakes** and gate approval. An **“add a claim I missed”** button lets the human author rows the AI never generated — the fix for omission blindness.
-- **Acceptance examples (Section 4)** — Given/When/Then examples (and counter-examples for what must NOT happen) the human signs off ✓/✗. The approved ones are the binding behavioural contract, turning prose understanding into something testable.
-- **Tensions (Section 6)** — conflicts the AI found between the user's intent and what the code allows, each with resolution options the human picks. Surfaces the AI's code-derived knowledge instead of letting it silently bend intent.
-- **Recall box** — the human writes success "in their own words"; the next pass reconciles it against the AI's overview to catch framing drift.
-- **Sync widget** — tallies agreed / to-fix / pending across claims, tensions, and examples, warns while high-stakes items are undecided, and exports a **“Copy review for the AI”** manifest (success statement, confirmed claims, fork choices, structured/prose corrections, new claims, tension resolutions, approved/rejected examples, answers) that the human pastes straight back for the next pass. On approval it names the confirmed claims + approved examples as the acceptance criteria to carry into `/feature`. All state persists per browser via `localStorage` keyed by title + version.
+- **Topics / Areas** — one card per decision the feature requires. Each has open questions (free text) and a list of options, each with pros/cons. The human clicks **Select** on the option they want; only one selection per topic.
+- **Decision Summary** — auto-derived list of topic → selected option, flagging any topic still undecided.
+- **Technical Details** — a table of implementation actions (create/update file + comment) plus counts of files to create/update and unit/integration tests, all editable.
+- **Approval & Export** — **Copy plan for AI** serializes the whole page (prompt, topics with selections, tech rows, counts) as plain text for the human to paste back; **Reset** clears the page.
 
 ## Two-stage workflow
 
-1. **Content (the AI).** Generates the concept-specific content as **structured JSON** — metadata, `aiOverview`, `understanding`, `tensions`, `examples`, `openQuestions`, and HTML fragments for the free-form sections. Cheap in tokens: no template boilerplate is regenerated.
-2. **Injection (the script).** `arch-inject.js` merges that JSON into `arch-template.html` deterministically. The AI never reads or rewrites the template.
+1. **Content (the AI).** Generates the plan as **structured JSON** — `title`, `prompt`, `topics` (with pre-populated options/pros/cons), `techRows`, `counts`. Cheap in tokens: no template boilerplate is regenerated.
+2. **Injection (the script).** `arch-inject.js` merges that JSON into `arch-template.html` deterministically, embedding it as the page's initial state. The AI never reads or rewrites the template.
 
 ## Usage
 
@@ -23,9 +22,9 @@ The common layer behind Claude Code's `/arch` command (`claude/commands/arch.md`
 # First draft
 /arch billing retry logic
 
-# Refinement: write your success statement, verdict the high-stakes claims and forks,
-# resolve tensions, sign off examples, add anything missed, then click
-# "Copy review for the AI" and paste the block back. The AI applies it all and re-injects.
+# Refinement: open the file, select an option per topic, edit the tech-details
+# table, then click "Copy plan for AI" and paste the block back so the AI can
+# proceed with implementation.
 ```
 
 Manual injection (either tool, same path):
@@ -37,48 +36,41 @@ node ~/.agents/skills/arch/arch-inject.js arch-feature.json arch-feature.html
 node agents/skills/arch/arch-inject.js arch-feature.json arch-feature.html
 ```
 
-## JSON structure (abridged)
+## JSON structure
 
 ```json
 {
   "title": "Billing retry logic",
-  "summary": "Retry failed card charges with backoff before dunning",
-  "stack": "Node.js · Postgres · Stripe",
-  "status": "DRAFT", "statusClass": "draft", "version": "v1",
-  "lastUpdated": "2026-07-12", "authorModel": "Claude Opus 4.8",
-  "aiOverview": "<p>The single condensed restatement of what the user wants.</p>",
-  "revisionLog": [ { "version": "v1", "date": "2026-07-12", "summary": "Initial", "drivenBy": "First generation" } ],
-  "understanding": [
-    { "id": "U1", "area": "Concept", "statement": "Retries stop once the invoice is paid by any means.", "source": "user", "confidence": "high", "impactLevel": "high", "impact": "Double-charge risk if wrong." },
-    { "id": "U2", "area": "Change", "statement": "How many retries before dunning?", "source": "inferred", "confidence": "low", "alternatives": ["3 over 5 days", "5 over 10 days"] },
-    { "id": "U3", "area": "Code", "statement": "Charges created in charges.js", "source": "code", "confidence": "medium", "evidence": "src/billing/charges.js:42", "options": ["charges.js", "billing.js"] }
+  "prompt": "Retry failed card charges with backoff before dunning.",
+  "topics": [
+    {
+      "id": "topic-1",
+      "name": "Retry strategy",
+      "questions": ["How many attempts before dunning?"],
+      "options": [
+        { "id": "opt-1", "name": "Fixed backoff", "pros": "simple to reason about", "cons": "slow to adapt to failures" },
+        { "id": "opt-2", "name": "Exponential backoff", "pros": "adapts fast, industry standard", "cons": "more moving parts" }
+      ],
+      "selectedOptionId": null
+    }
   ],
-  "tensions": [
-    { "id": "T1", "youWant": "Instant refunds", "butCode": "Gateway settles nightly", "options": ["Accept next-day", "Add a ledger"], "recommendation": "Accept next-day" }
+  "techRows": [
+    { "id": "row-1", "action": "create", "file": "src/billing/retry.js", "comment": "new retry scheduler" }
   ],
-  "examples": [
-    { "id": "E1", "kind": "example", "given": "invoice paid by transfer", "when": "a retry is scheduled", "then": "the retry is cancelled", "claims": ["U1"] },
-    { "id": "E2", "kind": "counter", "given": "a paid invoice", "when": "the nightly job runs", "then": "the card is charged again" }
-  ],
-  "openQuestions": [ { "id": "OQ1", "question": "Max attempts?", "whyItMatters": "Bounds cost", "proposedDefault": "3 over 5 days", "status": "Open" } ],
-  "sections": { "1": "…", "2": "…", "3": "…", "7": "…", "9": "…", "10": "…" }
+  "counts": { "create": 1, "update": 2, "unit": 3, "integration": 1 }
 }
 ```
 
-Sections are clean HTML fragments (no `<section>`/`<h2>`/outer `<html>`). There are no `sections` keys for 4/5/6/8 (built from `examples`/`understanding`/`tensions`/`openQuestions`) or 0 (from `revisionLog`).
+Leave `selectedOptionId` `null` — the human picks it in the browser. `id` fields must be unique strings; any scheme works (`topic-1`, `T1`, a slug) as long as topic option ids and tech row ids don't collide with each other.
 
 ## Files
 
-- **arch-template.html** — the template with `{{PLACEHOLDER}}` markers and the co-authoring engine: sticky TOC with scrollspy, lifecycle status banner, top AI-Overview card + recall box, acceptance-example cards with sign-off, the understanding checklist (verdicts, forks, structured corrections, add-a-claim, high-stakes triage), tension cards with resolution, an interactive Open Questions table, the floating sync widget + review-manifest export, and Mermaid rendering with a maximize/minimize toggle.
-- **arch-inject.js** — reads JSON and injects it. Escapes metadata; builds the revision-log, understanding (with fork/options/priority logic — `isHighPriority` flags forks and uncertain-but-impactful claims, badge mapping falls back to the cautious `assumed`/`low`), tension, example, and open-question markup; injects section + overview HTML raw. Template path is optional.
-- **arch-inject.test.js** — unit tests for the injection script and template contract. Run with `node --test agents/skills/arch/arch-inject.test.js`. Covers escaping, priority logic, all five builders (forks, structured corrections, tensions, examples, badges/fallbacks), placeholder completeness, tolerance of missing arrays, and raw-vs-escaped injection.
+- **arch-template.html** — the template with `{{FEATURE_TITLE}}` and `{{INITIAL_DATA_JSON}}` markers. Renders topics/options/tech-table entirely client-side from the injected data object; no server-side row building.
+- **arch-inject.js** — reads JSON, escapes the title, and embeds the rest of the plan as a JSON literal (`INITIAL_DATA`) inside a `<script>` tag, escaping `</script>` breakout and the U+2028/U+2029 line-terminator characters that `JSON.stringify` leaves raw. Fills in defaults (`normalizePlan`) so a sparse JSON input still renders a valid page. Template path is optional.
+- **arch-inject.test.js** — unit tests for the injection script and template contract. Run with `node --test agents/skills/arch/arch-inject.test.js`. Covers escaping, script-breakout/line-terminator safety, default-filling, and placeholder completeness.
 
 The instruction files that drive generation stay in each tool's directory (`claude/commands/arch.md`, `copilot/skills/arch/SKILL.md`): they're prose, not shared boilerplate, and differ in voice and path references. Both point at this folder's script and template by the same fixed `~/.agents/skills/arch/` path.
 
 ## Extending
 
-To add a field or section: add the `{{PLACEHOLDER}}` (or a new builder) to `arch-template.html` / `arch-inject.js` with a test, then document the new JSON key in **both** `claude/commands/arch.md` and `copilot/skills/arch/SKILL.md` (they aren't shared). The AI's next generation picks up the new format.
-
-## Known follow-up
-
-The review manifest already names the confirmed claims + approved examples as acceptance criteria "to carry into `/feature`", but the `/feature` planner/verifier charters don't yet *consume* that manifest to grade the implementation per-anchor. Closing that last mile (making each approved example a verification the build must pass) is a separate change to `claude/agents/verifier.md`, its Copilot/Pi ports, and `feature.md`.
+To add a field: add the `{{PLACEHOLDER}}` (or extend `normalizePlan`) in `arch-inject.js` / `arch-template.html` with a test, then document the new JSON key in **both** `claude/commands/arch.md` and `copilot/skills/arch/SKILL.md` (they aren't shared). The AI's next generation picks up the new format.

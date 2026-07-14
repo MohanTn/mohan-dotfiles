@@ -6,12 +6,8 @@ const assert = require('node:assert');
 const path = require('path');
 const {
   escapeHtml,
-  isHighPriority,
-  buildRevisionLogHtml,
-  buildUnderstandingHtml,
-  buildTensionsHtml,
-  buildExamplesHtml,
-  buildOpenQuestionsHtml,
+  toScriptJson,
+  normalizePlan,
   injectContent,
   loadTemplate
 } = require('./arch-inject.js');
@@ -21,65 +17,23 @@ const TEMPLATE_PATH = path.join(__dirname, 'arch-template.html');
 function sampleConfig(overrides = {}) {
   return {
     title: 'Sample Feature',
-    summary: 'A test summary',
-    stack: 'Node.js · React',
-    status: 'DRAFT',
-    statusClass: 'draft',
-    version: 'v1',
-    lastUpdated: '2026-07-12',
-    authorModel: 'Claude Opus 4.8',
-    aiOverview: '<p>Condensed summary of what the user wants.</p>',
-    revisionLog: [
-      { version: 'v1', date: '2026-07-12', summary: 'Initial understanding', drivenBy: 'First pass' }
-    ],
-    understanding: [
+    prompt: 'I want to add retry logic to billing charges.',
+    topics: [
       {
-        id: 'U1',
-        area: 'Concept',
-        statement: 'The doc must prove the AI understands before coding.',
-        source: 'user',
-        confidence: 'high',
-        evidence: 'arch-inject.js:80',
-        impact: 'Wrong goal means every section is aimed wrong.'
-      },
-      {
-        id: 'U2',
-        area: 'Change',
-        statement: 'How should retries stop?',
-        source: 'inferred',
-        confidence: 'low',
-        alternatives: ['Stop when the invoice is paid by any means', 'Stop only after N attempts']
-      },
-      {
-        id: 'U3',
-        area: 'Code',
-        statement: 'Charges are created in charges.js.',
-        source: 'code',
-        confidence: 'medium',
-        options: ['charges.js', 'billing.js', 'stripe.js']
+        id: 'topic-1',
+        name: 'Retry strategy',
+        questions: ['How many attempts before dunning?'],
+        options: [
+          { id: 'opt-1', name: 'Fixed backoff', pros: 'simple', cons: 'slow to adapt' },
+          { id: 'opt-2', name: 'Exponential backoff', pros: 'adapts fast', cons: 'more complex' }
+        ],
+        selectedOptionId: 'opt-2'
       }
     ],
-    tensions: [
-      {
-        id: 'T1',
-        youWant: 'Instant refunds',
-        butCode: 'The gateway settles nightly',
-        evidence: 'gateway.js:12',
-        options: ['Accept next-day refunds', 'Add a ledger to fake instant'],
-        recommendation: 'Accept next-day refunds'
-      }
+    techRows: [
+      { id: 'row-1', action: 'create', file: 'src/billing/retry.js', comment: 'new retry scheduler' }
     ],
-    examples: [
-      { id: 'E1', kind: 'example', given: 'invoice paid by transfer', when: 'a retry is scheduled', then: 'the retry is cancelled', claims: ['U2'] },
-      { id: 'E2', kind: 'counter', given: 'a paid invoice', when: 'the nightly job runs', then: 'the card is charged again' }
-    ],
-    openQuestions: [
-      { id: 'OQ1', question: 'Should sessions expire after 15 or 30 minutes?', whyItMatters: 'Impacts UX', proposedDefault: '15 minutes', status: 'Open' }
-    ],
-    sections: {
-      '1': '<div class="card"><p>Section one</p></div>',
-      '2': '<div class="mermaid-card"><div class="mermaid">flowchart LR\n  A --> B</div></div>'
-    },
+    counts: { create: 1, update: 2, unit: 3, integration: 1 },
     ...overrides
   };
 }
@@ -91,143 +45,61 @@ test('escapeHtml escapes all HTML-sensitive characters', () => {
   );
 });
 
-test('isHighPriority flags forks and uncertain-but-impactful claims', () => {
-  assert.strictEqual(isHighPriority({ alternatives: ['a', 'b'], confidence: 'high' }), true, 'forks are always high priority');
-  assert.strictEqual(isHighPriority({ confidence: 'low', impactLevel: 'high' }), true);
-  assert.strictEqual(isHighPriority({ confidence: 'medium', impact: 'breaks billing' }), true, 'impact text implies medium impact');
-  assert.strictEqual(isHighPriority({ confidence: 'high', impactLevel: 'high' }), false, 'certain claims are not danger-zone');
-  assert.strictEqual(isHighPriority({ confidence: 'low' }), false, 'uncertain but no impact is not danger-zone');
+test('toScriptJson escapes </script> breakout and line separators', () => {
+  const json = toScriptJson({ text: '</script><script>alert(1)</script>  ' });
+  assert.ok(!json.includes('</script>'));
+  assert.ok(json.includes('\\u003c/script>'));
+  assert.ok(json.includes('\\u2028') && json.includes('\\u2029'));
+  assert.deepStrictEqual(JSON.parse(json), { text: '</script><script>alert(1)</script>  ' });
 });
 
-test('buildRevisionLogHtml renders one escaped row per entry', () => {
-  const rows = buildRevisionLogHtml([
-    { version: 'v1', date: '2026-07-12', summary: 'Added <script>', drivenBy: 'User' },
-    { version: 'v2', date: '2026-07-13', summary: 'Fix', drivenBy: 'Review' }
-  ]);
-  assert.strictEqual(rows.split('<tr>').length - 1, 2);
-  assert.ok(rows.includes('&lt;script&gt;'));
-  assert.ok(!rows.includes('<script>'));
+test('normalizePlan fills defaults for missing fields', () => {
+  const plan = normalizePlan({});
+  assert.strictEqual(plan.prompt, '');
+  assert.deepStrictEqual(plan.topics, []);
+  assert.deepStrictEqual(plan.techRows, []);
+  assert.deepStrictEqual(plan.counts, { create: 0, update: 0, unit: 0, integration: 0 });
 });
 
-test('buildUnderstandingHtml renders verdicts, escaped statement, and data attributes', () => {
-  const rows = buildUnderstandingHtml([
-    { id: 'U1', area: 'Concept', statement: 'Sync <the> models', source: 'user', confidence: 'high' }
-  ]);
-  assert.strictEqual(rows.split('class="verdict-btn').length - 1, 3);
-  assert.ok(rows.includes('data-statement="Sync &lt;the&gt; models"'));
-  assert.ok(!rows.includes('Sync <the> models'));
-  assert.ok(rows.includes('data-id="U1"'));
+test('normalizePlan preserves topic, option, and tech row fields', () => {
+  const plan = normalizePlan(sampleConfig());
+  assert.strictEqual(plan.topics[0].name, 'Retry strategy');
+  assert.strictEqual(plan.topics[0].options[1].name, 'Exponential backoff');
+  assert.strictEqual(plan.topics[0].selectedOptionId, 'opt-2');
+  assert.strictEqual(plan.techRows[0].file, 'src/billing/retry.js');
+  assert.strictEqual(plan.counts.unit, 3);
 });
 
-test('buildUnderstandingHtml renders a fork as radios with a neither option and no verdict buttons', () => {
-  const rows = buildUnderstandingHtml([
-    { id: 'U2', statement: 'How should X behave?', source: 'inferred', confidence: 'low', alternatives: ['Option A', 'Option B'] }
-  ]);
-  assert.ok(rows.includes('data-fork="true"'));
-  assert.ok(rows.includes('data-priority="high"'), 'forks are high priority');
-  assert.strictEqual(rows.split('type="radio"').length - 1, 3, 'two alternatives + neither');
-  assert.ok(rows.includes('Option A') && rows.includes('Option B'));
-  assert.ok(rows.includes('value="neither"'));
-  assert.ok(!rows.includes('class="verdict-btn'), 'forks replace verdict buttons');
-});
-
-test('buildUnderstandingHtml renders structured-correction options for non-fork claims', () => {
-  const rows = buildUnderstandingHtml([
-    { id: 'U3', statement: 'File is charges.js', source: 'code', confidence: 'medium', options: ['charges.js', 'billing.js'] }
-  ]);
-  assert.strictEqual(rows.split('class="correction-opt"').length - 1, 2);
-  assert.ok(rows.includes('data-value="charges.js"'));
-});
-
-test('buildUnderstandingHtml maps known source/confidence to badges and falls back cautiously', () => {
-  const known = buildUnderstandingHtml([{ id: 'U1', statement: 's', source: 'code', confidence: 'high' }]);
-  assert.ok(known.includes('badge src-code') && known.includes('badge conf-high'));
-  const unknown = buildUnderstandingHtml([{ id: 'U1', statement: 's', source: 'wat', confidence: 'bogus' }]);
-  assert.ok(unknown.includes('badge src-assumed') && unknown.includes('badge conf-low'));
-});
-
-test('buildTensionsHtml renders want/code columns, options, and a summary attribute', () => {
-  const html = buildTensionsHtml([
-    { id: 'T1', youWant: 'Fast', butCode: 'Slow <gateway>', options: ['a', 'b'], recommendation: 'a' }
-  ]);
-  assert.ok(html.includes('data-id="T1"'));
-  assert.ok(html.includes('You want') && html.includes('But the code'));
-  assert.strictEqual(html.split('type="radio"').length - 1, 3, 'two options + other');
-  assert.ok(html.includes('My recommendation'));
-  assert.ok(html.includes('Slow &lt;gateway&gt;') && !html.includes('Slow <gateway>'));
-});
-
-test('buildTensionsHtml renders a friendly note when there are none', () => {
-  assert.ok(buildTensionsHtml([]).includes('No tensions surfaced'));
-});
-
-test('buildExamplesHtml renders given/when/then, kind, and verdict buttons', () => {
-  const html = buildExamplesHtml([
-    { id: 'E1', kind: 'counter', given: 'g', when: 'w', then: 't <x>', claims: ['U1'] }
-  ]);
-  assert.ok(html.includes('data-id="E1"'));
-  assert.ok(html.includes('ex-counter') && html.includes('must NOT happen'));
-  assert.ok(html.includes('>Given<') && html.includes('>When<') && html.includes('>Then<'));
-  assert.strictEqual(html.split('class="verdict-btn').length - 1, 2, 'examples use two verdicts');
-  assert.ok(html.includes('data-example="Given g; When w; Then t &lt;x&gt;"'));
-  assert.ok(html.includes('Pins claims: U1'));
-});
-
-test('buildOpenQuestionsHtml renders one escaped row with a textarea and data-id per entry', () => {
-  const rows = buildOpenQuestionsHtml([
-    { id: 'OQ1', question: 'Allow <script>?', whyItMatters: 'Security', proposedDefault: 'No', status: 'Open' },
-    { id: 'OQ2', question: 'Cache TTL?', whyItMatters: 'UX', proposedDefault: '15m', status: 'Open' }
-  ]);
-  assert.strictEqual(rows.split('<tr ').length - 1, 2);
-  assert.strictEqual(rows.split('<textarea').length - 1, 2);
-  assert.ok(rows.includes('data-id="OQ1"'));
-  assert.ok(rows.includes('&lt;script&gt;') && !rows.includes('<script>'));
-});
-
-test('injectContent fills all surfaces and leaves no unreplaced placeholders', () => {
+test('injectContent fills the title and leaves no unreplaced placeholders', () => {
   const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig());
-  assert.ok(html.includes('Shared Understanding — Sample Feature'));
-  assert.ok(html.includes('status-banner draft'));
-  assert.ok(html.includes('Section one'));
-  assert.ok(html.includes('id="recall-box"'));
-  assert.ok(html.includes('id="add-claim-btn"'));
+  assert.ok(html.includes('Feature Plan – Sample Feature'));
   const leftover = html.match(/{{[A-Z0-9_]+}}/g);
   assert.strictEqual(leftover, null, `unreplaced placeholders: ${leftover}`);
 });
 
-test('injectContent wires overview, checklist, tensions, examples, and the export button', () => {
+test('injectContent embeds the plan as valid, parseable JSON', () => {
   const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig());
-  assert.ok(html.includes('<p>Condensed summary of what the user wants.</p>'));
-  assert.ok(html.includes('The doc must prove the AI understands before coding.'));
-  assert.ok(html.includes('data-fork="true"'));
-  assert.ok(html.includes('Instant refunds'));
-  assert.ok(html.includes('the retry is cancelled'));
-  assert.ok(html.includes('id="copy-review-btn"'));
-  assert.ok(html.includes('class="oq-answer"'));
+  const match = html.match(/const INITIAL_DATA = (.*);/);
+  assert.ok(match, 'INITIAL_DATA assignment not found');
+  const parsed = JSON.parse(match[1]);
+  assert.strictEqual(parsed.prompt, 'I want to add retry logic to billing charges.');
+  assert.strictEqual(parsed.topics[0].options[0].name, 'Fixed backoff');
 });
 
-test('injectContent escapes metadata but injects section HTML raw', () => {
+test('injectContent escapes the title but keeps the JSON payload intact', () => {
   const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig({ title: 'A <b>bold</b> title' }));
   assert.ok(html.includes('A &lt;b&gt;bold&lt;/b&gt; title'));
-  assert.ok(html.includes('<div class="mermaid">flowchart LR'));
 });
 
-test('injectContent tolerates missing structured arrays', () => {
-  const config = sampleConfig();
-  delete config.understanding;
-  delete config.tensions;
-  delete config.examples;
-  delete config.openQuestions;
-  delete config.revisionLog;
-  const html = injectContent(loadTemplate(TEMPLATE_PATH), config);
+test('injectContent tolerates a config with only a title', () => {
+  const html = injectContent(loadTemplate(TEMPLATE_PATH), { title: 'Bare' });
   const leftover = html.match(/{{[A-Z0-9_]+}}/g);
   assert.strictEqual(leftover, null, `unreplaced placeholders: ${leftover}`);
-  assert.ok(html.includes('No tensions surfaced'));
+  const match = html.match(/const INITIAL_DATA = (.*);/);
+  assert.deepStrictEqual(JSON.parse(match[1]), { prompt: '', topics: [], techRows: [], counts: { create: 0, update: 0, unit: 0, integration: 0 } });
 });
 
-test('injectContent keeps dollar-sign patterns in section content literal', () => {
-  const config = sampleConfig();
-  config.sections['3'] = '<pre>price = `$&` + $1 + "$\'"</pre>';
-  const html = injectContent(loadTemplate(TEMPLATE_PATH), config);
-  assert.ok(html.includes('price = `$&` + $1 + "$\'"'));
+test('injectContent keeps dollar-sign patterns in the title literal', () => {
+  const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig({ title: 'price = $& + $1' }));
+  assert.ok(html.includes('price = $&amp; + $1'));
 });
