@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Changed
 
+- Adds Ptyxis terminal font configuration (JetBrainsMono Nerd Font), integrates tmux-nerd-font-window-name plugin for icon-based window naming, and replaces inline zsh prompt with powerlevel10k via zinit plugin manager.
 - Addresses glyph rendering bugs in tmux catppuccin status bar by switching to basic style and adding Nerd Font fallbacks. Removes command duration tracking from zsh prompt and adds zoxide for frecency-based directory jumping.
 - Major dotfiles refactor: replaces LazyVim with kickstart.nvim base (~1000 lines), inlines zsh prompt (removing oh-my-zsh), adds home-manager-driven tmux config with catppuccin, and removes herdr installer option to consolidate dependencies.
 - Removed documentation comments from claude.nix file configuration and expanded PATH in herdr installer to include gawk and ~/.local/bin, ensuring the installation script can access required tools.

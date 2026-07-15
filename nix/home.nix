@@ -12,6 +12,7 @@ in
     ./optional-packages.nix
     ./maintenance.nix
     ./zsh.nix
+    ./ptyxis.nix
     ./git.nix
     ./agents.nix
     ./claude.nix

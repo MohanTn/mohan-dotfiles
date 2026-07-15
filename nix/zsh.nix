@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 
 {
   programs.zsh = {
@@ -12,6 +12,20 @@
 
     initContent = ''
       setopt CORRECT
+
+      # zinit plugin manager: the core script comes from the Nix store (no
+      # runtime self-clone); plugins zinit installs still land in the
+      # writable ZINIT[HOME_DIR] default (~/.local/share/zinit) since they
+      # aren't part of this repo's declarative config.
+      source ${pkgs.zinit}/share/zinit/zinit.zsh
+
+      # powerlevel10k prompt, managed as a zinit plugin (git-cloned into
+      # ZINIT[PLUGINS_DIR] on first shell start). No ~/.p10k.zsh is checked
+      # into the repo, so it's machine-local: run `p10k configure` once to
+      # generate it, or the wizard prompts automatically on first launch.
+      zinit ice depth=1
+      zinit light romkatv/powerlevel10k
+      [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
       # nvim as editor (plain vim over SSH)
       if [[ -n $SSH_CONNECTION ]]; then
@@ -33,9 +47,6 @@
       # background; override to a brighter cyan, keep everything else default.
       command -v dircolors >/dev/null 2>&1 && eval "$(dircolors -b)"
       export LS_COLORS="''${LS_COLORS}:di=01;36"
-
-      PROMPT='%F{blue}%n%f %F{cyan}%~%f
-%F{green}%(?.✓.✗)%f '
 
       # `axi` wrapper for chrome-devtools-axi: uses Google Chrome when
       # installed (setup.sh handles that on apt machines), otherwise starts a
