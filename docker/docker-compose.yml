@@ -1,0 +1,55 @@
+# Containerized workspace for the three agent CLIs. Build context is the
+# repo root (not this docker/ directory), since the Dockerfile COPYs from
+# claude/, copilot/, pi/, agents/ at paths relative to the repo root.
+#
+# Usage (see zsh/agent-containers.zsh for the wrapper that sets REPO_PATH
+# automatically): from the project you want the agent working on,
+#   REPO_PATH=$PWD docker compose -f ~/REPO/mohan-dotfiles/docker/docker-compose.yml run --rm claude
+#
+# Each service's $HOME (auth.json, trust.json, session history) lives in its
+# own named volume, not on the host filesystem — it persists across runs
+# without ever writing to the machine outside the mounted repo. Hooks,
+# skills, and settings are re-synced into that volume from the image on
+# every start (see entrypoint.sh), so they never go stale even though the
+# volume itself is long-lived.
+services:
+  claude:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: claude
+    volumes:
+      - ${REPO_PATH:-.}:/workspace
+      - claude-agent-home:/home/agent/.claude
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+  copilot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: copilot
+    volumes:
+      - ${REPO_PATH:-.}:/workspace
+      - copilot-agent-home:/home/agent/.copilot
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+  pi:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: pi
+    volumes:
+      - ${REPO_PATH:-.}:/workspace
+      - pi-agent-home:/home/agent/.pi
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+volumes:
+  claude-agent-home:
+  copilot-agent-home:
+  pi-agent-home:

@@ -67,6 +67,33 @@
             cat "$out"
           '';
 
+        # Pi hooks extension: TypeScript port that shells out to the same
+        # Claude scripts plus native edit-no-op + goal-capture/check gates.
+        # Uses builtins.readFile instead of builtins.path so untracked TS
+        # files are accessible during local --impure development (flakes
+        # only see git-tracked files for ./path interpolation).
+        pi-hooks-selftest = pkgs.runCommand "pi-hooks-selftest"
+          { nativeBuildInputs = [ pkgs.nodejs_22 pkgs.esbuild ];
+            piHooksDir = builtins.path {
+              path =
+                let
+                  repo = builtins.toPath (builtins.getEnv "PWD");
+                in repo + "/pi/agent/extensions/hooks";
+              name = "pi-hooks";
+            };
+          }
+          ''
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME/.claude"
+            cp -r ${./claude/hooks} "$HOME/.claude/hooks"
+            chmod -R u+w "$HOME/.claude/hooks"
+            esbuild --bundle --platform=node --format=esm "$piHooksDir/test.ts" \
+              --external:@earendil-works/pi-coding-agent \
+              --outfile=test.mjs
+            node ./test.mjs > "$out"
+            cat "$out"
+          '';
+
         # setup.sh: lint it, then exercise the doctor drift audit against a
         # synthetic Home Manager profile (clean, hand-edited, deleted).
         setup-script = pkgs.runCommand "setup-script"

@@ -165,6 +165,10 @@
       # debug Chromium and points the bridge at it.
       source ${../zsh/chrome-devtools-axi.zsh}
 
+      # `agent-box`/`claude-box`/`copilot-box`/`pi-box`: run an agent CLI
+      # fully containerized against the current directory (see docker/).
+      source ${../zsh/agent-containers.zsh}
+
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
       [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

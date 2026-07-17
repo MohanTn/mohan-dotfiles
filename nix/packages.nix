@@ -18,6 +18,8 @@
     gnumake
     curl
     oh-my-posh # zsh prompt, catppuccin_mocha theme (nix/zsh.nix)
+    bubblewrap # Claude Code's Bash sandbox (claude/settings.json sandbox.enabled)
+    socat # network relay the Claude Code sandbox proxy depends on
 
     # Nerd Font glyphs for tmux (catppuccin status bar) and terminal icons.
     # symbols-only is a dedicated icon fallback: some Powerline glyphs
@@ -29,9 +31,6 @@
 
     # dev platforms
     dotnet-sdk_8
-
-    # GUI editor (replaces VS Code; needs WSLg on WSL)
-    zed-editor
 
     # GitHub
     gh
