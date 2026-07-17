@@ -1,5 +1,5 @@
 ---
-name: featurePlan
+name: feature-plan
 description: Take a feature the user has in mind and turn it into a code-level feature implementation plan (featurePlan-<slug>.html) — file-by-file change manifest in build order, business logic pseudo-code, function/API contracts, edge cases, and per-method tests, all grounded in this repo's actual code. The user edits each section in the browser and exports the plan back. Use when the user asks for a feature implementation plan, a code-level breakdown, or says "featurePlan".
 ---
 
