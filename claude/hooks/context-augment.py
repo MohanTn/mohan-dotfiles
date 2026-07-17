@@ -77,11 +77,12 @@ def extract_keywords(prompt: str) -> tuple[list[str], list[str]]:
         tok = m.group(1)
         if tok in seen_s or tok in STOPWORDS or len(tok) < 3:
             continue
-        # keep only code-shaped identifiers: CamelCase, ALL_CAPS, or snake_case
+        # keep code-shaped identifiers: CamelCase, ALL_CAPS, snake_case, or long lowercase words
         is_camel = any(c.isupper() for c in tok[1:]) and any(c.islower() for c in tok)
         is_caps = tok.isupper()
         is_snake = "_" in tok
-        if is_camel or is_caps or is_snake:
+        is_long_word = len(tok) >= 5  # accept long lowercase words (repo, boilerplates, etc.)
+        if is_camel or is_caps or is_snake or is_long_word:
             seen_s.add(tok)
             symbols.append(tok)
 
@@ -109,18 +110,19 @@ def fuzzy_filter(query: str, candidates: list[str], root: str, limit: int) -> li
 
 
 def find_files(paths: list[str], symbols: list[str], root: str) -> list[str]:
-    """Rank candidate files: explicit paths > fuzzy filename matches > symbol defs."""
+    """Rank candidate files and dirs: explicit paths > fuzzy filename matches > symbol defs."""
     ranked: list[str] = []
     seen: set[str] = set()
     deadline = time.monotonic() + SEARCH_DEADLINE
     all_files: list[str] | None = None
+    all_dirs: list[str] | None = None
 
     def expired() -> bool:
         return time.monotonic() > deadline
 
     def add(rel: str) -> None:
         rel = rel.strip()
-        if rel and rel not in seen and os.path.isfile(os.path.join(root, rel)):
+        if rel and rel not in seen and os.path.exists(os.path.join(root, rel)):
             seen.add(rel)
             ranked.append(rel)
 
@@ -129,6 +131,12 @@ def find_files(paths: list[str], symbols: list[str], root: str) -> list[str]:
         if all_files is None:
             all_files = run(["fd", "-t", "f"], root)
         return all_files
+
+    def dir_list() -> list[str]:
+        nonlocal all_dirs
+        if all_dirs is None:
+            all_dirs = run(["fd", "-t", "d"], root)
+        return all_dirs
 
     # 1. explicit paths (exact, else fuzzy-matched by basename)
     for p in paths:
@@ -146,6 +154,13 @@ def find_files(paths: list[str], symbols: list[str], root: str) -> list[str]:
         if expired() or len(ranked) >= MAX_FILES:
             break
         for hit in fuzzy_filter(sym, file_list(), root, limit=3):
+            add(hit)
+
+    # 2b. directory names fuzzy-matching a symbol (boilerplates ~ agents/boilerplats/)
+    for sym in symbols:
+        if expired() or len(ranked) >= MAX_FILES:
+            break
+        for hit in fuzzy_filter(sym, dir_list(), root, limit=2):
             add(hit)
 
     # 3. definition sites of a symbol via ripgrep
@@ -230,8 +245,17 @@ def abstract_regex(src: str) -> str:
 
 
 def abstract_file(root: str, rel: str) -> str:
+    path = os.path.join(root, rel)
+    # Handle directories: list their contents
+    if os.path.isdir(path):
+        try:
+            items = sorted(os.listdir(path))[:30]
+            return "Directory:\n" + "\n".join(f"  {item}" for item in items)
+        except OSError:
+            return ""
+    # Handle files: extract structure
     try:
-        with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as fh:
+        with open(path, encoding="utf-8", errors="replace") as fh:
             src = fh.read()
     except OSError:
         return ""
