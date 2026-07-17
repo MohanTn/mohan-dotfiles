@@ -7,9 +7,7 @@ flake.nix     inputs (pinned nixpkgs + home-manager) and CI checks
 nix/          one Home Manager module per concern:
               packages, zsh, git, agents, claude, nvim
 agents/       ~/.agents (tool-agnostic layer: AGENTS.md global instructions
-              plus skills/, also linked to ~/.claude/skills; the
-              scaffold-pack-author skill is additionally linked to
-              ~/.copilot/skills so both agents discover it)
+              plus skills/, also linked to ~/.claude/skills)
 claude/       ~/.claude/{settings.json,CLAUDE.md,hooks,statusline-usage.py}
 zsh/          chrome-devtools-axi.zsh: axi wrapper sourced by nix/zsh.nix
 nvim/         ~/.config/nvim (LazyVim)

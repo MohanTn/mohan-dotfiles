@@ -18,15 +18,6 @@
   home.file.".copilot/scaffold".source = config.lib.file.mkOutOfStoreSymlink
     "${config.home.homeDirectory}/REPO/scaffold-toolkit/packages/adapter-copilot-cli";
 
-  # Expose the tool-agnostic scaffold-pack-author skill to Copilot CLI, which
-  # discovers skills as directories under ~/.copilot/skills/ (verified 1.0.70:
-  # skills.getDiscoveryPaths joins homedir/.copilot/skills). Claude Code already
-  # gets this skill via claude.nix linking agents/skills to ~/.claude/skills; we
-  # link only the one subdir here so Copilot does not also surface the
-  # Claude-artifact-specific skills (arch, featurePlan) it cannot render.
-  home.file.".copilot/skills/scaffold-pack-author".source =
-    ../agents/skills/scaffold-pack-author;
-
   # Copilot CLI has no @-import directive (unlike claude/CLAUDE.md's
   # `@~/.agents/AGENTS.md`), so the global instructions are generated at
   # eval time from the same source instead of hand-duplicated: this reads
