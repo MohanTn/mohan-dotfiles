@@ -1,6 +1,6 @@
 ---
 name: token-efficiency
-description: Audit and optimize token consumption in Copilot CLI configs: agent prompts, skill files, and hook injection scripts. Use when reviewing config for redundancy, narrative bloat, or per-turn hook costs.
+description: Audit and optimize token consumption in Copilot CLI configs agent prompts, skill files, and hook injection scripts. Use when reviewing config for redundancy, narrative bloat, or per-turn hook costs.
 ---
 
 # token-efficiency: Audit and optimize token consumption in Copilot CLI configs
