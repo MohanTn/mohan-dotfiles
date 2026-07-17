@@ -12,7 +12,7 @@
  * Exit code 0 on pass, non-zero on any failure.
  */
 
-import { extractText, toClaudeToolName } from "./lib.js";
+import { extractText, findUncheckedGoal, toClaudeToolName, type MessageEntryLike } from "./lib.js";
 
 let pass = 0;
 let fail = 0;
@@ -91,6 +91,66 @@ for (const [input, want] of toolNameCases) {
   } else {
     no(`toClaudeToolName: "${input}"`, `expected "${want}", got "${got}"`);
   }
+}
+
+// ---- findUncheckedGoal ----
+
+function userEntry(text: string): MessageEntryLike {
+  return { type: "message", message: { role: "user", content: text } };
+}
+
+function assistantEntry(text: string): MessageEntryLike {
+  return { type: "message", message: { role: "assistant", content: [{ type: "text", text }] } };
+}
+
+{
+  const desc = "no GOAL: stated → no unchecked goal";
+  const got = findUncheckedGoal([userEntry("hi"), assistantEntry("Sure, on it.")]);
+  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
+}
+
+{
+  const desc = "GOAL: stated, no GOAL_CHECK: anywhere → flagged unchecked";
+  const got = findUncheckedGoal([userEntry("do the thing"), assistantEntry("GOAL: do the thing\n\nworking...")]);
+  got === "do the thing" ? ok(desc) : no(desc, `expected "do the thing", got ${JSON.stringify(got)}`);
+}
+
+{
+  const desc = "GOAL: and GOAL_CHECK: in the same assistant message → satisfied";
+  const got = findUncheckedGoal([
+    userEntry("do the thing"),
+    assistantEntry("GOAL: do the thing\n\nDone.\n\nGOAL_CHECK: ACHIEVED"),
+  ]);
+  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
+}
+
+{
+  // Regression for the turn_end bug: GOAL: is stated in the first LLM
+  // response of the turn, several tool-calling rounds follow with no
+  // GOAL_CHECK:, and only the final assistant message states it. A
+  // per-message check (the old turn_end behavior) would flag every
+  // intermediate round; the fix must aggregate all assistant entries since
+  // the last user entry and only flag if GOAL_CHECK: never appears at all.
+  const desc = "GOAL_CHECK: arrives several assistant turns later → satisfied, not flagged mid-loop";
+  const got = findUncheckedGoal([
+    userEntry("do the thing"),
+    assistantEntry("GOAL: do the thing"),
+    assistantEntry("Reading files..."),
+    assistantEntry("Editing..."),
+    assistantEntry("Done.\n\nGOAL_CHECK: ACHIEVED"),
+  ]);
+  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
+}
+
+{
+  const desc = "goal from a previous user turn doesn't leak into the next turn's check";
+  const got = findUncheckedGoal([
+    userEntry("first task"),
+    assistantEntry("GOAL: first task\n\nGOAL_CHECK: ACHIEVED"),
+    userEntry("second task"),
+    assistantEntry("Sure, on it (no GOAL: restated)."),
+  ]);
+  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
 }
 
 // ---- Extension module shape ----

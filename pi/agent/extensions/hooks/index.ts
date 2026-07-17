@@ -10,18 +10,26 @@
 //   newText}]}` (an array, for multi-edit-in-one-call), not Claude's single
 //   `{file_path, old_string, new_string}`. Re-checked directly against
 //   Pi's own type defs (dist/core/tools/edit.d.ts) rather than assumed.
-// - goal-capture/goal-check: Pi's turn_end event hands over the assistant's
-//   actual message text, so there's no need to re-parse a JSONL transcript
-//   file the way pre-tool-use-goal-capture.sh and stop-goal-check.sh do for
-//   Claude Code.
+// - goal-capture/goal-check: checked once against the session transcript,
+//   scoped to entries after the last user message — same scope
+//   pre-tool-use-goal-capture.sh and stop-goal-check.sh use against the
+//   JSONL transcript for Claude Code. This runs on `agent_settled`, not
+//   `turn_end`: a "turn" in Pi is one LLM response, and repeats internally
+//   while the LLM keeps calling tools (see docs/extensions.md's lifecycle
+//   diagram), so a single user prompt can produce many turn_end events
+//   before the agent is actually done. Checking on turn_end fired a false
+//   "never checked off" warning on every intermediate tool-calling round,
+//   not just when the agent was genuinely finished. agent_settled fires
+//   once, only when Pi will not continue automatically (no retry/compaction/
+//   follow-up left) — the closest match to Claude Code's Stop hook timing.
 //
 // Known gap: Claude Code's Stop hook can block the turn from ending (exit 2)
 // until a GOAL_CHECK: line appears. Pi's documented extension API has no
-// confirmed way to force a turn to continue from turn_end, so the check
+// confirmed way to force a turn to continue from agent_settled, so the check
 // below only warns via ctx.ui.notify — it does not gate completion. Revisit
-// if Pi adds a blocking return value for turn_end.
+// if Pi adds a blocking return value for agent_settled.
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { extractText, runClaudeHook, toClaudeToolName } from "./lib.js";
+import { findUncheckedGoal, runClaudeHook, toClaudeToolName } from "./lib.js";
 
 interface EditInput {
   path: string;
@@ -37,12 +45,10 @@ export default function (pi: ExtensionAPI) {
   let sessionId = crypto.randomUUID();
   let digest = "";
   let digestInjected = false;
-  let capturedGoal: string | null = null;
 
   pi.on("session_start", async (event, ctx) => {
     sessionId = crypto.randomUUID();
     digestInjected = false;
-    capturedGoal = null;
 
     const result = runClaudeHook("session-start.sh", {
       session_id: sessionId,
@@ -135,25 +141,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Native goal-capture + goal-check (see the module-level comment on why
-  // this isn't shelled out, and its enforcement gap vs. the Claude version).
-  pi.on("turn_end", async (event, ctx) => {
-    const text = extractText(event.message);
-
-    const goalMatch = text.match(/^GOAL:\s*(.+)$/m);
-    if (goalMatch) {
-      capturedGoal = goalMatch[1].trim();
-      return;
-    }
-
-    if (!capturedGoal) return;
-
-    if (/GOAL_CHECK:/.test(text)) {
-      capturedGoal = null;
-      return;
-    }
+  // this isn't shelled out, why it runs on agent_settled instead of
+  // turn_end, and its enforcement gap vs. the Claude version).
+  pi.on("agent_settled", async (_event, ctx) => {
+    const goal = findUncheckedGoal(ctx.sessionManager.getEntries());
+    if (!goal) return;
 
     ctx.ui?.notify?.(
-      `Goal stated earlier ("${capturedGoal}") was never checked off with GOAL_CHECK: this turn.`,
+      `Goal stated earlier ("${goal}") was never checked off with GOAL_CHECK: this turn.`,
       "warning",
     );
   });
