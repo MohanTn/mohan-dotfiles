@@ -61,10 +61,11 @@ The inject script falls back to the conventional `Layered (Controller -> Service
 
 ---
 
-## Sections (`files`, `logicSteps`, `contracts`, `edgeCases`, `testScenarios`)
+## Sections (`solutionApproach`, `files`, `logicSteps`, `contracts`, `edgeCases`, `testScenarios`)
 
 Each section is an array of items. Item shape per section:
 
+- **solutionApproach** — `{ id, aspect, rationale }`. Explain the solution before implementation. `aspect` is a key decision area (e.g. "Architecture", "Integration", "Performance", "Error Handling"); `rationale` is the reasoning, trade-offs, and high-level explanation. This section appears first to allow the user to review the design before seeing the code manifest.
 - **files** — `{ id, order, action, path, description, pseudoCode }`. `action` ∈ { create, update, delete } (drives the on-page badge colour). `order` is a positive integer (the UI sorts ascending by it). `pseudoCode` is a code-level stub or signature; copy it verbatim as the scaffold when implementing. New files: emit a stub signature. Updated files: describe only the new/changed surface.
 - **logicSteps** — `{ id, step, pseudo }`. One step per top-level concern (validate → load → mutate → persist → return), with plain-English + pseudo-code.
 - **contracts** — `{ id, name, inputs, outputs }`. `name` is the route + method or the function signature; `inputs` and `outputs` are concrete shapes (request body schema, return type, error responses included).
@@ -87,6 +88,10 @@ Write this to `featurePlan-<slug>.json`:
   "patternBusiness": "Transaction Script",
   "patternSpecific": "Use Repository for User; Factory for OTP enrollment DTO.",
   "patternOverrides": "No separate Repository for OTP — reuse UserRepository.",
+  "solutionApproach": [
+    { "id": "s-1", "aspect": "Architecture", "rationale": "We're using a three-tier layered approach with a dedicated Service layer. This keeps auth logic decoupled from HTTP routing and allows reuse across CLI and API endpoints. Trade-off: adds a thin Service abstraction layer." },
+    { "id": "s-2", "aspect": "Integration", "rationale": "TOTP enrollment happens at the User level, not during login. This allows users to set up 2FA at any time, not just at signup, and we can support multiple 2FA methods (TOTP, SMS) in the future." }
+  ],
   "files": [
     {
       "id": "f-1",
@@ -129,8 +134,8 @@ Write this to `featurePlan-<slug>.json`:
 
 Print to chat:
 1. Filename (`featurePlan-<slug>.html`).
-2. One line per non-empty section so the user knows what was drafted (e.g. "files: 4 (1 create, 3 update), logicSteps: 3, contracts: 2, edgeCases: 5, testScenarios: 6").
-3. Next step: "Open the file, edit any section directly in the browser, then click **Copy AI-Ready Plan** and paste the block back — I'll implement strictly per the plan."
+2. One line per non-empty section so the user knows what was drafted (e.g. "solutionApproach: 2, files: 4 (1 create, 3 update), logicSteps: 3, contracts: 2, edgeCases: 5, testScenarios: 6").
+3. Next step: "Open the file, review the solution approach, edit any section directly in the browser, then click **Copy AI-Ready Plan** and paste the block back — I'll implement strictly per the plan."
 
 ---
 

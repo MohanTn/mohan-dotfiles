@@ -309,6 +309,14 @@
         </div>
     </div>
 
+    <!-- SOLUTION APPROACH (EXPLANATION) -->
+    <div class="card">
+        <h2>💡 Solution Approach & Rationale</h2>
+        <p class="text-muted text-small">Explain the high-level design decisions, trade-offs, and rationale before diving into implementation. This section helps reviewers understand the "why" before the "what".</p>
+        <div id="approach-container"></div>
+        <button id="add-approach-btn" class="btn btn-outline btn-block mt-1">＋ Add design decision</button>
+    </div>
+
     <!-- FILE MANIFEST (ORDERED) -->
     <div class="card">
         <h2>📂 File Change Manifest (In Order of Execution)</h2>
@@ -400,6 +408,7 @@
                 patternBusiness: 'Transaction Script',
                 patternSpecific: '',
                 patternOverrides: '',
+                solutionApproach: [],
                 files: [],
                 logicSteps: [],
                 contracts: [],
@@ -444,6 +453,7 @@
         // Rendering Helpers
         // ------------------------------------------------------------------
         function renderAll() {
+            renderApproach();
             renderFiles();
             renderLogic();
             renderContracts();
@@ -678,6 +688,14 @@
         // ------------------------------------------------------------------
         // Render specific sections
         // ------------------------------------------------------------------
+        function renderApproach() {
+            const fields = [
+                { key: 'aspect', label: 'Decision Area (e.g. Architecture, Integration, Performance)', type: 'text', placeholder: 'e.g. Database Strategy' },
+                { key: 'rationale', label: 'Reasoning & Trade-offs', type: 'textarea', rows: 3, fullWidth: true }
+            ];
+            renderSimpleList('approach-container', data.solutionApproach, fields, 'Decision', 'add-approach-btn');
+        }
+
         function renderLogic() {
             const fields = [
                 { key: 'step', label: 'Step Title', type: 'text', placeholder: 'e.g. Validate user input' },
@@ -727,6 +745,7 @@
             });
         }
 
+        bindAdd('add-approach-btn', 'solutionApproach', { aspect: '', rationale: '' });
         bindAdd('add-file-btn', 'files', { order: data.files.length + 1, action: 'create', path: '', description: '',
             pseudoCode: '' });
         bindAdd('add-logic-btn', 'logicSteps', { step: '', pseudo: '' });
@@ -772,6 +791,22 @@
             lines.push(`Specific Implementations: ${data.patternSpecific || 'None'}`);
             lines.push(`Explicit Overrides: ${data.patternOverrides || 'None'}`);
             lines.push('');
+
+            // Solution Approach
+            lines.push('--- SOLUTION APPROACH & RATIONALE ---');
+            if (data.solutionApproach.length === 0) {
+                lines.push('(No approach decisions documented)');
+            } else {
+                data.solutionApproach.forEach((s, idx) => {
+                    lines.push(`Decision ${idx+1}: ${s.aspect || 'Untitled'}`);
+                    if (s.rationale) {
+                        s.rationale.split('\n').forEach(line => {
+                            lines.push(`  ${line}`);
+                        });
+                    }
+                    lines.push('');
+                });
+            }
 
             // Files
             lines.push('--- FILE CHANGE MANIFEST (IN ORDER) ---');

@@ -3,3 +3,4 @@ claude/hooks/state/
 # nix build outputs
 result
 result-*
+node_modules/

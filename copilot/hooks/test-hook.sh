@@ -96,6 +96,10 @@ cmd_selftest() {
     "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \
     '.additionalContext | contains("GOAL_CHECK")'
 
+  expect_out "session-start emits the boilerplate-generator hint" session-start.sh \
+    "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \
+    '.additionalContext | contains("scaffold.js")'
+
   # user-prompt-submit is notification-only: assert empty output + exit 0 directly
   local ups_out ups_rc
   ups_out=$(run_hook user-prompt-submit.sh "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", prompt:"hello"}')")

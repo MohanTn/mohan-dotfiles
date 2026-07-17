@@ -1,0 +1,13 @@
+{
+  "name": "boilerplats",
+  "version": "1.0.0",
+  "description": "Language-agnostic Handlebars boilerplate generator/injector",
+  "private": true,
+  "main": "scaffold.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "handlebars": "^4.7.9"
+  }
+}

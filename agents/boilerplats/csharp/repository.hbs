@@ -1,0 +1,22 @@
+{{!-- Data: { Namespace, EntityName, KeyType } --}}
+namespace {{{Namespace}}}.Repositories;
+
+public interface I{{{EntityName}}}Repository
+{
+    {{{EntityName}}}? GetById({{{KeyType}}} id);
+    IEnumerable<{{{EntityName}}}> GetAll();
+    void Add({{{EntityName}}} entity);
+    void Update({{{EntityName}}} entity);
+    void Delete({{{KeyType}}} id);
+}
+
+public class {{{EntityName}}}Repository : I{{{EntityName}}}Repository
+{
+    public {{{EntityName}}}? GetById({{{KeyType}}} id) => throw new NotImplementedException();
+    public IEnumerable<{{{EntityName}}}> GetAll() => throw new NotImplementedException();
+    public void Add({{{EntityName}}} entity) => throw new NotImplementedException();
+    public void Update({{{EntityName}}} entity) => throw new NotImplementedException();
+    public void Delete({{{KeyType}}} id) => throw new NotImplementedException();
+
+    // scaffold:inject
+}

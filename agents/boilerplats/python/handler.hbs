@@ -1,0 +1,6 @@
+{{!-- Data: { HandlerName, RequestType, ResponseType }. Inject marker: # scaffold:inject --}}
+class {{{HandlerName}}}:
+    def handle(self, request: "{{{RequestType}}}") -> "{{{ResponseType}}}":
+        raise NotImplementedError
+
+    # scaffold:inject

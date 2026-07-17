@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
-# Stop — 4.2 pre-stop goal-achievement gate. Safety-critical: the
-# stop_hook_active early-exit MUST be the first real check, before any
-# transcript parsing, so a broken transcript_path can never suppress the
-# at-most-once-per-turn guarantee.
+# Stop — advisory goal-check logger. Never blocks Stop (no exit 2): a forced
+# block costs a whole extra AI turn just to emit two lines, which isn't worth
+# it. This only logs whether GOAL_CHECK showed up, for visibility.
 input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.claude/hooks/lib/common.sh"
 
 goal_file="$state_dir/goal.txt"
 [ ! -f "$goal_file" ] && exit 0
-
-already_forced=$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null)
-[ "$already_forced" = "true" ] && exit 0
 
 transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
 goal=$(cat "$goal_file" 2>/dev/null)
@@ -29,9 +25,7 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
 fi
 
 if [ "$found_check" = "0" ]; then
-  log "stop-gate: blocked, no GOAL_CHECK found"
-  echo "You stated this goal earlier: \"$goal\". Before finishing, explicitly verify it — state 'GOAL_CHECK: ACHIEVED' or 'GOAL_CHECK: NOT_ACHIEVED — <reason>' and address any gap before stopping." >&2
-  exit 2
+  log "stop-gate: no GOAL_CHECK found for goal: $goal"
 fi
 
 rm -f "$goal_file" 2>/dev/null

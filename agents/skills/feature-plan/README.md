@@ -4,12 +4,13 @@ The common layer behind Claude Code's `/featurePlan` command (`claude/commands/f
 
 ## What the document is for
 
-`/featurePlan` produces a **feature implementation plan** as a working document, not a passive spec. The AI drafts the plan's structure (feature overview, design patterns, ordered file manifest, core business logic pseudo-code, function/API contracts, edge cases, testing strategy) and seeds an editable HTML page. The human then edits every section in the browser — reordering files, refining pseudo-code, adding edge cases — and exports the result as plain text via **Copy AI-Ready Plan**. Everything is editable in-browser and persists per document via `localStorage` (key derived from `document.title`, so different `featurePlan-<slug>.html` files don't share state).
+`/featurePlan` produces a **feature implementation plan** as a working document, not a passive spec. The AI drafts the plan's structure (feature overview, design patterns, solution approach & rationale, ordered file manifest, core business logic pseudo-code, function/API contracts, edge cases, testing strategy) and seeds an editable HTML page. The human reviews the approach, then edits every section in the browser — reordering files, refining pseudo-code, adding edge cases — and exports the result as plain text via **Copy AI-Ready Plan**. Everything is editable in-browser and persists per document via `localStorage` (key derived from `document.title`, so different `featurePlan-<slug>.html` files don't share state).
 
 The on-page sections in order:
 
 - **Feature Overview** — title, target module, user story/goal, and existing-codebase context.
 - **Design Patterns & Architectural Overrides** — core pattern (e.g. Layered), business-logic pattern (e.g. Transaction Script), specific implementations (Factory vs Builder, Repository vs DAO), and explicit overrides/constraints.
+- **Solution Approach & Rationale** — high-level design decisions, trade-offs, and the reasoning behind key choices before diving into implementation details.
 - **File Change Manifest (In Order of Execution)** — ordered list of files with `action` (create/update/delete), `path`, `description`, and `pseudoCode` per file. Sorted by a numeric `order` field; reorderable in the UI.
 - **Core Business Logic (Detailed Pseudo-Code)** — step-by-step algorithm that an AI can translate into actual code.
 - **Function / API Contracts** — entry points (Controllers, Event Handlers, CLI commands) with inputs and outputs.
@@ -56,6 +57,10 @@ Top-level keys: 8 scalar pattern/feature fields (`title`, `module`, `goal`, `con
   "patternBusiness": "Transaction Script",
   "patternSpecific": "Use Repository for User; Factory for OTP enrollment DTO.",
   "patternOverrides": "No separate Repository for OTP — reuse UserRepository.",
+  "solutionApproach": [
+    { "id": "s1", "aspect": "Architecture", "rationale": "Separate TOTP logic into its own service to keep auth concerns modular. This allows future 2FA methods (SMS, hardware keys) without touching AuthService." },
+    { "id": "s2", "aspect": "Performance", "rationale": "Store TOTP secrets encrypted in the users table, not in a separate table. Reduces DB lookups during login; trade-off is we can't easily audit secret rotations, but we can log them in an audit table separately." }
+  ],
   "files": [
     { "id": "f1", "order": 1, "action": "create", "path": "src/Security/TotpService.php", "description": "TOTP enrollment + verification", "pseudoCode": "class TotpService {\n  public function enroll(User $user): string { /* generate secret */ }\n  public function verify(User $user, string $code): bool { /* check code */ }\n}" },
     { "id": "f2", "order": 2, "action": "update", "path": "src/Auth/AuthService.php", "description": "Wire TOTP into login flow", "pseudoCode": "public function login($email, $password, $code) { /* verify + then 2fa */ }" }

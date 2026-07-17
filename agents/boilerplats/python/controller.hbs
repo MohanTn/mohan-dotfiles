@@ -1,0 +1,7 @@
+{{!-- Data: { EntityName, RouteBase }. Inject marker: # scaffold:inject --}}
+from fastapi import APIRouter
+
+router = APIRouter(prefix="{{{RouteBase}}}")
+
+
+# scaffold:inject

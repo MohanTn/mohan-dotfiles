@@ -1,0 +1,18 @@
+{{!-- Data: { EntityName }. Inject marker: # scaffold:inject --}}
+class {{{EntityName}}}Repository:
+    def get_by_id(self, id):
+        raise NotImplementedError
+
+    def get_all(self):
+        raise NotImplementedError
+
+    def add(self, entity):
+        raise NotImplementedError
+
+    def update(self, entity):
+        raise NotImplementedError
+
+    def delete(self, id):
+        raise NotImplementedError
+
+    # scaffold:inject

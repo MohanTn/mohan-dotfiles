@@ -1,0 +1,16 @@
+{{!-- Data: { ScriptName, Description }. Inject marker: # scaffold:inject --}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+# {{{Description}}}
+
+log() {
+  echo "[{{{ScriptName}}}] $*" >&2
+}
+
+main() {
+  # scaffold:inject
+  :
+}
+
+main "$@"

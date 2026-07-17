@@ -1,0 +1,12 @@
+{{!-- Data: { EntityName, ServiceParam } --}}
+const express = require('express');
+
+function {{{EntityName}}}Controller({{{ServiceParam}}}) {
+  const router = express.Router();
+
+  // scaffold:inject
+
+  return router;
+}
+
+module.exports = { {{{EntityName}}}Controller };

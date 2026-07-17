@@ -7,6 +7,19 @@
   # @import directive the way Claude Code does.
   home.file.".pi/agent/AGENTS.md".text = builtins.readFile ../agents/AGENTS.md;
 
+  # Boilerplate-generator hint (see agents/boilerplats/AGENT-HINT.md): on
+  # Claude Code it's a keyword-gated UserPromptSubmit hook
+  # (claude/hooks/boilerplate-hint.sh) and on Copilot it's appended to
+  # session-start.sh's once-per-session additionalContext, since neither of
+  # Pi's own per-turn hook events can rewrite the system prompt outside an
+  # extension. APPEND_SYSTEM.md is Pi's native, documented mechanism for a
+  # permanent system-prompt addition (docs/usage.md's "System Prompt Files"),
+  # so it's used directly here instead of porting the hook logic — it's
+  # always present, including after context compaction, unlike an injected
+  # session message.
+  home.file.".pi/agent/APPEND_SYSTEM.md".text =
+    builtins.readFile ../agents/boilerplats/AGENT-HINT.md;
+
   # TypeScript port of claude/hooks (see pi/agent/extensions/hooks/index.ts for
   # the event-mapping rationale). Pure node:* built-ins, no npm deps, so a
   # plain read-only store symlink is enough — same role as .claude/hooks.

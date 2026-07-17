@@ -29,6 +29,24 @@
             "command": "node \"$HOME/.claude/scaffold/hooks/user-prompt-submit.mjs\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/hooks/context-augment.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/boilerplate-hint.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [

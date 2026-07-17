@@ -54,11 +54,12 @@ function loadTemplate(templatePath) {
 // same per-section field schema, and adding or renaming a field requires
 // changes in both places.
 const ITEM_FIELD_DEFAULTS = {
-  files:         { order: 0, action: 'create', path: '', description: '', pseudoCode: '' },
-  logicSteps:    { step: '', pseudo: '' },
-  contracts:     { name: '', inputs: '', outputs: '' },
-  edgeCases:     { condition: '', handling: '' },
-  testScenarios: { target: '', scenario: '' }
+  solutionApproach: { aspect: '', rationale: '' },
+  files:            { order: 0, action: 'create', path: '', description: '', pseudoCode: '' },
+  logicSteps:       { step: '', pseudo: '' },
+  contracts:        { name: '', inputs: '', outputs: '' },
+  edgeCases:        { condition: '', handling: '' },
+  testScenarios:    { target: '', scenario: '' }
 };
 
 // Sections are top-level arrays in the config + the emptyData() template.

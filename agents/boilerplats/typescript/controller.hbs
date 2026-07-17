@@ -1,0 +1,10 @@
+{{!-- Data: { EntityName, RouteBase, ServiceType, ServiceParam } --}}
+import { Router } from 'express';
+
+export function {{{EntityName}}}Controller({{{ServiceParam}}}: {{{ServiceType}}}): Router {
+  const router = Router();
+
+  // scaffold:inject
+
+  return router;
+}

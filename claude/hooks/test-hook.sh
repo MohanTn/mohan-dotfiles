@@ -22,6 +22,7 @@ TEST_SESSION_ID="manual-test"
 declare -A HOOK_INFO=(
   [session-start.sh]="SessionStart::regenerate + print the project digest"
   [user-prompt-submit.sh]="UserPromptSubmit::inject GOAL reminder, clear prior loop/goal state"
+  [boilerplate-hint.sh]="UserPromptSubmit::point at ~/.agents/boilerplats/scaffold.js on boilerplate-flavored prompts"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
   [pre-tool-use-goal-capture.sh]="PreToolUse (*)::capture the stated GOAL: line from the transcript"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
@@ -40,6 +41,10 @@ default_payload() {
     user-prompt-submit.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"UserPromptSubmit", prompt:"Please investigate and fix the login bug"}'
+      ;;
+    boilerplate-hint.sh)
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"UserPromptSubmit", prompt:"create a new repository class for Orders"}'
       ;;
     pre-tool-use-edit-guard.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -229,6 +234,15 @@ cmd_selftest() {
 
   expect_exit "session-end-cleanup runs cleanly" \
     session-end-cleanup.sh '{}' 0
+
+  expect_contains "boilerplate-hint fires on a matching prompt" \
+    boilerplate-hint.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, prompt:"create a new repository class for Orders"}')" \
+    "scaffold.js"
+
+  expect_empty "boilerplate-hint stays silent on an unrelated prompt" \
+    boilerplate-hint.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, prompt:"why is the login test flaky"}')"
 
   rm -rf "${STATE_HOME:?}/selftest"
 

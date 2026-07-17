@@ -1,0 +1,18 @@
+{{!-- Data: { Namespace, EntityName, RouteBase, ServiceType, ServiceParam } --}}
+using Microsoft.AspNetCore.Mvc;
+
+namespace {{{Namespace}}}.Controllers;
+
+[ApiController]
+[Route("{{{RouteBase}}}")]
+public class {{{EntityName}}}Controller : ControllerBase
+{
+    private readonly {{{ServiceType}}} {{{ServiceParam}}};
+
+    public {{{EntityName}}}Controller({{{ServiceType}}} {{{ServiceParam}}})
+    {
+        this.{{{ServiceParam}}} = {{{ServiceParam}}};
+    }
+
+    // scaffold:inject
+}

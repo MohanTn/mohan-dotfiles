@@ -1,0 +1,13 @@
+{{!-- Data: { TargetName }. Inject marker: # scaffold:inject --}}
+validate_{{{TargetName}}}() {
+  local -r value="$1"
+
+  if [[ -z "$value" ]]; then
+    echo "error: {{{TargetName}}} must not be empty" >&2
+    return 1
+  fi
+
+  # scaffold:inject
+
+  return 0
+}

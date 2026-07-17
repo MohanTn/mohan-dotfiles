@@ -1,0 +1,14 @@
+{{!-- Data: { Namespace, TargetType } --}}
+namespace {{{Namespace}}}.Validators;
+
+public class {{{TargetType}}}Validator
+{
+    public IEnumerable<string> Validate({{{TargetType}}} input)
+    {
+        var errors = new List<string>();
+
+        // scaffold:inject
+
+        return errors;
+    }
+}
