@@ -28,6 +28,15 @@ sync_agents_layer() {
 
 case "${AGENT_TOOL:-}" in
   claude)
+    # claude-agent-home mounts all of /root, so a volume created before this
+    # image installed claude to /root/.local/bin (or from an older
+    # Dockerfile) never gets the binary — named volumes only inherit image
+    # content on their very first mount. Self-heal instead of failing at
+    # `exec "$@"`.
+    if ! command -v claude >/dev/null 2>&1; then
+      echo "entrypoint.sh: claude binary missing (stale volume), reinstalling..." >&2
+      curl -fsSL https://claude.ai/install.sh | bash
+    fi
     sync_agents_layer
     printf '@~/.agents/AGENTS.md\n' > "$HOME/.claude/CLAUDE.md"
     cp -f /opt/agent-config/claude/settings.json "$HOME/.claude/settings.json"
