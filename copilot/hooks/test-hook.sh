@@ -70,11 +70,16 @@ cmd_selftest() {
   expect_out "post-tool-use ignores non-file tools" post-tool-use.sh \
     "$(payload_tool $sid bash '{"command":"echo hi"}')" '. == {}'
 
+  expect_out "post-tool-use runs validate-and-test after the edit gate (no project markers -> clean)" post-tool-use.sh \
+    "$(payload_tool $sid edit '{"path":"/tmp/does-not-exist-'"$sid"'/notes.md","old_str":"a","new_str":"b"}')" '. == {}'
+
   expect_out "agent-stop allows with no transcript" agent-stop.sh \
     "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", transcriptPath:"/nonexistent", stopReason:"end_turn"}')" \
     '. == {}'
 
-  # Copilot events.jsonl transcript: GOAL stated, no GOAL_CHECK -> block once, then allow.
+  # Copilot events.jsonl transcript: GOAL stated, no GOAL_CHECK. Advisory-only
+  # (matches stop-goal-check.sh's canonical policy) — always allows, never
+  # blocks, whether or not GOAL_CHECK ever shows up.
   local transcript stop_payload
   transcript=$(mktemp)
   jq -nc '{type:"user.message", data:{content:"do the thing"}}' > "$transcript"
@@ -82,9 +87,9 @@ cmd_selftest() {
   stop_payload=$(jq -n --arg sid "$sid" --arg t "$transcript" \
     '{sessionId:$sid, cwd:"/tmp", transcriptPath:$t, stopReason:"end_turn"}')
 
-  expect_out "agent-stop blocks GOAL without GOAL_CHECK" agent-stop.sh \
-    "$stop_payload" '.decision == "block" and (.reason | contains("prove the gate works"))'
-  expect_out "agent-stop forces at most once per goal" agent-stop.sh \
+  expect_out "agent-stop allows a GOAL without GOAL_CHECK (advisory only)" agent-stop.sh \
+    "$stop_payload" '. == {}'
+  expect_out "agent-stop still allows on a second look at the same goal" agent-stop.sh \
     "$stop_payload" '. == {}'
 
   jq -nc '{type:"assistant.message", data:{content:"GOAL_CHECK: ACHIEVED"}}' >> "$transcript"

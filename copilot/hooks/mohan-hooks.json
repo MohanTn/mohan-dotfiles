@@ -11,13 +11,13 @@
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/pre-tool-use.sh\"", "timeoutSec": 10 }
     ],
     "postToolUse": [
-      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/post-tool-use.sh\"", "timeoutSec": 60 }
+      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/post-tool-use.sh\"", "timeoutSec": 165 }
     ],
     "agentStop": [
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/agent-stop.sh\"", "timeoutSec": 10 }
     ],
     "sessionEnd": [
-      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/session-end-cleanup.sh\"", "timeoutSec": 10 }
+      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/session-end-cleanup.sh\"", "timeoutSec": 40 }
     ]
   }
 }

@@ -54,3 +54,22 @@ claude_payload() {
                           content:    ($ta.file_text // $ta.fileText // $ta.content)}
                          | with_entries(select(.value != null))))}' 2>/dev/null
 }
+
+# Translates a Copilot events.jsonl transcript ({type:"user.message"|
+# "assistant.message", data:{content}}) into Claude Code's JSONL transcript
+# shape ({type:"user"|"assistant", message:{role, content}}) so the goal-scan
+# logic in pre-tool-use-goal-capture.sh / stop-goal-check.sh can read it
+# unmodified instead of being reimplemented against Copilot's format. Prints
+# the path to a translated temp file (caller must rm it) and returns 1 with
+# no output if the source transcript doesn't exist.
+claude_transcript() {
+  local src="$1" out
+  [ -n "$src" ] && [ -f "$src" ] || return 1
+  out=$(mktemp "${TMPDIR:-/tmp}/copilot-transcript.XXXXXX") || return 1
+  jq -c 'if .type == "user.message" then
+           {type: "user", message: {role: "user", content: (.data.content // "")}}
+         elif .type == "assistant.message" then
+           {type: "assistant", message: {role: "assistant", content: [{type: "text", text: (.data.content // "")}]}}
+         else empty end' "$src" > "$out" 2>/dev/null
+  printf '%s' "$out"
+}

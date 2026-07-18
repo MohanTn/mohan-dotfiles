@@ -29,7 +29,7 @@ declare -A HOOK_INFO=(
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::import/type-check/build gate after edits"
   [post-tool-use-validate-and-test.sh]="PostToolUse (Edit/Write)::auto-detect stack, run lint/build/test, inject error summary only"
-  [stop-goal-check.sh]="Stop::block stop until GOAL_CHECK: was stated"
+  [stop-goal-check.sh]="Stop::advisory-only; log if GOAL_CHECK: was never stated (never blocks)"
   [session-end-cleanup.sh]="SessionEnd::prune stale hook state"
   [session-end-audit.sh]="SessionEnd::auto-generate the session audit file (system layer + hook inventory + trace)"
 )

@@ -1,11 +1,14 @@
 // Shared helper for the hooks extension: shells out to the existing
-// claude/hooks/*.sh scripts instead of reimplementing their logic in
-// TypeScript, the same reuse-via-payload-translation pattern copilot/hooks
+// claude/hooks/*.sh (and *.py) scripts instead of reimplementing their logic
+// in TypeScript, the same reuse-via-payload-translation pattern copilot/hooks
 // already uses for the Bash-based port. Keeps one authored copy of each
 // gate's logic (edit no-op guard, loop breaker, digest generation, the
-// import/type-check/build chain) shared across all three tools.
+// import/type-check/build chain, the goal-check policy) shared across all
+// three tools — Pi must not reimplement its own policy on top of these.
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
+import { writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CLAUDE_HOOKS_HOME = join(homedir(), ".claude", "hooks");
@@ -16,8 +19,12 @@ export interface ClaudeHookResult {
   stderr: string;
 }
 
+function interpreterFor(script: string): string {
+  return script.endsWith(".py") ? "python3" : "bash";
+}
+
 export function runClaudeHook(script: string, payload: object): ClaudeHookResult {
-  const result = spawnSync("bash", [join(CLAUDE_HOOKS_HOME, script)], {
+  const result = spawnSync(interpreterFor(script), [join(CLAUDE_HOOKS_HOME, script)], {
     input: JSON.stringify(payload),
     encoding: "utf8",
   });
@@ -50,30 +57,32 @@ function entryRole(e: MessageEntryLike): string | undefined {
   return (e.message as { role?: string } | undefined)?.role;
 }
 
-// Scans session entries after the most recent user message for an unchecked
-// GOAL: — same scope pre-tool-use-goal-capture.sh and stop-goal-check.sh use
-// against the Claude Code JSONL transcript. Must be evaluated once per
-// user-facing turn (e.g. on agent_settled), not per turn_end: a single user
-// prompt can span many turn_end events while the LLM keeps calling tools, and
-// only the assistant text accumulated across ALL of them (not any one message)
-// determines whether GOAL_CHECK: was ever stated.
-export function findUncheckedGoal(entries: MessageEntryLike[]): string | null {
-  let lastUserIdx = -1;
-  for (let i = 0; i < entries.length; i++) {
-    if (entries[i].type === "message" && entryRole(entries[i]) === "user") lastUserIdx = i;
+// Serializes Pi's in-memory session entries into a Claude Code-shaped JSONL
+// transcript file ({type:"user"|"assistant", message:{role, content}}) so
+// pre-tool-use-goal-capture.sh and stop-goal-check.sh can read it unmodified,
+// the same role this plays for session-end-audit.sh. Only user/assistant
+// message entries are emitted — tool calls etc. don't affect the goal scan
+// and both scripts only correlate lines by relative order, not exact count.
+// Caller owns the returned path and should unlink it once done.
+export function entriesToClaudeTranscript(entries: MessageEntryLike[]): string {
+  const lines: string[] = [];
+  for (const e of entries) {
+    if (e.type !== "message") continue;
+    const role = entryRole(e);
+    if (role === "user") {
+      lines.push(JSON.stringify({ type: "user", message: { role: "user", content: extractText(e.message) } }));
+    } else if (role === "assistant") {
+      lines.push(
+        JSON.stringify({
+          type: "assistant",
+          message: { role: "assistant", content: [{ type: "text", text: extractText(e.message) }] },
+        }),
+      );
+    }
   }
-  if (lastUserIdx === -1) return null;
-
-  const assistantText = entries
-    .slice(lastUserIdx + 1)
-    .filter((e) => e.type === "message" && entryRole(e) === "assistant")
-    .map((e) => extractText(e.message))
-    .join("\n");
-
-  const goalMatch = assistantText.match(/^GOAL:\s*(.+)$/m);
-  if (!goalMatch || /GOAL_CHECK:/.test(assistantText)) return null;
-
-  return goalMatch[1].trim();
+  const file = join(tmpdir(), `pi-hooks-transcript-${randomUUID()}.jsonl`);
+  writeFileSync(file, lines.join("\n") + "\n");
+  return file;
 }
 
 export function extractText(message: unknown): string {

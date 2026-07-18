@@ -1,38 +1,40 @@
-// TypeScript port of claude/hooks for the Pi coding agent. Gates whose logic
-// doesn't depend on Pi's tool-input shape (loop breaker, digest generation,
-// the post-edit import/type-check/build chain, session cleanup)
-// shell out to the existing claude/hooks/*.sh scripts via lib.ts's
-// runClaudeHook, the same reuse pattern copilot/hooks uses. Two gates are
-// reimplemented natively instead of shelled out, because Pi's tool/event
-// shapes don't map onto Claude's closely enough to translate faithfully:
+// TypeScript port of claude/hooks for the Pi coding agent. Every gate shells
+// out to the existing claude/hooks/*.sh (and *.py) scripts via lib.ts's
+// runClaudeHook — the same reuse pattern copilot/hooks uses — so there is one
+// authored copy of each gate's logic and policy (edit no-op guard, boilerplate
+// mandate, loop breaker, digest generation, context augmentation, the
+// import/type-check/build + lint/test chain, the goal-check policy, session
+// audit) shared across all three tools. Pi must not reimplement its own
+// policy on top of these.
+//
+// Two spots still need native code, but only to translate Pi's shapes into
+// what the scripts expect — not to reimplement their logic:
 //
 // - edit no-op guard: Pi's edit tool takes `{path, edits: [{oldText,
 //   newText}]}` (an array, for multi-edit-in-one-call), not Claude's single
-//   `{file_path, old_string, new_string}`. Re-checked directly against
-//   Pi's own type defs (dist/core/tools/edit.d.ts) rather than assumed.
-// - goal-capture/goal-check: checked once against the session transcript,
-//   scoped to entries after the last user message — same scope
-//   pre-tool-use-goal-capture.sh and stop-goal-check.sh use against the
-//   JSONL transcript for Claude Code. This runs on `agent_settled`, not
-//   `turn_end`: a "turn" in Pi is one LLM response, and repeats internally
-//   while the LLM keeps calling tools (see docs/extensions.md's lifecycle
-//   diagram), so a single user prompt can produce many turn_end events
-//   before the agent is actually done. Checking on turn_end fired a false
-//   "never checked off" warning on every intermediate tool-calling round,
-//   not just when the agent was genuinely finished. agent_settled fires
-//   once, only when Pi will not continue automatically (no retry/compaction/
-//   follow-up left) — the closest match to Claude Code's Stop hook timing.
+//   `{file_path, old_string, new_string}`. The oldText===newText check itself
+//   is trivial and kept inline; boilerplate-guard.sh (the actual policy) is
+//   still called once per edit pair via the adapter below.
+// - goal-capture/goal-check: Pi's transcript is in-memory session entries,
+//   not a JSONL file. entriesToClaudeTranscript() (lib.ts) serializes them
+//   into Claude's JSONL shape so pre-tool-use-goal-capture.sh and
+//   stop-goal-check.sh can run completely unmodified against a temp file.
+//   Evaluated once per user-facing turn on `agent_end`, not `turn_end`: a
+//   "turn" in Pi is one LLM response and repeats internally while the LLM
+//   keeps calling tools (see the TurnStartEvent/TurnEndEvent vs.
+//   AgentStartEvent/AgentEndEvent split in the extension types), so a single
+//   user prompt can produce many turn_end events before the agent is
+//   actually done. agent_end ("fired when an agent loop ends") fires once —
+//   the closest match to Claude Code's Stop hook timing.
 //
-// Enforcement: mirrors Claude Code's Stop hook (exit 2 blocks the turn until
-// a GOAL_CHECK: line appears) by forcing a follow-up turn via
-// pi.sendUserMessage(..., { deliverAs: "followUp" }) — documented in
-// extensions.md as triggering a new turn when not streaming — the first time
-// a stated GOAL: goes unchecked at agent_settled. Only forces once per goal
-// (see goalCheckForced below) to avoid looping forever if the model never
-// complies, matching stop-goal-check.sh's stop_hook_active guard.
+// Enforcement is advisory-only, matching stop-goal-check.sh's canonical
+// policy (see its header comment: forcing a block costs a whole extra AI
+// turn for two lines of text, and isn't worth it). Pi does not force a
+// follow-up turn or otherwise block on a missing GOAL_CHECK:.
 import { randomUUID } from "node:crypto";
+import { unlinkSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { findUncheckedGoal, runClaudeHook, toClaudeToolName } from "./lib.js";
+import { entriesToClaudeTranscript, runClaudeHook, toClaudeToolName } from "./lib.js";
 
 interface EditInput {
   path: string;
@@ -48,12 +50,10 @@ export default function (pi: ExtensionAPI) {
   let sessionId = randomUUID();
   let digest = "";
   let digestInjected = false;
-  let goalCheckForced = false;
 
   pi.on("session_start", async (event, ctx) => {
     sessionId = crypto.randomUUID();
     digestInjected = false;
-    goalCheckForced = false;
 
     const result = runClaudeHook("session-start.sh", {
       session_id: sessionId,
@@ -81,6 +81,26 @@ export default function (pi: ExtensionAPI) {
       parts.push(promptResult.stdout.trim());
     }
 
+    const augmentResult = runClaudeHook("context-augment.py", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      hook_event_name: "UserPromptSubmit",
+      prompt: event.prompt,
+    });
+    if (augmentResult.stdout.trim()) {
+      parts.push(augmentResult.stdout.trim());
+    }
+
+    const hintResult = runClaudeHook("boilerplate-hint.sh", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      hook_event_name: "UserPromptSubmit",
+      prompt: event.prompt,
+    });
+    if (hintResult.stdout.trim()) {
+      parts.push(hintResult.stdout.trim());
+    }
+
     if (parts.length === 0) return;
     return {
       message: {
@@ -94,9 +114,19 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName === "edit") {
       const input = event.input as EditInput;
-      const noop = input.edits?.some((e) => e.oldText === e.newText);
-      if (noop) {
-        return { block: true, reason: "oldText and newText are identical — this edit is a no-op." };
+      for (const e of input.edits ?? []) {
+        if (e.oldText === e.newText) {
+          return { block: true, reason: "oldText and newText are identical — this edit is a no-op." };
+        }
+        const guard = runClaudeHook("boilerplate-guard.sh", {
+          session_id: sessionId,
+          cwd: ctx.cwd,
+          tool_name: "Edit",
+          tool_input: { file_path: input.path, old_string: e.oldText, new_string: e.newText },
+        });
+        if (guard.exitCode === 2) {
+          return { block: true, reason: guard.stderr.trim() };
+        }
       }
     }
 
@@ -110,6 +140,15 @@ export default function (pi: ExtensionAPI) {
       });
       if (guard.exitCode === 2) {
         return { block: true, reason: guard.stderr.trim() };
+      }
+      const boilerplate = runClaudeHook("boilerplate-guard.sh", {
+        session_id: sessionId,
+        cwd: ctx.cwd,
+        tool_name: "Write",
+        tool_input: { file_path: input.path, content: input.content },
+      });
+      if (boilerplate.exitCode === 2) {
+        return { block: true, reason: boilerplate.stderr.trim() };
       }
     }
 
@@ -136,40 +175,60 @@ export default function (pi: ExtensionAPI) {
       tool_name: toClaudeToolName(event.toolName),
       tool_input: { file_path: filePath },
     });
-    if (gate.exitCode !== 2) return;
-
-    return {
-      content: [...event.content, { type: "text", text: gate.stderr.trim() }],
-      details: event.details,
-      isError: true,
-    };
-  });
-
-  // Native goal-capture + goal-check (see the module-level comment on why
-  // this isn't shelled out, why it runs on agent_settled instead of
-  // turn_end, and its enforcement gap vs. the Claude version).
-  pi.on("agent_settled", async (_event, ctx) => {
-    const goal = findUncheckedGoal(ctx.sessionManager.getEntries());
-    if (!goal) {
-      goalCheckForced = false;
-      return;
+    if (gate.exitCode === 2) {
+      return {
+        content: [...event.content, { type: "text", text: gate.stderr.trim() }],
+        details: event.details,
+        isError: true,
+      };
     }
 
-    const reminder = `You stated this goal earlier: "${goal}". Before finishing, explicitly verify it — state 'GOAL_CHECK: ACHIEVED' or 'GOAL_CHECK: NOT_ACHIEVED — <reason>' and address any gap before stopping.`;
-
-    if (goalCheckForced) {
-      // Already forced one follow-up for this goal and it's still unchecked —
-      // don't loop forever, just warn like the Claude-side loop guard does.
-      ctx.ui?.notify?.(`Goal check still missing after follow-up: ${reminder}`, "warning");
-      goalCheckForced = false;
-      return;
+    const validate = runClaudeHook("post-tool-use-validate-and-test.sh", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      hook_event_name: "PostToolUse",
+      tool_name: toClaudeToolName(event.toolName),
+      tool_input: { file_path: filePath },
+    });
+    if (validate.exitCode !== 0 && validate.stderr.trim()) {
+      return {
+        content: [...event.content, { type: "text", text: validate.stderr.trim() }],
+        details: event.details,
+        isError: true,
+      };
     }
-
-    goalCheckForced = true;
-    pi.sendUserMessage(reminder, { deliverAs: "followUp" });
   });
 
-  pi.on("session_shutdown", async () => {
+  // Adapter for the canonical goal-check gate in claude/hooks (see the
+  // module-level comment for why transcript translation is needed and why
+  // this runs on agent_end). Advisory-only — never blocks or forces a
+  // follow-up turn.
+  pi.on("agent_end", async (_event, ctx) => {
+    const transcriptFile = entriesToClaudeTranscript(ctx.sessionManager.getEntries());
+    try {
+      const payload = { session_id: sessionId, cwd: ctx.cwd, transcript_path: transcriptFile };
+      runClaudeHook("pre-tool-use-goal-capture.sh", payload);
+      runClaudeHook("stop-goal-check.sh", payload);
+    } finally {
+      try {
+        unlinkSync(transcriptFile);
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  });
+
+  pi.on("session_shutdown", async (_event, ctx) => {
+    const transcriptFile = entriesToClaudeTranscript(ctx.sessionManager.getEntries());
+    try {
+      runClaudeHook("session-end-audit.sh", { session_id: sessionId, cwd: ctx.cwd, transcript_path: transcriptFile });
+    } finally {
+      try {
+        unlinkSync(transcriptFile);
+      } catch {
+        // best-effort cleanup
+      }
+    }
     runClaudeHook("session-end-cleanup.sh", {});
   });
 }

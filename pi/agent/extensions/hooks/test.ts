@@ -12,7 +12,8 @@
  * Exit code 0 on pass, non-zero on any failure.
  */
 
-import { extractText, findUncheckedGoal, toClaudeToolName, type MessageEntryLike } from "./lib.js";
+import { readFileSync, unlinkSync } from "node:fs";
+import { entriesToClaudeTranscript, extractText, toClaudeToolName, type MessageEntryLike } from "./lib.js";
 
 let pass = 0;
 let fail = 0;
@@ -93,7 +94,13 @@ for (const [input, want] of toolNameCases) {
   }
 }
 
-// ---- findUncheckedGoal ----
+// ---- entriesToClaudeTranscript ----
+// The goal-check policy itself now lives only in claude/hooks/
+// pre-tool-use-goal-capture.sh + stop-goal-check.sh, run against this
+// translated transcript (see index.ts's agent_end handler) — no goal-scan
+// logic is reimplemented here. What's unique to the TS port is the
+// translation: session entries -> a Claude-shaped JSONL file those scripts
+// can read unmodified.
 
 function userEntry(text: string): MessageEntryLike {
   return { type: "message", message: { role: "user", content: text } };
@@ -104,53 +111,28 @@ function assistantEntry(text: string): MessageEntryLike {
 }
 
 {
-  const desc = "no GOAL: stated → no unchecked goal";
-  const got = findUncheckedGoal([userEntry("hi"), assistantEntry("Sure, on it.")]);
-  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
+  const desc = "translates user/assistant entries into Claude's {type, message:{role, content}} JSONL shape";
+  const file = entriesToClaudeTranscript([userEntry("do the thing"), assistantEntry("GOAL: do the thing")]);
+  const lines = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  unlinkSync(file);
+  const wantUser = lines[0]?.type === "user" && lines[0]?.message?.content === "do the thing";
+  const wantAssistant =
+    lines[1]?.type === "assistant" && lines[1]?.message?.content?.[0]?.text === "GOAL: do the thing";
+  wantUser && wantAssistant
+    ? ok(desc)
+    : no(desc, `got ${JSON.stringify(lines)}`);
 }
 
 {
-  const desc = "GOAL: stated, no GOAL_CHECK: anywhere → flagged unchecked";
-  const got = findUncheckedGoal([userEntry("do the thing"), assistantEntry("GOAL: do the thing\n\nworking...")]);
-  got === "do the thing" ? ok(desc) : no(desc, `expected "do the thing", got ${JSON.stringify(got)}`);
-}
-
-{
-  const desc = "GOAL: and GOAL_CHECK: in the same assistant message → satisfied";
-  const got = findUncheckedGoal([
-    userEntry("do the thing"),
-    assistantEntry("GOAL: do the thing\n\nDone.\n\nGOAL_CHECK: ACHIEVED"),
+  const desc = "non-message entries (e.g. custom entries) are skipped, not emitted as blank lines";
+  const file = entriesToClaudeTranscript([
+    userEntry("hi"),
+    { type: "thinking_level_change" } as MessageEntryLike,
+    assistantEntry("hello"),
   ]);
-  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
-}
-
-{
-  // Regression for the turn_end bug: GOAL: is stated in the first LLM
-  // response of the turn, several tool-calling rounds follow with no
-  // GOAL_CHECK:, and only the final assistant message states it. A
-  // per-message check (the old turn_end behavior) would flag every
-  // intermediate round; the fix must aggregate all assistant entries since
-  // the last user entry and only flag if GOAL_CHECK: never appears at all.
-  const desc = "GOAL_CHECK: arrives several assistant turns later → satisfied, not flagged mid-loop";
-  const got = findUncheckedGoal([
-    userEntry("do the thing"),
-    assistantEntry("GOAL: do the thing"),
-    assistantEntry("Reading files..."),
-    assistantEntry("Editing..."),
-    assistantEntry("Done.\n\nGOAL_CHECK: ACHIEVED"),
-  ]);
-  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
-}
-
-{
-  const desc = "goal from a previous user turn doesn't leak into the next turn's check";
-  const got = findUncheckedGoal([
-    userEntry("first task"),
-    assistantEntry("GOAL: first task\n\nGOAL_CHECK: ACHIEVED"),
-    userEntry("second task"),
-    assistantEntry("Sure, on it (no GOAL: restated)."),
-  ]);
-  got === null ? ok(desc) : no(desc, `expected null, got ${JSON.stringify(got)}`);
+  const lineCount = readFileSync(file, "utf8").trim().split("\n").length;
+  unlinkSync(file);
+  lineCount === 2 ? ok(desc) : no(desc, `expected 2 lines, got ${lineCount}`);
 }
 
 // ---- Extension module shape ----
