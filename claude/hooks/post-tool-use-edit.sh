@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# PostToolUse: Edit|Write — 2.1 dirty-flag + 3.1 symbol-existence + 3.2 type-check gate + 3.5 build gate
+# PostToolUse: Edit|Write — 2.1 dirty-flag + 3.1 symbol-existence
+# No tsc/dotnet build gate here: a whole-project compile per edit times out on
+# anything large (so it silently passes exactly where it's needed), and the
+# basename grep it filtered errors with false-blocks on common names like
+# index.ts. Compile errors are better caught by an explicit build the model runs.
 input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.claude/hooks/lib/common.sh"
@@ -13,6 +17,10 @@ file=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null
 gen_file="$state_dir/edit_gen"
 gen=$(( $(cat "$gen_file" 2>/dev/null || echo 0) + 1 ))
 printf '%s' "$gen" > "$gen_file" 2>/dev/null
+
+# Append to the touched-files list pre-compact.sh replays, so the set of files
+# this session changed survives a compaction that drops the tool history.
+printf '%s\n' "$file" >> "$state_dir/edited_files" 2>/dev/null
 
 file_dir=$(dirname "$file")
 in_git_repo=0
@@ -44,69 +52,6 @@ case "$file" in
           ;;
       esac
     done <<< "$new_imports"
-  fi
-
-  # 3.2 — type-check gate: discover nearest tsconfig.json by walking up from file_dir (max 6 levels), never CLAUDE_PROJECT_DIR
-  tsconfig_dir=""
-  search_dir="$file_dir"
-  for _ in 1 2 3 4 5 6; do
-    if [ -f "$search_dir/tsconfig.json" ]; then
-      tsconfig_dir="$search_dir"
-      break
-    fi
-    parent=$(dirname "$search_dir")
-    [ "$parent" = "$search_dir" ] && break
-    search_dir="$parent"
-  done
-
-  if [ -n "$tsconfig_dir" ]; then
-    tsc_bin=""
-    if [ -x "$tsconfig_dir/node_modules/.bin/tsc" ]; then
-      tsc_bin="$tsconfig_dir/node_modules/.bin/tsc"
-    elif command -v npx >/dev/null 2>&1; then
-      tsc_bin="npx --no-install tsc"
-    fi
-    if [ -n "$tsc_bin" ]; then
-      errors=$(cd "$tsconfig_dir" && timeout 8 $tsc_bin --noEmit --pretty false -p "$tsconfig_dir" 2>&1 | grep "$(basename "$file")")
-      if [ -n "$errors" ]; then
-        log "post-edit: type errors in $file"
-        printf 'Type errors introduced:\n%s\n' "$errors" >&2
-        exit 2
-      fi
-    fi
-  fi
-  ;;
-*.cs)
-  # 3.5 — dotnet build gate, the C# analogue of the tsc gate above. There's no
-  # equivalent of 3.1's relative-import check here: C# resolves by namespace via
-  # project/assembly references, not relative file paths, so it doesn't map.
-  if command -v dotnet >/dev/null 2>&1; then
-    csproj_dir=""
-    csproj_file=""
-    search_dir="$file_dir"
-    for _ in 1 2 3 4 5 6; do
-      found=$(find "$search_dir" -maxdepth 1 -name "*.csproj" 2>/dev/null | head -1)
-      if [ -n "$found" ]; then
-        csproj_dir="$search_dir"
-        csproj_file="$found"
-        break
-      fi
-      parent=$(dirname "$search_dir")
-      [ "$parent" = "$search_dir" ] && break
-      search_dir="$parent"
-    done
-
-    if [ -n "$csproj_dir" ]; then
-      # --no-restore: a missing/stale restore produces NuGet errors that won't
-      # mention this file's basename, so the filter below naturally ignores them
-      # rather than false-blocking on an unrelated restore problem.
-      errors=$(cd "$csproj_dir" && timeout 20 dotnet build "$csproj_file" --no-restore -nologo -v q 2>&1 | grep -E 'error (CS|MSB)' | grep -F "$(basename "$file")")
-      if [ -n "$errors" ]; then
-        log "post-edit: build errors in $file"
-        printf 'Build errors introduced:\n%s\n' "$errors" >&2
-        exit 2
-      fi
-    fi
   fi
   ;;
 esac

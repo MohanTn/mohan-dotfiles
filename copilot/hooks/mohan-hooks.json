@@ -2,7 +2,7 @@
   "version": 1,
   "hooks": {
     "sessionStart": [
-      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/session-start.sh\"", "timeoutSec": 15 }
+      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/session-start.sh\"", "timeoutSec": 30 }
     ],
     "userPromptSubmitted": [
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/user-prompt-submit.sh\"", "timeoutSec": 5 }

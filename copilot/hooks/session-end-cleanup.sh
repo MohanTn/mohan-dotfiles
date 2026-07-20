@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# sessionEnd — prune stale hook state, generate the same session audit Claude
-# produces, then run the full lint/build/test pass, reusing
-# session-end-cleanup.sh, session-end-audit.sh and
-# session-end-validate-and-test.sh unmodified. Copilot hook state lives in the
-# same ~/.local/state/claude-hooks tree the Claude hooks use (see lib/common.sh).
+# sessionEnd — prune stale hook state and generate the same session audit Claude
+# produces, reusing session-end-cleanup.sh and session-end-audit.sh unmodified.
+# Copilot hook state lives in the same ~/.local/state/claude-hooks tree the
+# Claude hooks use (see lib/common.sh).
 input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.copilot/hooks/lib/common.sh"
@@ -20,8 +19,5 @@ else
   payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" '{session_id: $sid, cwd: $cwd}')
 fi
 printf '%s' "$payload" | bash "$HOME/.claude/hooks/session-end-audit.sh" >/dev/null 2>&1
-
-jq -n --arg sid "$session_id" --arg cwd "$cwd" '{session_id: $sid, cwd: $cwd}' \
-  | bash "$HOME/.claude/hooks/session-end-validate-and-test.sh" >/dev/null 2>&1
 
 exit 0

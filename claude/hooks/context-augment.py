@@ -12,9 +12,8 @@ Design patterns:
                      Read needed); larger files degrade to signatures only.
   3. Keyword-driven -- searches are triggered by tokens found in the prompt.
 
-Files injected at "full" fidelity are recorded in a per-session ledger
-(state_dir/context_shown.json, same state_dir pre-tool-use-read-guard.sh
-reads) so that hook can block a redundant Read of a file already in context.
+Injection is advisory only: nothing here restricts a later Read. "full" content
+is minified (comments stripped), so a Read of the same file is not redundant.
 
 Always exits 0; failures degrade to no augmentation rather than blocking submit.
 """
@@ -38,6 +37,8 @@ MINIFY_MAX_CHARS = 2500  # inject full minified content only if it fits this
 TOTAL_BUDGET = 8000      # overall augmentation budget
 SEARCH_TIMEOUT = 2       # seconds per rg/fd call
 SEARCH_DEADLINE = 4      # seconds total wall-clock budget for all searches
+MAX_CANDIDATES = 20000   # cap the fd file/dir list so fzf stays fast on monorepos
+MIN_WORD_LEN = 8         # bare lowercase words shorter than this are prose, not symbols
 
 # per-language single-line comment prefix, for safe whitespace-only minify
 LINE_COMMENT = {
@@ -56,39 +57,18 @@ PATH_RE = re.compile(r"@?((?:[\w.\-]+/)+[\w.\-]+|\b[\w.\-]+\.[a-zA-Z]{1,5}\b)")
 SYMBOL_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\b")
 EXT_RE = re.compile(r"\.(" + "|".join(CODE_EXTS) + r")\b")
 
+# Matched case-insensitively (see extract_keywords), so list these in one form.
 STOPWORDS = {
-    "The", "This", "That", "With", "From", "Into", "When", "Then", "Also",
-    "And", "But", "For", "Not", "Use", "Using", "Add", "Fix", "Make", "Get",
-    "Set", "Run", "Should", "Would", "Could", "Please", "Need", "Want", "How",
-    "What", "Why", "Where", "AI", "OK",
+    "the", "this", "that", "with", "from", "into", "when", "then", "also",
+    "and", "but", "for", "not", "use", "using", "add", "fix", "make", "get",
+    "set", "run", "should", "would", "could", "please", "need", "want", "how",
+    "what", "why", "where", "ai", "ok",
+    # long prose words that clear MIN_WORD_LEN but never name code
+    "actually", "anything", "basically", "probably", "something", "everything",
+    "existing", "complete", "complex", "honest", "review", "reviewed",
+    "suggestion", "suggestions", "understand", "currently", "instead",
+    "because", "however", "therefore", "consider", "explain", "describe",
 }
-
-
-def ledger_path(session_id: str) -> str:
-    """Path to this session's context_shown ledger (mirrors lib/common.sh's state_dir)."""
-    state_home = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
-    return os.path.join(state_home, "claude-hooks", session_id or "default", "context_shown.json")
-
-
-def record_shown(session_id: str, abs_paths: list[str]) -> None:
-    """Merge abs_paths into the session's ledger of fully-injected files. Never raises."""
-    if not abs_paths:
-        return
-    path = ledger_path(session_id)
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        try:
-            with open(path, encoding="utf-8") as fh:
-                ledger = json.load(fh)
-        except (OSError, json.JSONDecodeError, ValueError):
-            ledger = {}
-        now = time.time()
-        for p in abs_paths:
-            ledger[p] = now
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(ledger, fh)
-    except OSError:
-        pass
 
 
 def run(cmd: list[str], cwd: str) -> list[str]:
@@ -116,13 +96,16 @@ def extract_keywords(prompt: str) -> tuple[list[str], list[str]]:
 
     for m in SYMBOL_RE.finditer(prompt):
         tok = m.group(1)
-        if tok in seen_s or tok in STOPWORDS or len(tok) < 3:
+        if tok in seen_s or tok.lower() in STOPWORDS or len(tok) < 3:
             continue
         # keep code-shaped identifiers: CamelCase, ALL_CAPS, snake_case, or long lowercase words
         is_camel = any(c.isupper() for c in tok[1:]) and any(c.islower() for c in tok)
         is_caps = tok.isupper()
         is_snake = "_" in tok
-        is_long_word = len(tok) >= 5  # accept long lowercase words (repo, boilerplates, etc.)
+        # A bare lowercase word is only worth searching when it's long enough to
+        # plausibly be an identifier; shorter ones are ordinary prose and just
+        # burn the fzf/rg budget on noise.
+        is_long_word = len(tok) >= MIN_WORD_LEN
         if is_camel or is_caps or is_snake or is_long_word:
             seen_s.add(tok)
             symbols.append(tok)
@@ -185,13 +168,13 @@ def find_files(paths: list[str], symbols: list[str], root: str) -> list[str]:
     def file_list() -> list[str]:
         nonlocal all_files
         if all_files is None:
-            all_files = run(["fd", "-t", "f"], root)
+            all_files = run(["fd", "-t", "f"], root)[:MAX_CANDIDATES]
         return all_files
 
     def dir_list() -> list[str]:
         nonlocal all_dirs
         if all_dirs is None:
-            all_dirs = run(["fd", "-t", "d"], root)
+            all_dirs = run(["fd", "-t", "d"], root)[:MAX_CANDIDATES]
         return all_dirs
 
     # 1. explicit paths (exact, else fuzzy-matched by basename)
@@ -394,7 +377,6 @@ def main() -> int:
 
     header_count = len(parts)
     used = sum(len(p) for p in parts)
-    shown_full: list[str] = []
     for rel in files:
         body, mode = render_file(root, rel)
         if not body:
@@ -405,13 +387,9 @@ def main() -> int:
             break
         parts.append(block)
         used += len(block)
-        if mode == "full":
-            shown_full.append(os.path.join(root, rel))
 
     if len(parts) <= header_count:  # header only, no file blocks
         return 0
-
-    record_shown(data.get("session_id") or "default", shown_full)
 
     parts.append("</context-augmentation>")
     print("\n".join(parts))

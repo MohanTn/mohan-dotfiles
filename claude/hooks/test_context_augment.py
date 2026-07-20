@@ -147,31 +147,43 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("return True", out)      # no Read needed to see the body
 
 
-class Ledger(unittest.TestCase):
-    def test_full_mode_file_recorded_in_ledger(self):
+class NoLedger(unittest.TestCase):
+    """Injection is advisory: it must not write a ledger anything else gates Reads on."""
+
+    def test_no_ledger_written(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as state_home:
             subprocess.run(["git", "init", "-q"], cwd=d)
             (Path(d) / "auth_service.py").write_text(
                 "class AuthService:\n    def login(self, user):\n        return True\n")
             env = {**os.environ, "XDG_STATE_HOME": state_home}
-            run_main("Please fix AuthService login in auth_service.py now", d,
-                     session_id="ledger-test", env=env)
-            ledger_file = Path(state_home) / "claude-hooks" / "ledger-test" / "context_shown.json"
-            self.assertTrue(ledger_file.exists())
-            ledger = json.loads(ledger_file.read_text())
-            self.assertIn(str(Path(d) / "auth_service.py"), ledger)
+            out = run_main("Please fix AuthService login in auth_service.py now", d,
+                           session_id="ledger-test", env=env)
+            self.assertIn('mode="full"', out)
+            self.assertFalse(
+                (Path(state_home) / "claude-hooks" / "ledger-test" / "context_shown.json").exists())
 
-    def test_abstract_mode_file_not_recorded(self):
-        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as state_home:
-            subprocess.run(["git", "init", "-q"], cwd=d)
-            rel = _large_rel_in(d)
-            env = {**os.environ, "XDG_STATE_HOME": state_home}
-            run_main(f"Please look at large.py fn_0 now", d,
-                      session_id="ledger-test-2", env=env)
-            ledger_file = Path(state_home) / "claude-hooks" / "ledger-test-2" / "context_shown.json"
-            if ledger_file.exists():
-                ledger = json.loads(ledger_file.read_text())
-                self.assertNotIn(str(Path(d) / rel), ledger)
+
+class KeywordPrecision(unittest.TestCase):
+    def test_prose_words_are_not_symbols(self):
+        _, symbols = ca.extract_keywords(
+            "could you give me an honest review of the existing complex setup")
+        self.assertEqual(symbols, [])
+
+    def test_stopwords_match_case_insensitively(self):
+        _, symbols = ca.extract_keywords("should we consider what happens here")
+        self.assertNotIn("should", symbols)
+        self.assertNotIn("consider", symbols)
+
+    def test_code_shaped_tokens_still_kept(self):
+        _, symbols = ca.extract_keywords("fix AuthService and get_user and MAX_RETRY")
+        self.assertIn("AuthService", symbols)
+        self.assertIn("get_user", symbols)
+        self.assertIn("MAX_RETRY", symbols)
+
+    def test_short_lowercase_word_dropped_long_kept(self):
+        _, symbols = ca.extract_keywords("the parser broke in boilerplates")
+        self.assertNotIn("parser", symbols)       # 6 chars, below MIN_WORD_LEN
+        self.assertIn("boilerplates", symbols)
 
 
 def _large_rel_in(root):

@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/session-start.sh\"",
-            "timeout": 10
+            "command": "bash \"$HOME/.claude/hooks/session-start.sh\" --no-claude-md",
+            "timeout": 30
           }
         ]
       }
@@ -63,16 +63,6 @@
         ]
       },
       {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/pre-tool-use-read-guard.sh\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "*",
         "hooks": [
           {
@@ -95,12 +85,22 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/post-tool-use-edit.sh\"",
-            "timeout": 45
+            "timeout": 10
           }
         ]
       }
     ],
-    "PreCompact": [],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/pre-compact.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -124,12 +124,6 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/session-end-audit.sh\"",
             "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/session-end-validate-and-test.sh\"",
-            "timeout": 120,
-            "onError": "continue"
           }
         ]
       }

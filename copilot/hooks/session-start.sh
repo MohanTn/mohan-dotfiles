@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# sessionStart — project digest (reuses the Claude hook) + the GOAL/GOAL_CHECK
-# standing instruction + the boilerplate-generator hint. On Claude Code both
-# are injected per turn (GOAL via UserPromptSubmit, the boilerplate hint only
-# when a prompt looks boilerplate-flavored, see claude/hooks/boilerplate-hint.sh);
-# Copilot fires userPromptSubmitted but ignores its output, so this once-per-session
-# injection is the available equivalent for both (agent-stop.sh enforces the
-# GOAL half; the hint has no per-turn re-trigger, so it runs unconditionally
-# here instead of being keyword-gated).
+# sessionStart — project digest (reuses the Claude hook) + the boilerplate-generator
+# hint. The digest is the only path by which a project's own CLAUDE.md reaches
+# Copilot, which loads just the global copilot-instructions.md. The GOAL/GOAL_CHECK
+# instruction now lives in agents/AGENTS.md, which that file is generated from.
+# On Claude Code the boilerplate hint fires per turn only when a prompt looks
+# boilerplate-flavored (claude/hooks/boilerplate-hint.sh); Copilot fires
+# userPromptSubmitted but ignores its output, so it runs unconditionally here.
 input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.copilot/hooks/lib/common.sh"
@@ -22,8 +21,6 @@ else
   boilerplate_hint="Boilerplate generator available at ~/.agents/boilerplats/scaffold.js (run 'home-manager switch --impure' if that path doesn't exist yet)."
 fi
 
-printf '%s\n\n%s\n\n%s' "$digest" \
-'Standing instruction for every substantial request in this session: begin your reply with "GOAL: <one-sentence objective>" and, before finishing that turn, state "GOAL_CHECK: ACHIEVED" or "GOAL_CHECK: NOT_ACHIEVED — <gap>".' \
-  "$boilerplate_hint" \
+printf '%s\n\n%s' "$digest" "$boilerplate_hint" \
   | jq -Rs '{additionalContext: .}'
 exit 0

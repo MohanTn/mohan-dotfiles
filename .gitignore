@@ -4,3 +4,5 @@ claude/hooks/state/
 result
 result-*
 node_modules/
+
+.claude/repo-map.md

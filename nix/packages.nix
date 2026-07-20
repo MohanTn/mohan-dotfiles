@@ -11,6 +11,7 @@
     ripgrep # Telescope live-grep
     fd # Telescope file finder
     jq # every Claude Code hook
+    universal-ctags # session-start.sh's repo map (folder -> file -> symbol)
     python3 # statusline-usage.py
     nodejs_22 # LazyVim LSP extras, pi extensions, npm global CLIs
     pnpm # for enriched_planning

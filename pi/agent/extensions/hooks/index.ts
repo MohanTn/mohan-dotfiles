@@ -215,8 +215,5 @@ export default function (pi: ExtensionAPI) {
       }
     }
     runClaudeHook("session-end-cleanup.sh", {});
-    // Full lint/build/test pass runs once here instead of after every
-    // Edit/Write (see tool_result above) so individual edits aren't held up.
-    runClaudeHook("session-end-validate-and-test.sh", { session_id: sessionId, cwd: ctx.cwd });
   });
 }

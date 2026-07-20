@@ -70,7 +70,7 @@ cmd_selftest() {
   expect_out "post-tool-use ignores non-file tools" post-tool-use.sh \
     "$(payload_tool $sid bash '{"command":"echo hi"}')" '. == {}'
 
-  expect_out "post-tool-use runs validate-and-test after the edit gate (no project markers -> clean)" post-tool-use.sh \
+  expect_out "post-tool-use passes a non-code edit through the edit gate" post-tool-use.sh \
     "$(payload_tool $sid edit '{"path":"/tmp/does-not-exist-'"$sid"'/notes.md","old_str":"a","new_str":"b"}')" '. == {}'
 
   expect_out "agent-stop allows with no transcript" agent-stop.sh \
@@ -96,10 +96,6 @@ cmd_selftest() {
   expect_out "agent-stop allows when GOAL_CHECK is stated" agent-stop.sh \
     "$stop_payload" '. == {}'
   rm -f "$transcript"
-
-  expect_out "session-start emits the GOAL standing instruction" session-start.sh \
-    "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \
-    '.additionalContext | contains("GOAL_CHECK")'
 
   expect_out "session-start emits the boilerplate-generator hint" session-start.sh \
     "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \

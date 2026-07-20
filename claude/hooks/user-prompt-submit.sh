@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# UserPromptSubmit — inject goal-statement + YAGNI principles; skip trivial prompts
+# UserPromptSubmit — reset per-turn state; inject the MCP document-reader hint.
+# The GOAL/GOAL_CHECK instruction lives in agents/AGENTS.md, not here.
 input=$(cat)
 session_id=$(printf '%s' "$input" | jq -r '.session_id // "default"' 2>/dev/null)
 session_id=${session_id:-default}
@@ -14,14 +15,4 @@ if printf '%s' "$prompt" | grep -qiE '@[^ ]+\.(pdf|docx|xlsx|xls)'; then
   echo "IMPORTANT: For any .pdf, .docx, .xlsx, or .xls files referenced in this prompt, use the mcp__files-mcp__convert_file tool to read them — do NOT use the Read tool for these file types."
 fi
 
-# Skip GOAL injection for short/conversational prompts (continuations, acks, simple questions)
-word_count=$(printf '%s' "$prompt" | wc -w)
-if [ "$word_count" -lt 6 ]; then
-  exit 0
-fi
-
-cat <<'EOF'
-State this turn's goal: GOAL: <one-sentence objective>
-Before finishing: GOAL_CHECK: ACHIEVED or NOT_ACHIEVED — <gap, if any>
-EOF
 exit 0

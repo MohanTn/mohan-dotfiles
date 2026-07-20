@@ -20,19 +20,18 @@ TEST_SESSION_ID="manual-test"
 
 # hook basename -> "event_name::one-line purpose"
 declare -A HOOK_INFO=(
-  [session-start.sh]="SessionStart::regenerate + print the project digest"
-  [user-prompt-submit.sh]="UserPromptSubmit::inject GOAL reminder, clear prior loop/goal state"
+  [session-start.sh]="SessionStart::regenerate .claude/repo-map.md (via repo-map.sh) + print the digest that points at it"
+  [user-prompt-submit.sh]="UserPromptSubmit::clear prior loop/goal state, hint the MCP reader for @-referenced documents"
   [boilerplate-hint.sh]="UserPromptSubmit::point at ~/.agents/boilerplats/scaffold.js on boilerplate-flavored prompts"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
-  [pre-tool-use-read-guard.sh]="PreToolUse (Read)::block re-reading a file already injected in full by context-augment.py"
   [boilerplate-guard.sh]="PreToolUse (Edit/Write)::mandate scaffold.js for new boilerplate files, protect scaffold:inject markers"
   [pre-tool-use-goal-capture.sh]="PreToolUse (*)::capture the stated GOAL: line from the transcript"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
-  [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::import/type-check/build gate after edits"
+  [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
+  [pre-compact.sh]="PreCompact::replay goal + files edited + diffstat across a compaction"
   [stop-goal-check.sh]="Stop::advisory-only; log if GOAL_CHECK: was never stated (never blocks)"
   [session-end-cleanup.sh]="SessionEnd::prune stale hook state"
   [session-end-audit.sh]="SessionEnd::auto-generate the session audit file (system layer + hook inventory + trace)"
-  [session-end-validate-and-test.sh]="SessionEnd::auto-detect stack, run lint/build/test once per session, inject error summary only"
 )
 
 default_payload() {
@@ -60,11 +59,6 @@ default_payload() {
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Write",
           tool_input:{file_path:"/tmp/does-not-exist/OrdersController.cs", content:"public class OrdersController {}"}}'
       ;;
-    pre-tool-use-read-guard.sh)
-      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
-        '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Read",
-          tool_input:{file_path:"/tmp/example.txt"}}'
-      ;;
     pre-tool-use-goal-capture.sh | pre-tool-use-loop-breaker.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Bash",
@@ -79,7 +73,11 @@ default_payload() {
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"Stop", transcript_path:"/nonexistent/transcript.jsonl", stop_hook_active:false}'
       ;;
-    session-end-cleanup.sh | session-end-audit.sh | session-end-validate-and-test.sh)
+    pre-compact.sh)
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"PreCompact", trigger:"auto"}'
+      ;;
+    session-end-cleanup.sh | session-end-audit.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"SessionEnd", reason:"exit", transcript_path:"/nonexistent/transcript.jsonl"}'
       ;;
@@ -231,20 +229,6 @@ cmd_selftest() {
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Edit", tool_input:{file_path:"/tmp/x.txt", old_string:"a", new_string:"b"}}')" \
     0
 
-  # read-guard: only blocks a file present in the session's context_shown ledger
-  local ledger_dir="$STATE_HOME/selftest-readguard"
-  mkdir -p "$ledger_dir"
-  jq -n --arg f "/tmp/already-shown.txt" '{($f): 1234567890}' > "$ledger_dir/context_shown.json"
-  expect_exit "read-guard blocks a file already in the context-shown ledger" \
-    pre-tool-use-read-guard.sh \
-    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest-readguard", cwd:$cwd, tool_name:"Read", tool_input:{file_path:"/tmp/already-shown.txt"}}')" \
-    2
-  expect_exit "read-guard allows a file not in the ledger" \
-    pre-tool-use-read-guard.sh \
-    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest-readguard", cwd:$cwd, tool_name:"Read", tool_input:{file_path:"/tmp/never-shown.txt"}}')" \
-    0
-  rm -rf "$ledger_dir"
-
   # loop-breaker: fire the same signature 3x in an isolated session, only the
   # 3rd consecutive call should block.
   local loop_payload
@@ -262,6 +246,19 @@ cmd_selftest() {
 
   expect_exit "session-end-cleanup runs cleanly" \
     session-end-cleanup.sh '{}' 0
+
+  # pre-compact: silent with no carry-forward state, emits the edited-file list once there is some
+  expect_empty "pre-compact stays silent with nothing to carry forward" \
+    pre-compact.sh \
+    "$(jq -n '{session_id:"selftest-precompact", cwd:"/tmp/nonexistent", hook_event_name:"PreCompact"}')"
+  local pc_dir="$STATE_HOME/selftest-precompact"
+  mkdir -p "$pc_dir"
+  printf '/tmp/one.ts\n/tmp/one.ts\n/tmp/two.ts\n' > "$pc_dir/edited_files"
+  expect_contains "pre-compact replays files edited this session" \
+    pre-compact.sh \
+    "$(jq -n '{session_id:"selftest-precompact", cwd:"/tmp/nonexistent", hook_event_name:"PreCompact"}')" \
+    "/tmp/two.ts"
+  rm -rf "$pc_dir"
 
   expect_exit "boilerplate-guard blocks a hand-written new controller" \
     boilerplate-guard.sh \
@@ -316,11 +313,6 @@ cmd_selftest() {
   expect_empty "boilerplate-hint stays silent on an unrelated prompt" \
     boilerplate-hint.sh \
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, prompt:"why is the login test flaky"}')"
-
-  expect_exit "session-end-validate-and-test exits 0 on unknown stack (no project root)" \
-    session-end-validate-and-test.sh \
-    "$(jq -n --arg cwd "/tmp/nonexistent" '{session_id:"selftest", cwd:$cwd, hook_event_name:"SessionEnd"}')" \
-    0
 
   expect_exit "session-end-audit exits 0 even when transcript is missing" \
     session-end-audit.sh \
