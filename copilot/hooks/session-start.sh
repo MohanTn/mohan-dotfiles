@@ -4,8 +4,11 @@
 # Copilot, which loads just the global copilot-instructions.md. The GOAL/GOAL_CHECK
 # instruction now lives in agents/AGENTS.md, which that file is generated from.
 # On Claude Code the boilerplate hint fires per turn only when a prompt looks
-# boilerplate-flavored (claude/hooks/boilerplate-hint.sh); Copilot fires
-# userPromptSubmitted but ignores its output, so it runs unconditionally here.
+# boilerplate-flavored (claude/hooks/boilerplate-hint.sh); here it is appended
+# unconditionally, once per session. Copilot does consume userPromptSubmitted's
+# additionalContext (see user-prompt-submit-context.sh), so the keyword-gated
+# hook could be ported across as well — that would trade this one-off cost for a
+# per-turn one, and hasn't been measured either way.
 input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.copilot/hooks/lib/common.sh"

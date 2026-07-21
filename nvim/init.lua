@@ -982,11 +982,14 @@ require('lazy').setup({
   -- require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommended keymaps
 
-  -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
+  -- NOTE: The import below automatically adds plugins from `lua/custom/plugins/*.lua`.
   --    This is the easiest way to modularize your config.
   --
-  --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
-  -- { import = 'custom.plugins' },
+  -- Enabled: lua/custom/plugins/init.lua declares vim-tmux-navigator, whose tmux
+  -- half is already installed by nix/tmux.nix. While this import was commented
+  -- out the nvim side never loaded, so Ctrl-h/j/k/l moved between nvim splits
+  -- but would not cross into tmux panes.
+  { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!

@@ -19,11 +19,18 @@ mkdir -p "$HOME/.claude"
 rm -rf "$HOME/.claude/hooks"
 cp -r /opt/agent-config/claude/hooks "$HOME/.claude/hooks"
 
+# Mirrors nix/agents.nix's ~/.agents layer. Runs for every AGENT_TOOL, not just
+# the ones that read AGENTS.md/skills from here: boilerplate-guard.sh fires on
+# all three tools and points at ~/.agents/boilerplats/scaffold.js, and
+# session-start.sh reads ~/.agents/boilerplats/AGENT-HINT.md.
 sync_agents_layer() {
   mkdir -p "$HOME/.agents"
   cp -f /opt/agent-config/agents/AGENTS.md "$HOME/.agents/AGENTS.md"
   rm -rf "$HOME/.agents/skills"
   cp -r /opt/agent-config/agents/skills "$HOME/.agents/skills"
+  # includes node_modules/, baked by the Dockerfile's npm ci
+  rm -rf "$HOME/.agents/boilerplats"
+  cp -r /opt/agent-config/agents/boilerplats "$HOME/.agents/boilerplats"
 }
 
 case "${AGENT_TOOL:-}" in
@@ -45,7 +52,14 @@ case "${AGENT_TOOL:-}" in
     cp -r /opt/agent-config/agents/skills "$HOME/.claude/skills"
     ;;
   copilot)
-    mkdir -p "$HOME/.copilot/skills"
+    # Copilot reads its instructions from copilot-instructions.md rather than
+    # ~/.agents/AGENTS.md and isn't wired for skills (matching nix/copilot.nix),
+    # but it still needs the agents layer for the boilerplate generator.
+    sync_agents_layer
+    # $HOME/.copilot is pre-created in the image only for the agent user, and
+    # this stage runs as root — it used to be created as a side effect of an
+    # (unused) `mkdir -p $HOME/.copilot/skills`, so create it outright.
+    mkdir -p "$HOME/.copilot"
     cp -f /opt/agent-config/agents/AGENTS.md "$HOME/.copilot/copilot-instructions.md"
     rm -rf "$HOME/.copilot/hooks"
     cp -r /opt/agent-config/copilot/hooks "$HOME/.copilot/hooks"

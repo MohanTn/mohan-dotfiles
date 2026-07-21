@@ -4,8 +4,11 @@
 # block a write that already happened (neither can Claude's), but it can
 # append additionalContext to the tool result — the gate's findings arrive
 # there. Non-zero exits are logged and skipped (fail-open), so always exit 0.
-# Full lint/build/test runs happen once at sessionEnd instead (see
-# session-end-cleanup.sh) so individual edits aren't held up by them.
+# There is deliberately no lint/build/test run anywhere in the hook chain: a
+# whole-project compile per edit times out on anything large, and at sessionEnd
+# there is no further AI turn left to feed the findings to. Builds are the
+# model's to run explicitly. (This used to point at a POST_TEST_VALIDATOR.md
+# describing a session-end validator that was never implemented.)
 input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.copilot/hooks/lib/common.sh"

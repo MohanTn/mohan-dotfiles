@@ -48,8 +48,15 @@ fi
 symbols=""
 symbol_count=0
 if [ "$file_count" -le "$MAX_FILES" ] && command -v ctags >/dev/null 2>&1; then
+  # ctags has to run from $root: the file list is relative to it (git ls-files
+  # prints repo-relative paths), so resolving those against the caller's PWD
+  # instead silently finds nothing and degrades the map to a bare file listing
+  # with no error. That happened to work only while the hook's PWD and $root
+  # coincided, which is not guaranteed — session-start.sh takes cwd from the
+  # payload, and the Copilot/Pi adapters invoke it from wherever the tool
+  # was launched.
   symbols=$(printf '%s\n' "$files" \
-    | ctags -L - -x --_xformat='%F|%N|%K|%n' --languages="$CTAGS_LANGS" 2>/dev/null \
+    | (cd "$root" && ctags -L - -x --_xformat='%F|%N|%K|%n' --languages="$CTAGS_LANGS" 2>/dev/null) \
     | awk -F'|' -v kre="$KIND_RE" '$3 ~ kre' \
     | sort -t'|' -k1,1 -k4,4n)
   symbol_count=$(printf '%s\n' "$symbols" | grep -c .)

@@ -192,15 +192,31 @@ expect_exit() {
   fi
 }
 
+# Trailing arguments after the needle are passed through to the hook script
+# (session-start.sh takes --no-claude-md).
 expect_contains() {
   local desc="$1" hook="$2" payload="$3" needle="$4" out
-  out=$(printf '%s' "$payload" | bash "$HOOKS_DIR/$hook" 2>/dev/null)
+  shift 4
+  out=$(printf '%s' "$payload" | bash "$HOOKS_DIR/$hook" "$@" 2>/dev/null)
   if printf '%s' "$out" | grep -qF "$needle"; then
     echo "PASS: $desc"
     pass_count=$((pass_count + 1))
   else
     echo "FAIL: $desc (output did not contain: $needle)"
     fail_count=$((fail_count + 1))
+  fi
+}
+
+expect_not_contains() {
+  local desc="$1" hook="$2" payload="$3" needle="$4" out
+  shift 4
+  out=$(printf '%s' "$payload" | bash "$HOOKS_DIR/$hook" "$@" 2>/dev/null)
+  if printf '%s' "$out" | grep -qF "$needle"; then
+    echo "FAIL: $desc (output unexpectedly contained: $needle)"
+    fail_count=$((fail_count + 1))
+  else
+    echo "PASS: $desc"
+    pass_count=$((pass_count + 1))
   fi
 }
 
@@ -212,6 +228,20 @@ expect_empty() {
     pass_count=$((pass_count + 1))
   else
     echo "FAIL: $desc (expected empty output, got: $out)"
+    fail_count=$((fail_count + 1))
+  fi
+}
+
+# expect_cond <desc> <cmd...> — passes when the command exits 0. For asserting
+# on a hook's side effects (state files it writes) rather than its output.
+expect_cond() {
+  local desc="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    echo "PASS: $desc"
+    pass_count=$((pass_count + 1))
+  else
+    echo "FAIL: $desc"
     fail_count=$((fail_count + 1))
   fi
 }
@@ -318,6 +348,119 @@ cmd_selftest() {
     session-end-audit.sh \
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, hook_event_name:"SessionEnd", reason:"exit", transcript_path:"/nonexistent/transcript.jsonl"}')" \
     0
+
+  # ---- post-tool-use-edit.sh ----
+  # A blocking gate (exit 2) that had no coverage at all. It reads new `+import`
+  # lines out of `git diff`, so the import must be an uncommitted change against
+  # a committed baseline — a bare file in a temp dir exercises nothing.
+  local pte_dir pte_payload
+  pte_dir=$(mktemp -d)
+  git -C "$pte_dir" init -q
+  git -C "$pte_dir" config user.email selftest@example.com
+  git -C "$pte_dir" config user.name selftest
+  : > "$pte_dir/app.ts"
+  git -C "$pte_dir" add app.ts
+  git -C "$pte_dir" commit -qm baseline
+  printf 'import { helper } from "./helper.js";\n' > "$pte_dir/app.ts"
+  pte_payload=$(jq -n --arg f "$pte_dir/app.ts" \
+    '{session_id:"selftest-postedit", cwd:"/tmp", tool_name:"Edit", tool_input:{file_path:$f}}')
+
+  expect_exit "post-tool-use-edit blocks an import resolving to nothing" \
+    post-tool-use-edit.sh "$pte_payload" 2
+
+  # NodeNext/ESM: a "./helper.js" specifier is satisfied by helper.ts, which is
+  # exactly the case the extension-stripping in the hook exists for.
+  printf 'export const helper = 1;\n' > "$pte_dir/helper.ts"
+  expect_exit "post-tool-use-edit allows a .js specifier resolved by a .ts file" \
+    post-tool-use-edit.sh "$pte_payload" 0
+
+  expect_exit "post-tool-use-edit ignores a non-TypeScript file" \
+    post-tool-use-edit.sh \
+    "$(jq -n --arg f "$pte_dir/notes.md" '{session_id:"selftest-postedit", cwd:"/tmp", tool_name:"Write", tool_input:{file_path:$f}}')" \
+    0
+
+  # 2.1 ledger: pre-compact.sh replays edited_files, so the writer needs its own
+  # assertion — a silent regression here only shows up after a compaction.
+  expect_cond "post-tool-use-edit records the file in the edited_files ledger" \
+    grep -qF "$pte_dir/app.ts" "$STATE_HOME/selftest-postedit/edited_files"
+  expect_cond "post-tool-use-edit advances the edit generation counter" \
+    test -s "$STATE_HOME/selftest-postedit/edit_gen"
+  rm -rf "$pte_dir" "${STATE_HOME:?}/selftest-postedit"
+
+  # ---- pre-tool-use-goal-capture.sh ----
+  local gc_transcript gc_payload
+  gc_transcript=$(mktemp)
+  jq -nc '{type:"user", message:{role:"user", content:"do the thing"}}' > "$gc_transcript"
+  jq -nc '{type:"assistant", message:{role:"assistant", content:[{type:"text", text:"GOAL: prove the capture works"}]}}' >> "$gc_transcript"
+  gc_payload=$(jq -n --arg t "$gc_transcript" \
+    '{session_id:"selftest-goal", cwd:"/tmp", tool_name:"Bash", tool_input:{command:"true"}, transcript_path:$t}')
+  run_hook pre-tool-use-goal-capture.sh "$gc_payload" >/dev/null 2>&1
+  expect_cond "goal-capture stores the GOAL line stated after the last user turn" \
+    grep -qxF "prove the capture works" "$STATE_HOME/selftest-goal/goal.txt"
+  rm -rf "${STATE_HOME:?}/selftest-goal"
+
+  # The scan is deliberately scoped to text after the newest user message, so a
+  # GOAL: from an earlier turn must not be picked up as this turn's goal.
+  jq -nc '{type:"assistant", message:{role:"assistant", content:[{type:"text", text:"GOAL: a stale goal from an earlier turn"}]}}' > "$gc_transcript"
+  jq -nc '{type:"user", message:{role:"user", content:"now do something else"}}' >> "$gc_transcript"
+  run_hook pre-tool-use-goal-capture.sh \
+    "$(jq -n --arg t "$gc_transcript" '{session_id:"selftest-stale", cwd:"/tmp", tool_name:"Bash", tool_input:{command:"true"}, transcript_path:$t}')" \
+    >/dev/null 2>&1
+  expect_cond "goal-capture ignores a GOAL line predating the last user turn" \
+    test ! -f "$STATE_HOME/selftest-stale/goal.txt"
+  rm -f "$gc_transcript"
+  rm -rf "${STATE_HOME:?}/selftest-stale"
+
+  # ---- user-prompt-submit.sh ----
+  expect_contains "user-prompt-submit hints the MCP reader for an @-referenced pdf" \
+    user-prompt-submit.sh \
+    "$(jq -n '{session_id:"selftest-ups", cwd:"/tmp", prompt:"summarise @docs/spec.pdf for me"}')" \
+    "mcp__files-mcp__convert_file"
+
+  expect_empty "user-prompt-submit stays silent on a prompt with no documents" \
+    user-prompt-submit.sh \
+    "$(jq -n '{session_id:"selftest-ups", cwd:"/tmp", prompt:"why is the login test flaky"}')"
+
+  # Per-turn reset: a goal left over from the previous turn must not survive into
+  # the next one, or stop-goal-check gates against a goal nobody restated.
+  mkdir -p "$STATE_HOME/selftest-ups"
+  printf 'stale goal' > "$STATE_HOME/selftest-ups/goal.txt"
+  run_hook user-prompt-submit.sh \
+    "$(jq -n '{session_id:"selftest-ups", cwd:"/tmp", prompt:"a fresh prompt"}')" >/dev/null 2>&1
+  expect_cond "user-prompt-submit clears the previous turn's captured goal" \
+    test ! -f "$STATE_HOME/selftest-ups/goal.txt"
+  rm -rf "${STATE_HOME:?}/selftest-ups"
+
+  # ---- repo-map.sh + session-start.sh ----
+  # repo-map.sh is not a stdin hook (it takes a root as $1) but session-start.sh
+  # is a thin wrapper over it, so both are covered off one temp repo.
+  local map_dir map_out
+  map_dir=$(mktemp -d)
+  git -C "$map_dir" init -q
+  printf 'def login(user):\n    return True\n' > "$map_dir/auth.py"
+  printf '# Project\nnotes\n' > "$map_dir/CLAUDE.md"
+  git -C "$map_dir" add auth.py CLAUDE.md
+  map_out=$(bash "$HOOKS_DIR/repo-map.sh" "$map_dir" 2>/dev/null)
+  expect_cond "repo-map writes the map and returns its path" \
+    test -n "$map_out" -a -f "$map_out"
+  expect_cond "repo-map lists the tracked file" \
+    grep -qF "auth.py" "$map_dir/.claude/repo-map.md"
+  expect_cond "repo-map extracts symbols via ctags" \
+    grep -qF "login (function)" "$map_dir/.claude/repo-map.md"
+
+  local ss_payload
+  ss_payload=$(jq -n --arg cwd "$map_dir" \
+    '{session_id:"selftest-start", cwd:$cwd, hook_event_name:"SessionStart", source:"startup"}')
+  expect_contains "session-start points at the generated repo map" \
+    session-start.sh "$ss_payload" "Repo map — read this before searching"
+
+  # Claude Code injects project CLAUDE.md itself, so --no-claude-md must drop
+  # that section; Copilot and Pi omit the flag and rely on it being there.
+  expect_contains "session-start includes CLAUDE.md without the flag" \
+    session-start.sh "$ss_payload" "### CLAUDE.md"
+  expect_not_contains "session-start omits CLAUDE.md under --no-claude-md" \
+    session-start.sh "$ss_payload" "### CLAUDE.md" --no-claude-md
+  rm -rf "$map_dir" "${STATE_HOME:?}/selftest-start"
 
   rm -rf "${STATE_HOME:?}/selftest"
 

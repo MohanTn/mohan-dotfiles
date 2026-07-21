@@ -31,9 +31,25 @@ WORKDIR /workspace
 
 COPY --chown=agent:agent agents/AGENTS.md /opt/agent-config/agents/AGENTS.md
 COPY --chown=agent:agent agents/skills /opt/agent-config/agents/skills
+# boilerplats ships to every stage: all three tools run boilerplate-guard.sh
+# (Claude via settings.json, Copilot via pre-tool-use.sh, Pi via index.ts),
+# which hard-blocks hand-written boilerplate and directs the model to
+# ~/.agents/boilerplats/scaffold.js. Without the generator here that block is a
+# dead end with no way out. node_modules/ is gitignored so it never arrives via
+# COPY; baking `npm ci` in at build time (rather than leaving it to the
+# ~/.cache/boilerplats fallback nix/agents.nix populates) means scaffold.js's
+# plain `require('handlebars')` resolves from its own directory and containers
+# never need the registry at run time.
+COPY --chown=agent:agent agents/boilerplats /opt/agent-config/agents/boilerplats
 COPY --chown=agent:agent docker/entrypoint.sh /opt/agent-config/entrypoint.sh
 USER root
-RUN chmod +x /opt/agent-config/entrypoint.sh
+# npm_config_cache is redirected because this RUN is root while HOME is still
+# the agent user's — the default cache would leave root-owned files in
+# /home/agent/.npm that later agent-user npm calls can't write through.
+RUN chmod +x /opt/agent-config/entrypoint.sh \
+    && npm_config_cache=/tmp/npm-cache \
+       npm ci --prefix /opt/agent-config/agents/boilerplats --no-fund --no-audit \
+    && rm -rf /tmp/npm-cache
 USER agent
 
 # ---- claude ----
@@ -51,17 +67,16 @@ ENV PATH="/root/.local/bin:${PATH}"
 ENV IS_SANDBOX=1
 COPY --chown=root:root claude/hooks /opt/agent-config/claude/hooks
 COPY --chown=root:root claude/statusline-usage.py /opt/agent-config/claude/statusline-usage.py
-# scaffold-toolkit hooks reference a live host checkout (~/REPO/scaffold-toolkit)
-# that isn't mounted into the container, so they're stripped rather than
-# copied verbatim — Claude Code hooks fail open on a missing script (shown
-# to the user as a non-blocking error, not a deny), but there's no reason to
-# ship a hook that can only ever error in this environment. RUN executes
-# against the image filesystem, not the build context, so the source file
-# has to be COPY'd in before jq can read it.
-COPY --chown=root:root claude/settings.json /tmp/claude-settings.json
-RUN jq 'del(.hooks.UserPromptSubmit[1], .hooks.PreToolUse[0].hooks[0], .hooks.PostToolUse[1], .hooks.Stop[1])' \
-    /tmp/claude-settings.json > /opt/agent-config/claude/settings.json \
-    && rm /tmp/claude-settings.json
+# settings.json ships verbatim. It used to be filtered through a `jq del(...)`
+# that stripped hooks pointing at a live host checkout (~/REPO/scaffold-toolkit)
+# which isn't mounted here. Those hooks are long gone, but the filter selected
+# them by array index, so as settings.json changed the indices silently came to
+# name different entries — by the time it was caught it was deleting
+# context-augment.py and boilerplate-guard.sh instead. Every hook now in
+# settings.json points into ~/.claude/hooks, which entrypoint.sh populates for
+# every AGENT_TOOL, so nothing needs stripping. If that changes again, filter by
+# matching .command, never by index.
+COPY --chown=root:root claude/settings.json /opt/agent-config/claude/settings.json
 ENV AGENT_TOOL=claude
 ENTRYPOINT ["/opt/agent-config/entrypoint.sh"]
 CMD ["claude"]
@@ -75,9 +90,14 @@ RUN npm install --global @github/copilot \
     && chown -R root:root /root/.npm 2>/dev/null || true
 COPY --chown=root:root copilot/hooks/lib /opt/agent-config/copilot/hooks/lib
 COPY --chown=root:root copilot/hooks/mohan-hooks.json /opt/agent-config/copilot/hooks/mohan-hooks.json
+# Every script mohan-hooks.json registers must be listed here, or Copilot fails
+# that hook on each fire. Enforced by the docker-hook-parity flake check.
 COPY --chown=root:root copilot/hooks/session-start.sh copilot/hooks/user-prompt-submit.sh \
-     copilot/hooks/pre-tool-use.sh copilot/hooks/post-tool-use.sh copilot/hooks/agent-stop.sh \
-     copilot/hooks/session-end-cleanup.sh /opt/agent-config/copilot/hooks/
+     copilot/hooks/user-prompt-submit-context.sh copilot/hooks/pre-tool-use.sh \
+     copilot/hooks/post-tool-use.sh copilot/hooks/agent-stop.sh \
+     copilot/hooks/pre-compact.sh \
+     copilot/hooks/session-end-cleanup.sh copilot/hooks/session-end-audit.sh \
+     /opt/agent-config/copilot/hooks/
 # copilot/hooks reuses claude/hooks scripts via CLAUDE_HOOKS_HOME (see
 # copilot/hooks/lib/common.sh) — those need to exist here too, independent
 # of whether the claude stage is ever built.

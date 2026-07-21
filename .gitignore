@@ -4,5 +4,9 @@ claude/hooks/state/
 result
 result-*
 node_modules/
+# python bytecode: the hook suite regenerates these on every run, and anything
+# tracked under claude/hooks/ also ships into the Nix store
+__pycache__/
+*.pyc
 
 .claude/repo-map.md

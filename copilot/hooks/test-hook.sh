@@ -101,6 +101,24 @@ cmd_selftest() {
     "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \
     '.additionalContext | contains("scaffold.js")'
 
+  # Regression: the wrapper must forward .prompt into the payload it hands
+  # context-augment.py. Without it that script hits its MIN_WORDS guard and
+  # returns nothing, so the hook silently emits no context at all. Asserting
+  # on a real augmentation (a temp repo holding a file the prompt names by
+  # path, which context-augment.py resolves without fd/fzf) is what makes the
+  # omission visible — an empty-output check would pass either way.
+  local ctx_repo
+  ctx_repo=$(mktemp -d)
+  git -C "$ctx_repo" init -q 2>/dev/null
+  printf 'class AuthService:\n    def login(self, user):\n        return True\n' \
+    > "$ctx_repo/auth_service.py"
+  expect_out "user-prompt-submit-context forwards the prompt to context-augment" \
+    user-prompt-submit-context.sh \
+    "$(jq -n --arg sid "$sid" --arg cwd "$ctx_repo" \
+      '{sessionId:$sid, cwd:$cwd, prompt:"Please fix AuthService login in auth_service.py now"}')" \
+    '.additionalContext | contains("auth_service.py") and contains("class AuthService:")'
+  rm -rf "$ctx_repo"
+
   # user-prompt-submit is notification-only: assert empty output + exit 0 directly
   local ups_out ups_rc
   ups_out=$(run_hook user-prompt-submit.sh "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", prompt:"hello"}')")
@@ -110,6 +128,57 @@ cmd_selftest() {
     pass_count=$((pass_count + 1))
   else
     echo "FAIL: user-prompt-submit (exit $ups_rc, out: $ups_out)"
+    fail_count=$((fail_count + 1))
+  fi
+
+  # preCompact stashes the carry-forward block (Copilot discards this hook's own
+  # output) and the next userPromptSubmitted flushes it. Driven off a git repo
+  # with an uncommitted change, one of the things pre-compact.sh replays.
+  local pc_repo pc_sid
+  pc_sid="$sid-compact"
+  pc_repo=$(mktemp -d)
+  git -C "$pc_repo" init -q 2>/dev/null
+  git -C "$pc_repo" config user.email selftest@example.com
+  git -C "$pc_repo" config user.name selftest
+  printf 'one\n' > "$pc_repo/a.txt"
+  git -C "$pc_repo" add a.txt
+  git -C "$pc_repo" commit -qm baseline
+  printf 'two\n' > "$pc_repo/a.txt"
+
+  expect_out "pre-compact returns an empty decision" pre-compact.sh \
+    "$(jq -n --arg sid "$pc_sid" --arg cwd "$pc_repo" '{sessionId:$sid, cwd:$cwd, trigger:"auto", transcriptPath:""}')" \
+    '. == {}'
+  expect_out "the stashed carry-forward is flushed into the next prompt" \
+    user-prompt-submit-context.sh \
+    "$(jq -n --arg sid "$pc_sid" --arg cwd "$pc_repo" '{sessionId:$sid, cwd:$cwd, prompt:"carry on with the work"}')" \
+    '.additionalContext | contains("<carry-forward>") and contains("a.txt")'
+  # Second turn: with the stash consumed and no file matches for this prompt the
+  # hook emits nothing at all, so this is a plain text check — an expect_out
+  # jq assertion cannot run against empty stdout.
+  local pc_second
+  pc_second=$(run_hook user-prompt-submit-context.sh \
+    "$(jq -n --arg sid "$pc_sid" --arg cwd "$pc_repo" '{sessionId:$sid, cwd:$cwd, prompt:"carry on with the work"}')" 2>/dev/null)
+  if printf '%s' "$pc_second" | grep -qF "<carry-forward>"; then
+    echo "FAIL: the carry-forward is delivered once, not on every later prompt"
+    fail_count=$((fail_count + 1))
+  else
+    echo "PASS: the carry-forward is delivered once, not on every later prompt"
+    pass_count=$((pass_count + 1))
+  fi
+  rm -rf "$pc_repo" "${STATE_HOME:?}/$pc_sid"
+
+  # Per-turn reset: goal-capture runs at agentStop and no-ops when goal.txt
+  # already exists, so a goal surviving into the next turn would never be
+  # replaced. Mirrors the same assertion in claude/hooks/test-hook.sh.
+  mkdir -p "$STATE_HOME/$sid"
+  printf 'stale goal' > "$STATE_HOME/$sid/goal.txt"
+  run_hook user-prompt-submit.sh \
+    "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", prompt:"a fresh prompt"}')" >/dev/null 2>&1
+  if [ ! -f "$STATE_HOME/$sid/goal.txt" ]; then
+    echo "PASS: user-prompt-submit clears the previous turn's captured goal"
+    pass_count=$((pass_count + 1))
+  else
+    echo "FAIL: user-prompt-submit left goal.txt in place"
     fail_count=$((fail_count + 1))
   fi
 

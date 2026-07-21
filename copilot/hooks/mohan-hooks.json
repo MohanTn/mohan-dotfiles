@@ -14,6 +14,9 @@
     "postToolUse": [
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/post-tool-use.sh\"", "timeoutSec": 45 }
     ],
+    "preCompact": [
+      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/pre-compact.sh\"", "timeoutSec": 5 }
+    ],
     "agentStop": [
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/agent-stop.sh\"", "timeoutSec": 10 }
     ],

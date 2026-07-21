@@ -14,3 +14,21 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v16
       - name: Validate flake and run hook selftests
         run: nix flake check --print-build-logs --impure
+
+  # agents/boilerplats' suite loads scaffold.js, which requires handlebars at
+  # module scope. node_modules/ is gitignored and handlebars isn't in nixpkgs,
+  # so this can't run inside the flake's offline sandbox the way the other
+  # suites do — it needs the registry, which is available here.
+  node-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run boilerplate generator tests
+        working-directory: agents/boilerplats
+        run: |
+          npm ci --no-fund --no-audit
+          npm test

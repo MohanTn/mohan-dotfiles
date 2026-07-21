@@ -42,8 +42,10 @@
 
         # The hooks' own regression suite, run in a sandbox HOME exactly the
         # way Claude Code invokes them (JSON payload on stdin).
+        # universal-ctags backs repo-map.sh's symbol pass and python3 backs
+        # session-end-audit.sh; without them those checks would pass vacuously.
         hooks-selftest = pkgs.runCommand "hooks-selftest"
-          { nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.git ]; }
+          { nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.git pkgs.universal-ctags pkgs.python3 ]; }
           ''
             export HOME="$TMPDIR/home"
             mkdir -p "$HOME/.claude"
@@ -53,10 +55,92 @@
             cat "$out"
           '';
 
+        # The container images are assembled by an explicit COPY list, while the
+        # hooks that must exist are declared in mohan-hooks.json/settings.json —
+        # two lists nothing kept in agreement, so the copilot stage silently
+        # shipped without user-prompt-submit-context.sh and session-end-audit.sh
+        # (Copilot then fails that hook on every fire, invisibly). This ties the
+        # manifests to the Dockerfile so the next divergence fails the build.
+        docker-hook-parity = pkgs.runCommand "docker-hook-parity"
+          { nativeBuildInputs = [ pkgs.bash pkgs.jq ]; }
+          ''
+            set -euo pipefail
+            dockerfile=${./docker/Dockerfile}
+            entrypoint=${./docker/entrypoint.sh}
+            fail=0
+
+            # Every script mohan-hooks.json registers must be COPY'd in.
+            for s in $(jq -r '.hooks[][].bash
+                              | capture("\\.copilot/hooks/(?<n>[A-Za-z0-9._-]+)").n' \
+                         ${./copilot/hooks/mohan-hooks.json} | sort -u); do
+              if ! grep -q "copilot/hooks/$s" "$dockerfile"; then
+                echo "MISSING from Dockerfile: copilot/hooks/$s (registered in mohan-hooks.json)" >&2
+                fail=1
+              else
+                echo "ok: copilot/hooks/$s"
+              fi
+            done
+
+            # Every hook settings.json points at must exist in claude/hooks/,
+            # which the Dockerfile copies wholesale.
+            for s in $(jq -r '[.hooks[][].hooks[].command, .statusLine.command]
+                              | .[] | capture("\\.claude/(hooks/)?(?<n>[A-Za-z0-9._-]+)").n' \
+                         ${./claude/settings.json} | sort -u); do
+              if [ ! -e "${./claude/hooks}/$s" ] && [ ! -e "${./claude}/$s" ]; then
+                echo "MISSING: claude/$s referenced by settings.json" >&2
+                fail=1
+              else
+                echo "ok: claude/$s"
+              fi
+            done
+
+            # boilerplate-guard.sh sends the model to this path on all three
+            # tools, so the container has to actually have it.
+            if ! grep -q 'agents/boilerplats' "$entrypoint"; then
+              echo "MISSING: entrypoint.sh does not sync agents/boilerplats" >&2
+              fail=1
+            else
+              echo "ok: entrypoint.sh syncs agents/boilerplats"
+            fi
+
+            [ "$fail" -eq 0 ] || exit 1
+            echo "docker hook parity ok" > "$out"
+          '';
+
+        # context-augment.py's own unit/regression suite. It is the largest
+        # hook (>400 lines) and the one the Bash selftests can't meaningfully
+        # cover, so it gets its own check rather than riding along on
+        # test-hook.sh. Needs git: the end-to-end cases build a throwaway repo.
+        context-augment-tests = pkgs.runCommand "context-augment-tests"
+          { nativeBuildInputs = [ pkgs.python3 pkgs.git ]; }
+          ''
+            cp -r ${./claude/hooks} hooks
+            chmod -R u+w hooks
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME"
+            python3 hooks/test_context_augment.py > "$out" 2>&1 || { cat "$out"; exit 1; }
+            cat "$out"
+          '';
+
+        # feature-plan skill's injector suite. Pure node: built-ins, no npm
+        # deps, so it runs hermetically here. (agents/boilerplats' suite needs
+        # handlebars from the registry and runs in the CI node-tests job.)
+        feature-plan-tests = pkgs.runCommand "feature-plan-tests"
+          { nativeBuildInputs = [ pkgs.nodejs_22 ]; }
+          ''
+            cp -r ${./agents/skills/feature-plan} feature-plan
+            chmod -R u+w feature-plan
+            cd feature-plan
+            node --test > "$out" 2>&1 || { cat "$out"; exit 1; }
+            cat "$out"
+          '';
+
         # Same suite for the Copilot CLI hooks, which reuse the Claude scripts
         # through payload translation — so both hook trees are deployed.
+        # python3 is here because the context-augmentation case shells out to
+        # claude/hooks/context-augment.py.
         copilot-hooks-selftest = pkgs.runCommand "copilot-hooks-selftest"
-          { nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.git ]; }
+          { nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.git pkgs.python3 ]; }
           ''
             export HOME="$TMPDIR/home"
             mkdir -p "$HOME/.claude" "$HOME/.copilot"
@@ -69,18 +153,17 @@
 
         # Pi hooks extension: TypeScript port that shells out to the same
         # Claude scripts plus native edit-no-op + goal-capture/check gates.
-        # Uses builtins.readFile instead of builtins.path so untracked TS
-        # files are accessible during local --impure development (flakes
-        # only see git-tracked files for ./path interpolation).
+        # This used to derive the source path from `builtins.getEnv "PWD"` so
+        # that untracked TS files were visible during local --impure work. That
+        # made the check silently depend on being invoked from the repo root,
+        # and the underlying problem — flakes only seeing git-tracked files —
+        # is solved by staging the file (`git add`, no commit needed), which is
+        # what CLAUDE.md already prescribes for this repo.
         pi-hooks-selftest = pkgs.runCommand "pi-hooks-selftest"
-          { nativeBuildInputs = [ pkgs.nodejs_22 pkgs.esbuild ];
-            piHooksDir = builtins.path {
-              path =
-                let
-                  repo = builtins.toPath (builtins.getEnv "PWD");
-                in repo + "/pi/agent/extensions/hooks";
-              name = "pi-hooks";
-            };
+          # bash/jq/git back the shelled-out gates the handler tests now drive
+          # (pre-tool-use-edit-guard.sh, pre-compact.sh and its git diffstat).
+          { nativeBuildInputs = [ pkgs.nodejs_22 pkgs.esbuild pkgs.bash pkgs.jq pkgs.git ];
+            piHooksDir = ./pi/agent/extensions/hooks;
           }
           ''
             export HOME="$TMPDIR/home"

@@ -12,7 +12,10 @@
  * Exit code 0 on pass, non-zero on any failure.
  */
 
-import { readFileSync, unlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { entriesToClaudeTranscript, extractText, toClaudeToolName, type MessageEntryLike } from "./lib.js";
 
 let pass = 0;
@@ -135,17 +138,102 @@ function assistantEntry(text: string): MessageEntryLike {
   lineCount === 2 ? ok(desc) : no(desc, `expected 2 lines, got ${lineCount}`);
 }
 
-// ---- Extension module shape ----
+// ---- Extension handlers ----
 
-// The extension must export a default function (ExtensionAPI → void).
-// We can't call it without a real ExtensionAPI, but we can verify it loads
-// and is callable.
+// A recording stand-in for ExtensionAPI: the extension only ever calls
+// pi.on(event, handler), so capturing those is enough to drive each handler
+// directly and assert on what it returns.
+type Handler = (event: unknown, ctx: unknown) => Promise<unknown>;
+
+function fakePi(): { api: unknown; handlers: Map<string, Handler> } {
+  const handlers = new Map<string, Handler>();
+  return { api: { on: (event: string, handler: Handler) => handlers.set(event, handler) }, handlers };
+}
+
 async function main() {
   const mod = await import("./index.js");
   if (typeof mod.default === "function") {
     ok("index.ts exports a default function");
   } else {
     no("index.ts exports a default function", `got ${typeof mod.default}`);
+    console.log(`\n---\n${pass} passed, ${fail} failed`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { api, handlers } = fakePi();
+  (mod.default as (pi: unknown) => void)(api);
+
+  for (const event of ["session_start", "before_agent_start", "tool_call", "tool_result", "agent_end", "session_compact", "session_shutdown"]) {
+    handlers.has(event)
+      ? ok(`registers a ${event} handler`)
+      : no(`registers a ${event} handler`);
+  }
+
+  const ctx = { cwd: tmpdir() };
+
+  // The no-op rule is no longer reimplemented in TypeScript — it comes from
+  // pre-tool-use-edit-guard.sh. Asserting on that script's wording
+  // ("old_string", not Pi's "oldText") is what proves the shell-out actually
+  // happened rather than a local check standing in for it.
+  {
+    const desc = "tool_call blocks a no-op edit using the shared guard's reason";
+    const result = (await handlers.get("tool_call")!(
+      { toolName: "edit", input: { path: "/tmp/x.txt", edits: [{ oldText: "a", newText: "a" }] } },
+      ctx,
+    )) as { block?: boolean; reason?: string } | undefined;
+    if (result?.block && result.reason?.includes("old_string")) {
+      ok(desc);
+    } else {
+      no(desc, `got ${JSON.stringify(result)}`);
+    }
+  }
+
+  {
+    const desc = "tool_call allows an ordinary edit";
+    const result = await handlers.get("tool_call")!(
+      { toolName: "edit", input: { path: "/tmp/notes.md", edits: [{ oldText: "a", newText: "b" }] } },
+      ctx,
+    );
+    result === undefined ? ok(desc) : no(desc, `expected no block, got ${JSON.stringify(result)}`);
+  }
+
+  // Compaction carry-forward: session_compact stashes pre-compact.sh's block and
+  // the next before_agent_start injects it. Driven off a git repo with an
+  // uncommitted change, which is one of the things pre-compact.sh replays.
+  {
+    const desc = "session_compact carry-forward is injected on the next turn";
+    const repo = mkdtempSync(join(tmpdir(), "pi-hooks-compact-"));
+    const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
+    git("init", "-q");
+    git("config", "user.email", "selftest@example.com");
+    git("config", "user.name", "selftest");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    git("add", "a.txt");
+    git("commit", "-qm", "baseline");
+    writeFileSync(join(repo, "a.txt"), "two\n");
+
+    const repoCtx = { cwd: repo };
+    await handlers.get("session_compact")!({ reason: "threshold", willRetry: false }, repoCtx);
+    const injected = (await handlers.get("before_agent_start")!({ prompt: "hi" }, repoCtx)) as
+      | { message?: { content?: string } }
+      | undefined;
+    const content = injected?.message?.content ?? "";
+    if (content.includes("<carry-forward>") && content.includes("a.txt")) {
+      ok(desc);
+    } else {
+      no(desc, `got ${JSON.stringify(content).slice(0, 200)}`);
+    }
+
+    // Flushed, not resent: a second turn must not repeat the same block.
+    const second = (await handlers.get("before_agent_start")!({ prompt: "hi again" }, repoCtx)) as
+      | { message?: { content?: string } }
+      | undefined;
+    const secondDesc = "carry-forward is cleared after being injected once";
+    (second?.message?.content ?? "").includes("<carry-forward>")
+      ? no(secondDesc, "carry-forward was injected twice")
+      : ok(secondDesc);
+    rmSync(repo, { recursive: true, force: true });
   }
 
   // ---- Result ----

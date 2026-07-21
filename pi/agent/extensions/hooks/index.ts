@@ -7,14 +7,9 @@
 // audit) shared across all three tools. Pi must not reimplement its own
 // policy on top of these.
 //
-// Two spots still need native code, but only to translate Pi's shapes into
+// One spot still needs native code, but only to translate Pi's shapes into
 // what the scripts expect — not to reimplement their logic:
 //
-// - edit no-op guard: Pi's edit tool takes `{path, edits: [{oldText,
-//   newText}]}` (an array, for multi-edit-in-one-call), not Claude's single
-//   `{file_path, old_string, new_string}`. The oldText===newText check itself
-//   is trivial and kept inline; boilerplate-guard.sh (the actual policy) is
-//   still called once per edit pair via the adapter below.
 // - goal-capture/goal-check: Pi's transcript is in-memory session entries,
 //   not a JSONL file. entriesToClaudeTranscript() (lib.ts) serializes them
 //   into Claude's JSONL shape so pre-tool-use-goal-capture.sh and
@@ -50,6 +45,7 @@ export default function (pi: ExtensionAPI) {
   let sessionId = randomUUID();
   let digest = "";
   let digestInjected = false;
+  let carryForward = "";
 
   pi.on("session_start", async (event, ctx) => {
     sessionId = crypto.randomUUID();
@@ -91,14 +87,18 @@ export default function (pi: ExtensionAPI) {
       parts.push(augmentResult.stdout.trim());
     }
 
-    const hintResult = runClaudeHook("boilerplate-hint.sh", {
-      session_id: sessionId,
-      cwd: ctx.cwd,
-      hook_event_name: "UserPromptSubmit",
-      prompt: event.prompt,
-    });
-    if (hintResult.stdout.trim()) {
-      parts.push(hintResult.stdout.trim());
+    // No boilerplate-hint.sh call here: on Pi the same AGENT-HINT.md is already
+    // permanently in the system prompt via ~/.pi/agent/APPEND_SYSTEM.md (see
+    // nix/pi.nix), so running the keyword-gated hook as well just paid for the
+    // text twice on boilerplate-flavored turns. Claude has no APPEND_SYSTEM
+    // equivalent, which is why the hook remains its delivery path.
+
+    // Emitted by session_compact below, flushed into the first turn after a
+    // compaction — Pi's compaction handlers have no way to inject a message
+    // themselves, so this is the same channel the session digest uses.
+    if (carryForward) {
+      parts.push(carryForward);
+      carryForward = "";
     }
 
     if (parts.length === 0) return;
@@ -114,9 +114,21 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName === "edit") {
       const input = event.input as EditInput;
+      // Pi's edit tool takes `{path, edits: [{oldText, newText}]}` (an array,
+      // for multi-edit-in-one-call) rather than Claude's single
+      // `{file_path, old_string, new_string}`, so each pair is fed through the
+      // shared scripts individually. The no-op check used to be reimplemented
+      // inline here; running the real pre-tool-use-edit-guard.sh instead keeps
+      // one authored copy of that rule, per this file's opening note.
       for (const e of input.edits ?? []) {
-        if (e.oldText === e.newText) {
-          return { block: true, reason: "oldText and newText are identical — this edit is a no-op." };
+        const noop = runClaudeHook("pre-tool-use-edit-guard.sh", {
+          session_id: sessionId,
+          cwd: ctx.cwd,
+          tool_name: "Edit",
+          tool_input: { file_path: input.path, old_string: e.oldText, new_string: e.newText },
+        });
+        if (noop.exitCode === 2) {
+          return { block: true, reason: noop.stderr.trim() };
         }
         const guard = runClaudeHook("boilerplate-guard.sh", {
           session_id: sessionId,
@@ -200,6 +212,28 @@ export default function (pi: ExtensionAPI) {
       } catch {
         // best-effort cleanup
       }
+    }
+  });
+
+  // Claude Code's PreCompact counterpart. Compaction summarizes the transcript,
+  // so the tool history — which files were already changed, what the session was
+  // for — is the first thing lost; pre-compact.sh replays exactly that.
+  //
+  // Runs on session_compact (after) rather than session_before_compact: the
+  // "before" handler's result can only cancel or wholly replace the compaction,
+  // and its output would be summarized away along with everything else. Neither
+  // handler can inject a message, so the block is stashed and flushed by the
+  // next before_agent_start. On overflow recovery (`willRetry`) that may land
+  // one turn later than Claude's equivalent — degraded, not lost.
+  pi.on("session_compact", async (event, ctx) => {
+    const result = runClaudeHook("pre-compact.sh", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      hook_event_name: "PreCompact",
+      trigger: event.reason === "manual" ? "manual" : "auto",
+    });
+    if (result.stdout.trim()) {
+      carryForward = result.stdout.trim();
     }
   });
 
