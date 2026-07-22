@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Feature Implementation Plan – {{FEATURE_TITLE}}</title>
+    <title>Feature Implementation Plan – feature-plan flow efficiency</title>
     <style>
         :root{
             --bg:#0B0D10; --panel:#131619; --tree:#0E1013; --field:#0E1114; --line:#23272C;
@@ -178,22 +178,22 @@
                 <div class="meta" id="tree-brand-meta">featurePlan</div>
             </div>
 
-            <div class="tree-group">Problem</div>
-            <button class="tnode" data-target="#overview-section">Feature Overview</button>
+            <div class="tree-group">Review</div>
+            <button class="tnode" data-target="#overview-section">Overview</button>
             <button class="tnode" data-target="#questions-section">Open Questions<span class="flag" id="nav-questions-flag" style="display:none;"></span></button>
-
-            <div class="tree-group">Solution</div>
-            <button class="tnode" data-target="#architecture-section">Design &amp; Architecture</button>
+            <button class="tnode" data-target="#acceptance-section">Acceptance Criteria</button>
+            <button class="tnode" data-target="#patterns-section">Design Patterns</button>
             <button class="tnode" data-target="#approach-section">Solution Approach</button>
+
+            <div class="tree-group">Build pipeline</div>
             <button class="tnode" data-target="#folder-section">Folder Structure</button>
-            <button class="tnode" data-target="#files-section">File Manifest</button>
             <div id="tree-files"></div>
-            <button class="tnode" data-target="#acceptance-section">Acceptance &amp; Tests</button>
-            <button class="tnode" data-target="#edges-section">Edge Cases</button>
 
             <div class="tree-group">Reference</div>
             <button class="tnode" data-target="#logic-section">Logic Steps</button>
             <button class="tnode" data-target="#contracts-section">Contracts</button>
+            <button class="tnode" data-target="#edges-section">Edge Cases</button>
+            <button class="tnode" data-target="#tests-section">Tests</button>
 
             <div class="tree-foot"><span class="dot" id="tree-foot-dot"></span><span id="tree-foot-text">No open questions</span></div>
         </nav>
@@ -203,9 +203,10 @@
                 <div class="wrap">
                     <div class="topline">
                         <span><button id="nav-toggle-btn" class="btn btn-sm">☰</button> featurePlan · <b id="topline-file">plan.html</b></span>
+                        <span id="topline-module"></span>
                     </div>
 
-                    <h1>⚙️ Feature Implementation Plan – {{FEATURE_TITLE}}</h1>
+                    <h1>⚙️ Feature Implementation Plan – feature-plan flow efficiency</h1>
                     <p class="sub">File-by-file plan for building a feature inside an existing codebase — co-authored: the AI drafts, the human decides. Resolve open questions, edit any section, then copy the plan back; human edits are tagged in the export and override the AI draft.</p>
 
                     <div class="alert" id="alert-banner" style="display:none;"></div>
@@ -222,17 +223,21 @@
                         <div class="pipe-row" id="pipeline-row"></div>
                     </div>
 
-                    <!-- PROBLEM: FEATURE OVERVIEW -->
+                    <!-- OVERVIEW -->
                     <div class="section" id="overview-section">
                         <h2 class="section-head">📌 Feature Overview</h2>
-                        <p class="section-desc">The AI's own words: what was asked, what it understood, and how this fits the existing codebase — one free-form narrative, not a form.</p>
                         <div class="section-body">
-                            <div><label>Feature Title</label><input id="feature-title" placeholder="e.g. Add two-factor authentication" /></div>
-                            <div class="mt-1"><label>Overview (the ask, what the AI understood, and the existing code it touches)</label><textarea id="feature-overview" rows="6" placeholder="e.g. You asked to 'add 2FA to login'. I read AuthService.php and the users table; I understand this as a TOTP second factor verified at login, with enrollment from the profile page. The login flow currently..."></textarea></div>
+                            <div class="flex-row">
+                                <div style="flex:2;"><label>Feature Title</label><input id="feature-title" placeholder="e.g. Add two-factor authentication" /></div>
+                                <div style="flex:1;"><label>Target Module / Context</label><input id="feature-module" placeholder="e.g. User Service" /></div>
+                            </div>
+                            <div class="mt-1"><label>Captured Intent (the user's original ask, verbatim, plus what was inferred from it)</label><textarea id="feature-intent" rows="2" placeholder="e.g. User asked: 'add 2FA to login'. Inferred: TOTP second factor verified at login; enrollment managed from the profile page."></textarea></div>
+                            <div class="mt-1"><label>User Story / Goal</label><textarea id="feature-goal" rows="2" placeholder="As a user, I want to ... so that ..."></textarea></div>
+                            <div class="mt-1"><label>Existing Codebase Context (files, classes, DB schemas that already exist)</label><textarea id="feature-context" rows="2" placeholder="e.g. We already have User.php, AuthService.php, and a 'users' table with columns..."></textarea></div>
                         </div>
                     </div>
 
-                    <!-- PROBLEM: OPEN QUESTIONS & DECISIONS -->
+                    <!-- OPEN QUESTIONS & DECISIONS -->
                     <div class="section" id="questions-section">
                         <h2 class="section-head">❓ Open Questions & Decisions</h2>
                         <p class="section-desc">Ambiguities the AI could not resolve from the ask or the code. <strong>The human decides here.</strong> An empty Decision exports as UNRESOLVED and blocks implementation.</p>
@@ -242,16 +247,35 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: DESIGN PATTERN & ARCHITECTURE -->
-                    <div class="section" id="architecture-section">
-                        <h2 class="section-head">🧩 Design Pattern &amp; Architecture</h2>
-                        <p class="section-desc">The AI explains the pattern choices and draws the architecture in its own words — prose, ASCII diagrams, whatever communicates the design best. Edit freely to redirect it.</p>
+                    <!-- ACCEPTANCE CRITERIA -->
+                    <div class="section" id="acceptance-section">
+                        <h2 class="section-head">✅ Acceptance Criteria</h2>
+                        <p class="section-desc">Testable conditions that define "done". Each criterion states an expected behaviour and how to verify it.</p>
                         <div class="section-body">
-                            <textarea id="feature-architecture" rows="12" placeholder="e.g. Layered flow, one new service:&#10;&#10;  LoginController ──▶ AuthService ──▶ TotpService  [NEW]&#10;                          │&#10;                          └──▶ UserRepository&#10;&#10;Why: TOTP logic is isolated in TotpService so AuthService stays..."></textarea>
+                            <div id="acceptance-container"></div>
+                            <button id="add-acceptance-btn" class="btn btn-outline btn-block mt-1">＋ Add acceptance criterion</button>
                         </div>
                     </div>
 
-                    <!-- SOLUTION: APPROACH & RATIONALE -->
+                    <!-- DESIGN PATTERNS & OVERRIDES -->
+                    <div class="section" id="patterns-section">
+                        <h2 class="section-head">🧩 Design Patterns & Architectural Overrides</h2>
+                        <p class="section-desc">Explicitly state which patterns to use. <strong>Change these to alter the architecture</strong> (e.g., switch from Repository to Service Layer).</p>
+                        <div class="section-body">
+                            <div class="flex-row">
+                                <div style="flex:1;"><label>Core Pattern</label><input id="pattern-core" placeholder="e.g. MVC, Layered Architecture" value="Layered (Controller -> Service -> Repository)" /></div>
+                                <div style="flex:1;"><label>Business Logic Pattern</label><input id="pattern-business" placeholder="e.g. Transaction Script, Domain Model" value="Transaction Script" /></div>
+                            </div>
+                            <div class="mt-1"><label>Specific Pattern Implementations (e.g., Factory vs Builder, Repository vs DAO)</label>
+                                <textarea id="pattern-specific" rows="2" placeholder="e.g. Use Repository pattern for User data. Use Factory pattern to create complex DTOs."></textarea>
+                            </div>
+                            <div class="mt-1"><label>Explicit Overrides / Constraints (Change these to deviate from standard patterns)</label>
+                                <textarea id="pattern-overrides" rows="2" placeholder="e.g. Do NOT create a separate Repository for this; put logic directly in Service. Use Singleton for CacheManager."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION APPROACH -->
                     <div class="section" id="approach-section">
                         <h2 class="section-head">💡 Solution Approach & Rationale</h2>
                         <p class="section-desc">Explain the high-level design decisions, trade-offs, and rationale before diving into implementation. This section helps reviewers understand the "why" before the "what".</p>
@@ -261,7 +285,7 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: RESULTING FOLDER STRUCTURE -->
+                    <!-- RESULTING FOLDER STRUCTURE -->
                     <div class="section" id="folder-section">
                         <h2 class="section-head">🌳 Resulting Folder Structure</h2>
                         <p class="section-desc">Tree of the affected directories after the change. Mark every touched file <strong>[CREATE]</strong>, <strong>[UPDATE]</strong>, or <strong>[DELETE]</strong>; must match the file manifest below.</p>
@@ -270,7 +294,7 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: FILE MANIFEST -->
+                    <!-- FILE MANIFEST -->
                     <div class="section" id="files-section">
                         <h2 class="section-head">📂 File Change Manifest (In Order of Execution)</h2>
                         <p class="section-desc">List every file that needs to be created, updated, or deleted. Order them by build sequence. Add pseudo-code for each.</p>
@@ -280,27 +304,7 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: ACCEPTANCE CRITERIA & TEST CASES -->
-                    <div class="section" id="acceptance-section">
-                        <h2 class="section-head">✅ Acceptance Criteria &amp; Test Cases</h2>
-                        <p class="section-desc">Testable conditions that define "done", each paired with the test case that proves it.</p>
-                        <div class="section-body">
-                            <div id="acceptance-container"></div>
-                            <button id="add-acceptance-btn" class="btn btn-outline btn-block mt-1">＋ Add criterion + test</button>
-                        </div>
-                    </div>
-
-                    <!-- SOLUTION: EDGE CASES -->
-                    <div class="section" id="edges-section">
-                        <h2 class="section-head">🚨 Edge Cases & Error Handling</h2>
-                        <p class="section-desc">What happens when things go wrong? Specify validation rules, exceptions, and fallbacks.</p>
-                        <div class="section-body">
-                            <div id="edges-container"></div>
-                            <button id="add-edge-btn" class="btn btn-outline btn-block mt-1">＋ Add edge case</button>
-                        </div>
-                    </div>
-
-                    <!-- REFERENCE: CORE BUSINESS LOGIC -->
+                    <!-- CORE BUSINESS LOGIC -->
                     <div class="section" id="logic-section">
                         <h2 class="section-head">🧠 Core Business Logic (Detailed Pseudo-Code)</h2>
                         <p class="section-desc">The main algorithm or orchestration of the feature. Write this in plain English + pseudo-code so an AI can translate it into actual code.</p>
@@ -310,13 +314,33 @@
                         </div>
                     </div>
 
-                    <!-- REFERENCE: API / FUNCTION CONTRACTS -->
+                    <!-- API / FUNCTION CONTRACTS -->
                     <div class="section" id="contracts-section">
                         <h2 class="section-head">📡 Function / API Contracts</h2>
                         <p class="section-desc">Inputs, outputs, signatures for the main entry points (Controllers, Event Handlers, CLI commands).</p>
                         <div class="section-body">
                             <div id="contracts-container"></div>
                             <button id="add-contract-btn" class="btn btn-outline btn-block mt-1">＋ Add contract</button>
+                        </div>
+                    </div>
+
+                    <!-- EDGE CASES -->
+                    <div class="section" id="edges-section">
+                        <h2 class="section-head">🚨 Edge Cases & Error Handling</h2>
+                        <p class="section-desc">What happens when things go wrong? Specify validation rules, exceptions, and fallbacks.</p>
+                        <div class="section-body">
+                            <div id="edges-container"></div>
+                            <button id="add-edge-btn" class="btn btn-outline btn-block mt-1">＋ Add edge case</button>
+                        </div>
+                    </div>
+
+                    <!-- TESTING STRATEGY -->
+                    <div class="section" id="tests-section">
+                        <h2 class="section-head">🧪 Testing Strategy</h2>
+                        <p class="section-desc">Specific test scenarios per file or logic unit.</p>
+                        <div class="section-body">
+                            <div id="tests-container"></div>
+                            <button id="add-test-btn" class="btn btn-outline btn-block mt-1">＋ Add test scenario</button>
                         </div>
                     </div>
                 </div>
@@ -335,7 +359,7 @@
     <script>
         // Filled by featurePlan-inject.js from the AI's plan. Falls back to an
         // empty plan when opened without injection (e.g. developing the template).
-        const INITIAL_DATA = {{INITIAL_DATA_JSON}};
+        const INITIAL_DATA = {"title":"feature-plan flow efficiency","module":"agents/skills/feature-plan (deployed to ~/.agents/skills/feature-plan, symlinked to ~/.claude/skills; copilot and pi discover the same dir via nix links)","intent":"User asked: \"i need to make the flow for @agents/skills/feature-plan/ more efficient\", scoped via Q&A to (1) prompt/token cost and (2) interactive socket mode. Then added: \"Listen should work on copilot and pi launched from wsl machine, it should be able to launch the browser and listener + once the feature html is created any updates to the plan should be done on top of it not replacing it with new file\". Inferred: the launcher must be harness-agnostic (Claude Code, Copilot CLI, Pi), auto-open the browser including from WSL, and re-running the skill on an existing featurePlan-\u003cslug>.html must merge into it, preserving prior content and human edits.","goal":"As the skill's owner, I want /feature-plan to load a lean prompt, start interactive mode (listener + browser) with one command from any harness including WSL, and update existing plans in place, so that every invocation costs fewer tokens and no human edit or prior draft is ever lost.","context":"SKILL.md (186 lines, 16.5KB) duplicates itself: Operating modes describes every section, the Sections block re-describes them, the ~50-line JSON example repeats the shapes, Self-check restates the rules, and the trailing Implementation section recaps Operating modes verbatim. Both inject commands reference ~/.agents/skills/featurePlan/ but the deployed dir is feature-plan — the documented command fails. featurePlan-harness-listener.js exposes createServer(port, {aiAgent}) requiring hand-written JS; featurePlan-socket-client.js and the template's ?socket-port support are complete. Persistence gap: the template's loadData() prefers localStorage wholesale over INITIAL_DATA, so after a re-injection an already-opened doc never shows new seed items; featurePlan-inject.js unconditionally overwrites the output HTML. Human edits live only in localStorage ('feature-impl-plan:' + document.title), not in the file. Tests: featurePlan-inject.test.js, featurePlan-harness-listener.test.js (skip when ws unavailable in nix sandbox).","folderStructure":"└── agents/\n    └── skills/\n        └── feature-plan/\n            ├── featurePlan-inject.js    [UPDATE]\n            ├── featurePlan-inject.test.js    [UPDATE]\n            ├── featurePlan-serve.js    [CREATE]\n            ├── featurePlan-serve.test.js    [CREATE]\n            ├── featurePlan-template.html    [UPDATE]\n            ├── package.json    [UPDATE]\n            ├── README.md    [UPDATE]\n            └── SKILL.md    [UPDATE]","patternCore":"Skill = SKILL.md prompt + deterministic Node scripts (inject/serve/listener) + client-side HTML template","patternBusiness":"Transaction Script (each Node script is a single-purpose CLI/module)","patternSpecific":"Token cuts follow the repo's proven /arch trim patterns (dedup schema blocks, condense preambles, collapse checklists). Launcher follows the CLI shape of featurePlan-inject.js (require.main guard, module.exports for tests). Cross-harness support comes free from plain-Node CLIs + a file-based bridge, no harness API used.","patternOverrides":"Do not shorten the Co-author contract, skip rules, or Self-check semantics — load-bearing gates; only deduplicate where a rule is stated twice. No new npm dependencies beyond ws: WSL/browser detection uses child_process + /proc/version only.","openQuestions":[{"question":"How should the interactive launcher bridge questions between the browser page and the AI (no harness can host a persistent in-process aiAgent callback)?","options":"A) JSONL file bridge (recommended, now doubly so — files are the only mechanism all three harnesses share): launcher appends questions to featurePlan-questions.jsonl and watches featurePlan-answers.jsonl for responses/patches\nB) stdin/stdout bridge — ties the AI to the launcher's TTY, awkward under Copilot/Pi\nC) Launcher only, keep the aiAgent callback API — harness still needs custom JS per session","decision":"A) JSONL file bridge — implemented","id":"q-1"},{"question":"Where should interactive-mode usage be documented, given goal 1 is shrinking SKILL.md?","options":"A) README carries the full flow; SKILL.md gets a 2-line pointer (recommended — keeps the per-invocation prompt lean, and SKILL.md is shared by all three harnesses)\nB) Full interactive section in SKILL.md — discoverable every run, but adds ~300 tokens per invocation","decision":"A) README full flow + 2-line SKILL.md pointer — implemented","id":"q-2"},{"question":"What happens to the ~50-line JSON example in SKILL.md?","options":"A) Shrink to a sparse example (~15 lines: scalars + one item for files/openQuestions only), keep the per-section item shapes as the canonical schema (recommended — few-shot examples teach the model, keep a minimal one)\nB) Delete entirely, rely on the Sections item-shape docs\nC) Keep as-is, cut elsewhere only","decision":"A) Sparse example (~15 lines) — implemented","id":"q-3"},{"question":"Update-in-place conflict policy: when a re-injection changes an item the human also edited (or decided) in the browser, who wins?","options":"A) Additive merge, human wins (recommended): new items appended, new sections added; for same-id items the stored (human) values are kept and only the SEED baseline updates — decisions are never overwritten\nB) Provenance-aware: AI draft wins on items the human never touched, human wins on [HUMAN-EDITED] items — more faithful but needs per-field provenance in the template\nC) AI wins, human edits discarded on re-inject — simplest, violates the co-author contract","decision":"A) Additive merge, human wins — implemented","id":"q-4"}],"solutionApproach":[{"aspect":"Token reduction","rationale":"Four proven cuts: (1) delete the trailing Implementation section — restates Operating modes 1:1; (2) merge Mode A's per-section descriptions into the Sections block; (3) collapse Self-check into a terse checklist without dropping checks; (4) state each skip rule once. Target ≥40% reduction (16.5KB → ≤9.5KB) with zero semantic loss.","id":"s-1"},{"aspect":"Interactive mode launch","rationale":"One command starts everything: featurePlan-serve.js wraps createServer, picks the port, wires the bridge (per q-1), auto-opens the browser, and prints the URL as fallback. The harness never writes server code.","id":"s-2"},{"aspect":"Correctness fix bundled","rationale":"The featurePlan→feature-plan path fix in SKILL.md rides along because the token edit touches both lines anyway.","id":"s-3"},{"aspect":"Cross-harness (Claude Code, Copilot, Pi)","rationale":"All three harnesses discover the same agents/skills/feature-plan dir (claude.nix links it to ~/.claude/skills, agents.nix to ~/.agents, pi auto-discovers ~/.agents/skills). Keeping serve.js a plain Node CLI with a file-based bridge means zero harness-specific code: any agent that can run Bash and read/write files can drive interactive mode.","id":"s-4"},{"aspect":"WSL browser launch","rationale":"Platform detection: WSL when /proc/version contains 'microsoft' or WSL_DISTRO_NAME is set. Open chain: WSL → wslview (handles \\\\wsl$ path translation), fallback powershell.exe Start-Process with wslpath -w; Linux → xdg-open; macOS → open. If every opener fails, print the URL and keep serving. The Windows browser reaches ws://localhost:PORT via WSL2's default localhost forwarding, so the socket needs no extra wiring.","id":"s-5"},{"aspect":"Update-in-place","rationale":"Two halves. File half: featurePlan-inject.js detects an existing output HTML, extracts its INITIAL_DATA, and merges the new JSON into it by item id (existing ids keep their id and position, new items append, scalars update) before re-injecting — never a blind overwrite. Browser half: the template reconciles SEED against localStorage on load, appending seed items whose id isn't stored, so re-injections become visible in an already-edited doc; conflict policy per q-4. Same title keeps the same localStorage key, so human edits survive the file being rewritten.","id":"s-6"}],"acceptanceCriteria":[{"criterion":"SKILL.md is ≤9.5KB and still contains: both operating modes, all 8 section item shapes, all skip rules, the co-author contract, and every self-check item.","verification":"wc -c SKILL.md, then one real /feature-plan run on a toy feature produces JSON that featurePlan-inject.js accepts without error.","id":"a-1"},{"criterion":"The inject command as written in SKILL.md runs successfully on the deployed path.","verification":"Copy-paste the command from SKILL.md with a sample JSON; expect '✓ Generated'.","id":"a-2"},{"criterion":"Interactive mode starts with a single command, the browser opens automatically, and the opened page connects.","verification":"Run the launcher on Linux (xdg-open path) and on the WSL machine (wslview/powershell path); confirm '[featurePlan] Client connected' in launcher output on both.","id":"a-3"},{"criterion":"All existing and new unit tests pass.","verification":"npm test in agents/skills/feature-plan (inject merge tests + serve tests included).","id":"a-4"},{"criterion":"Launcher works identically when driven from Copilot CLI and Pi.","verification":"From each harness: run the serve command via its shell tool, confirm the same connected/bridge behaviour; no Claude-specific paths or APIs invoked.","id":"a-5"},{"criterion":"Re-running injection against an existing featurePlan-\u003cslug>.html merges instead of replacing: prior items keep their ids, new items appear, and browser-side human edits/decisions survive.","verification":"Unit test on the inject merge; manual check — decide a question in the browser, re-inject with an added file item, reload: decision intact, new item visible.","id":"a-6"}],"files":[{"order":1,"action":"update","path":"agents/skills/feature-plan/featurePlan-inject.js","description":"Update-in-place: merge new JSON into an existing output HTML's INITIAL_DATA by item id","pseudoCode":"function extractInitialData(html) {\n  // regex: /const INITIAL_DATA = ([\\s\\S]*?);\\n/ — same anchor the tests use\n  // no match on an existing file -> throw (hand-edited file, refuse to corrupt)\n}\nfunction mergePlans(existing, incoming) {\n  // scalars: incoming wins when non-empty, else keep existing\n  // sections: keyed by id — existing items keep id+order, incoming fields applied per q-4,\n  //           incoming items with unknown id appended\n}\nmain(): if (fs.existsSync(outputHtmlPath)) config = mergePlans(extractInitialData(...), config);\n// then inject as today; log '✓ Updated (merged): …' vs '✓ Generated: …'","id":"f-6"},{"order":2,"action":"update","path":"agents/skills/feature-plan/featurePlan-template.html","description":"Reconcile SEED vs localStorage on load so re-injected items become visible in an edited doc","pseudoCode":"function loadData() {\n  const stored = /* localStorage as today */;\n  if (!stored) return SEED clone;\n  // per q-4A: append SEED items whose id is absent from stored sections;\n  // keep stored values for same-id items; stored scalars win when human-edited\n  return reconcile(stored, SEED);\n}\n// NOTE comment updated to point at inject.js mergePlans (schema halves stay in sync)","id":"f-7"},{"order":3,"action":"update","path":"agents/skills/feature-plan/featurePlan-inject.test.js","description":"Tests for extractInitialData + mergePlans + merged disk round-trip","pseudoCode":"test('merge keeps existing item ids and appends new ones', …);\ntest('re-inject onto existing HTML preserves prior sections', …); // disk round-trip x2\ntest('extractInitialData throws on template-less HTML', …);","id":"f-8"},{"order":4,"action":"create","path":"agents/skills/feature-plan/featurePlan-serve.js","description":"Single-command launcher: listener + bridge (per q-1) + browser auto-open (WSL-aware)","pseudoCode":"#!/usr/bin/env node\n// Usage: node featurePlan-serve.js \u003cplan.html> [--port 3001] [--no-open]\nconst { createServer } = require('./featurePlan-harness-listener');\nfunction detectPlatform() { /* 'wsl' | 'linux' | 'darwin' via WSL_DISTRO_NAME || /proc/version */ }\nfunction openBrowser(url) {\n  // wsl: try wslview, else powershell.exe Start-Process (wslpath -w for the file part)\n  // linux: xdg-open; darwin: open; all spawned detached, failures non-fatal -> print URL\n}\nasync function serve(htmlPath, port) {\n  const server = createServer(port, { aiAgent: bridgeAgent /* per q-1 */ });\n  await server.start(); // EADDRINUSE: try port+1 up to +10\n  openBrowser(urlFor(htmlPath, port));\n  console.log(`Open: ${urlFor(htmlPath, port)}`); // always printed as fallback\n}\nif (require.main === module) main();\nmodule.exports = { serve, detectPlatform, openBrowser };","id":"f-2"},{"order":5,"action":"create","path":"agents/skills/feature-plan/featurePlan-serve.test.js","description":"Launcher tests (ws-skip guard as in harness-listener tests); openBrowser command selection mocked per platform","pseudoCode":"test('question round-trips through the bridge', …);\ntest('falls back to next port when busy', …);\ntest('detectPlatform: wsl via /proc/version microsoft', …);\ntest('openBrowser picks wslview on wsl, xdg-open on linux', …); // spawn mocked","id":"f-3"},{"order":6,"action":"update","path":"agents/skills/feature-plan/SKILL.md","description":"Dedup to ≤9.5KB; fix inject path (2×); Mode A re-runs use merge (update-in-place); interactive pointer (per q-2)","pseudoCode":"Retained outline:\n  frontmatter (unchanged)\n  # featurePlan — 1-para directive (condensed preamble)\n  Prime directive + Co-author contract (unchanged, load-bearing)\n  ## Operating modes — Mode A step 3: node ~/.agents/skills/feature-plan/featurePlan-inject.js …  // path fixed\n    Mode A note: if featurePlan-\u003cslug>.html already exists, the same command merges into it\n    (update-in-place) — never delete/recreate the file\n  ## Sections — single canonical per-section shape + skip rule (only place they appear)\n  ## JSON example — sparse (per q-3)\n  ## Interactive mode — 2 lines: serve command + README pointer (per q-2)\n  ## After saving (unchanged)  |  ## Self-check — same items, checklist form\nDeleted: trailing ## Implementation section (restates Operating modes)","id":"f-1"},{"order":7,"action":"update","path":"agents/skills/feature-plan/README.md","description":"Replace hand-written harness JS snippet with serve flow (Claude/Copilot/Pi + WSL notes); document merge semantics; fix stale featurePlan/ paths","pseudoCode":"### Interactive mode (any harness: Claude Code, Copilot CLI, Pi)\n```bash\nnode ~/.agents/skills/feature-plan/featurePlan-serve.js featurePlan-\u003cslug>.html\n# starts listener, opens the browser (wslview/powershell on WSL, xdg-open on Linux),\n# bridge protocol per q-1\n```\n### Updating an existing plan\nRe-running inject against an existing HTML merges by item id; human edits live in\nlocalStorage (keyed by title) and survive.","id":"f-4"},{"order":8,"action":"update","path":"agents/skills/feature-plan/package.json","description":"Add featurePlan-serve.test.js to the test script","pseudoCode":"\"test\": \"node --test featurePlan-inject.test.js featurePlan-harness-listener.test.js featurePlan-serve.test.js\"","id":"f-5"}],"logicSteps":[],"contracts":[{"name":"CLI: node featurePlan-serve.js \u003cplan.html> [--port N] [--no-open]","inputs":"plan.html path (must exist); optional --port (default 3001, auto-increments up to +10 on EADDRINUSE); --no-open skips browser launch","outputs":"stdout: 'Open: \u003curl>?socket-port=N' (always, even after auto-open); exit 1 with hint if html missing or ws unavailable. Bridge file shapes (option A): questions.jsonl line { id, section, question, plan }, answers.jsonl line { id, response, patches: [{type:'patch', section, itemId, field, value, action}] }","id":"c-1"},{"name":"featurePlan-inject.js CLI (changed behaviour, same signature)","inputs":"Same args as today: \u003cinput-json> \u003coutput-html> [template-path]","outputs":"Output HTML missing → generate as today ('✓ Generated'). Output HTML exists → extract INITIAL_DATA, mergePlans(existing, incoming), re-inject ('✓ Updated (merged)'). Existing file without an INITIAL_DATA anchor → exit 1, file untouched.","id":"c-2"}],"edgeCases":[{"condition":"Default port already in use","handling":"Retry port+1 up to +10, then exit 1 naming the range tried.","id":"e-1"},{"condition":"ws module missing (nix sandbox / fresh checkout)","handling":"Launcher exits 1 with 'npm install' hint; serve tests skip via the same guard harness-listener tests use.","id":"e-2"},{"condition":"Malformed JSON line in answers.jsonl (option A bridge)","handling":"Skip the line, log a warning, keep watching; never crash the server.","id":"e-3"},{"condition":"Token trim accidentally drops a load-bearing rule","handling":"Diff review: every rule in the old SKILL.md must map to a surviving line; a-1's real-run verification is the gate.","id":"e-4"},{"condition":"WSL: wslview not installed","handling":"Fall back to powershell.exe Start-Process with the wslpath -w translated file URL; if that also fails, print the URL and keep serving (non-fatal).","id":"e-5"},{"condition":"WSL2 localhost forwarding disabled in .wslconfig","handling":"Page opens but socket can't connect; template already degrades to static mode after max reconnects. Launcher README notes the .wslconfig localhostForwarding requirement.","id":"e-6"},{"condition":"Re-injection with a changed title","handling":"New title → new localStorage key would orphan human edits. mergePlans keeps the existing title unless the incoming JSON explicitly sets a different non-empty one; README warns that retitling detaches browser edits.","id":"e-7"},{"condition":"Existing output HTML was hand-edited and no longer contains the INITIAL_DATA anchor","handling":"extractInitialData throws; inject exits 1 with the file untouched, telling the user to pass a fresh output path.","id":"e-8"}],"testScenarios":[{"target":"featurePlan-serve.js::bridgeAgent","scenario":"A question appends exactly one JSONL line with a unique id, and an answer line with that id resolves the pending promise with response + patches.","id":"t-1"},{"target":"featurePlan-inject.js::mergePlans","scenario":"Merging incoming JSON over an existing plan keeps existing item ids/order, applies field updates per the q-4 policy, appends unknown-id items, and leaves untouched sections intact.","id":"t-2"}]};
     </script>
     <script>
         // ------------------------------------------------------------------
@@ -363,16 +387,23 @@
         function emptyData() {
             return {
                 title: '',
-                overview: '',
-                architecture: '',
+                module: '',
+                intent: '',
+                goal: '',
+                context: '',
                 folderStructure: '',
+                patternCore: 'Layered (Controller -> Service -> Repository)',
+                patternBusiness: 'Transaction Script',
+                patternSpecific: '',
+                patternOverrides: '',
                 openQuestions: [],
                 solutionApproach: [],
                 acceptanceCriteria: [],
                 files: [],
                 logicSteps: [],
                 contracts: [],
-                edgeCases: []
+                edgeCases: [],
+                testScenarios: []
             };
         }
 
@@ -471,15 +502,17 @@
         // ------------------------------------------------------------------
         const SEED = normalize(JSON.parse(JSON.stringify(INITIAL_DATA || {})));
 
-        const SCALAR_KEYS = ['title', 'overview', 'architecture', 'folderStructure'];
+        const SCALAR_KEYS = ['title', 'module', 'intent', 'goal', 'context', 'folderStructure',
+            'patternCore', 'patternBusiness', 'patternSpecific', 'patternOverrides'];
         const SECTION_FIELDS = {
             openQuestions: ['question', 'options', 'decision'],
             solutionApproach: ['aspect', 'rationale'],
-            acceptanceCriteria: ['criterion', 'testCase'],
+            acceptanceCriteria: ['criterion', 'verification'],
             files: ['order', 'action', 'path', 'description', 'pseudoCode'],
             logicSteps: ['step', 'pseudo'],
             contracts: ['name', 'inputs', 'outputs'],
-            edgeCases: ['condition', 'handling']
+            edgeCases: ['condition', 'handling'],
+            testScenarios: ['target', 'scenario']
         };
 
         function scalarTag(key) {
@@ -528,9 +561,10 @@
             renderLogic();
             renderContracts();
             renderEdges();
+            renderTests();
 
             renderFeatureOverview();
-            renderArchitecture();
+            renderPatterns();
             renderPipeline();
             renderTreeFiles();
             addCollapseTogglesToCards();
@@ -563,14 +597,22 @@
 
         function renderFeatureOverview() {
             document.getElementById('feature-title').value = data.title || '';
-            document.getElementById('feature-overview').value = data.overview || '';
+            document.getElementById('feature-module').value = data.module || '';
+            document.getElementById('feature-intent').value = data.intent || '';
+            document.getElementById('feature-goal').value = data.goal || '';
+            document.getElementById('feature-context').value = data.context || '';
 
             document.getElementById('topline-file').textContent = data.title || 'Untitled';
+            document.getElementById('topline-module').textContent = data.module || '';
             document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature';
+            document.getElementById('tree-brand-meta').textContent = (data.module || 'Module not set') + ' · featurePlan';
         }
 
-        function renderArchitecture() {
-            document.getElementById('feature-architecture').value = data.architecture || '';
+        function renderPatterns() {
+            document.getElementById('pattern-core').value = data.patternCore || '';
+            document.getElementById('pattern-business').value = data.patternBusiness || '';
+            document.getElementById('pattern-specific').value = data.patternSpecific || '';
+            document.getElementById('pattern-overrides').value = data.patternOverrides || '';
             document.getElementById('folder-structure').value = data.folderStructure || '';
         }
 
@@ -1014,7 +1056,7 @@
         function renderAcceptance() {
             const fields = [
                 { key: 'criterion', label: 'Criterion (Given / When / Then, or a testable statement)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Given a user with 2FA enabled, when they log in without a code, then the login is rejected with 2fa_required.' },
-                { key: 'testCase', label: 'Test Case (the test that proves it)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Integration test on POST /login: valid password, no OTP code, expect 401 with 2fa_required.' }
+                { key: 'verification', label: 'How to Verify', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Integration test on POST /login; manual check via curl.' }
             ];
             renderSimpleList('acceptance-container', data.acceptanceCriteria, fields, 'Criterion', 'add-acceptance-btn');
         }
@@ -1044,6 +1086,14 @@
             renderSimpleList('edges-container', data.edgeCases, fields, 'Edge Case', 'add-edge-btn');
         }
 
+        function renderTests() {
+            const fields = [
+                { key: 'target', label: 'Target File / Method', type: 'text', placeholder: 'NewService::execute()' },
+                { key: 'scenario', label: 'Test Scenario', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('tests-container', data.testScenarios, fields, 'Test', 'add-test-btn');
+        }
+
         // ------------------------------------------------------------------
         // Event Bindings for Add Buttons
         //
@@ -1062,23 +1112,38 @@
 
         bindAdd('add-question-btn', 'openQuestions', { question: '', options: '', decision: '' });
         bindAdd('add-approach-btn', 'solutionApproach', { aspect: '', rationale: '' });
-        bindAdd('add-acceptance-btn', 'acceptanceCriteria', { criterion: '', testCase: '' });
+        bindAdd('add-acceptance-btn', 'acceptanceCriteria', { criterion: '', verification: '' });
         bindAdd('add-file-btn', 'files', { order: data.files.length + 1, action: 'create', path: '', description: '',
             pseudoCode: '' });
         bindAdd('add-logic-btn', 'logicSteps', { step: '', pseudo: '' });
         bindAdd('add-contract-btn', 'contracts', { name: '', inputs: '', outputs: '' });
         bindAdd('add-edge-btn', 'edgeCases', { condition: '', handling: '' });
+        bindAdd('add-test-btn', 'testScenarios', { target: '', scenario: '' });
 
         // Input bindings for top-level fields
         document.getElementById('feature-title').addEventListener('input', (e) => { data.title = e.target.value;
             saveData();
             document.getElementById('topline-file').textContent = data.title || 'Untitled';
             document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature'; });
-        document.getElementById('feature-overview').addEventListener('input', (e) => { data.overview = e.target.value;
+        document.getElementById('feature-module').addEventListener('input', (e) => { data.module = e.target.value;
+            saveData();
+            document.getElementById('topline-module').textContent = data.module || '';
+            document.getElementById('tree-brand-meta').textContent = (data.module || 'Module not set') + ' · featurePlan'; });
+        document.getElementById('feature-intent').addEventListener('input', (e) => { data.intent = e.target.value;
             saveData(); });
-        document.getElementById('feature-architecture').addEventListener('input', (e) => { data.architecture = e.target.value;
+        document.getElementById('feature-goal').addEventListener('input', (e) => { data.goal = e.target.value;
             saveData(); });
         document.getElementById('folder-structure').addEventListener('input', (e) => { data.folderStructure = e.target.value;
+            saveData(); });
+        document.getElementById('feature-context').addEventListener('input', (e) => { data.context = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-core').addEventListener('input', (e) => { data.patternCore = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-business').addEventListener('input', (e) => { data.patternBusiness = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-specific').addEventListener('input', (e) => { data.patternSpecific = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-overrides').addEventListener('input', (e) => { data.patternOverrides = e.target.value;
             saveData(); });
 
         // Static nav items (the dynamic file leaves bind their own click handler)
@@ -1104,13 +1169,10 @@
             }
             lines.push('');
             lines.push(`FEATURE TITLE: ${data.title || 'Not set'}${scalarTag('title')}`);
-            lines.push('');
-            lines.push(`--- FEATURE OVERVIEW ---${scalarTag('overview')}`);
-            if (!data.overview) {
-                lines.push('(No overview written)');
-            } else {
-                data.overview.split('\n').forEach(line => lines.push(line));
-            }
+            lines.push(`TARGET MODULE: ${data.module || 'Not set'}${scalarTag('module')}`);
+            lines.push(`CAPTURED INTENT: ${data.intent || 'Not set'}${scalarTag('intent')}`);
+            lines.push(`USER STORY: ${data.goal || 'Not set'}${scalarTag('goal')}`);
+            lines.push(`EXISTING CONTEXT: ${data.context || 'Not set'}${scalarTag('context')}`);
             lines.push('');
 
             // Open Questions & Decisions
@@ -1130,13 +1192,24 @@
             }
             lines.push('');
 
-            // Design Pattern & Architecture
-            lines.push(`--- DESIGN PATTERN & ARCHITECTURE ---${scalarTag('architecture')}`);
-            if (!data.architecture) {
-                lines.push('(No architecture described)');
+            // Acceptance Criteria
+            lines.push('--- ACCEPTANCE CRITERIA ---');
+            if (data.acceptanceCriteria.length === 0) {
+                lines.push('(No acceptance criteria defined)');
             } else {
-                data.architecture.split('\n').forEach(line => lines.push(line));
+                data.acceptanceCriteria.forEach((a, idx) => {
+                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}${itemTag('acceptanceCriteria', a)}`);
+                    if (a.verification) lines.push(`  Verify: ${a.verification}`);
+                    lines.push('');
+                });
             }
+            lines.push('');
+
+            lines.push('--- DESIGN PATTERNS & OVERRIDES ---');
+            lines.push(`Core Pattern: ${data.patternCore || 'Not set'}${scalarTag('patternCore')}`);
+            lines.push(`Business Logic Pattern: ${data.patternBusiness || 'Not set'}${scalarTag('patternBusiness')}`);
+            lines.push(`Specific Implementations: ${data.patternSpecific || 'None'}${scalarTag('patternSpecific')}`);
+            lines.push(`Explicit Overrides: ${data.patternOverrides || 'None'}${scalarTag('patternOverrides')}`);
             lines.push('');
 
             // Solution Approach
@@ -1185,30 +1258,6 @@
                 });
             }
 
-            // Acceptance Criteria & Test Cases
-            lines.push('--- ACCEPTANCE CRITERIA & TEST CASES ---');
-            if (data.acceptanceCriteria.length === 0) {
-                lines.push('(No acceptance criteria defined)');
-            } else {
-                data.acceptanceCriteria.forEach((a, idx) => {
-                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}${itemTag('acceptanceCriteria', a)}`);
-                    if (a.testCase) lines.push(`  Test Case: ${a.testCase}`);
-                    lines.push('');
-                });
-            }
-
-            // Edge Cases
-            lines.push('--- EDGE CASES & ERROR HANDLING ---');
-            if (data.edgeCases.length === 0) {
-                lines.push('(No edge cases defined)');
-            } else {
-                data.edgeCases.forEach(e => {
-                    lines.push(`Condition: ${e.condition || 'Untitled'}${itemTag('edgeCases', e)}`);
-                    if (e.handling) lines.push(`  Handling: ${e.handling}`);
-                    lines.push('');
-                });
-            }
-
             // Logic
             lines.push('--- CORE BUSINESS LOGIC (PSEUDO-CODE) ---');
             if (data.logicSteps.length === 0) {
@@ -1234,6 +1283,30 @@
                     lines.push(`Signature: ${c.name || 'Unnamed'}${itemTag('contracts', c)}`);
                     if (c.inputs) lines.push(`  Inputs: ${c.inputs}`);
                     if (c.outputs) lines.push(`  Outputs: ${c.outputs}`);
+                    lines.push('');
+                });
+            }
+
+            // Edge Cases
+            lines.push('--- EDGE CASES & ERROR HANDLING ---');
+            if (data.edgeCases.length === 0) {
+                lines.push('(No edge cases defined)');
+            } else {
+                data.edgeCases.forEach(e => {
+                    lines.push(`Condition: ${e.condition || 'Untitled'}${itemTag('edgeCases', e)}`);
+                    if (e.handling) lines.push(`  Handling: ${e.handling}`);
+                    lines.push('');
+                });
+            }
+
+            // Tests
+            lines.push('--- TESTING STRATEGY ---');
+            if (data.testScenarios.length === 0) {
+                lines.push('(No tests defined)');
+            } else {
+                data.testScenarios.forEach(t => {
+                    lines.push(`Target: ${t.target || 'Untitled'}${itemTag('testScenarios', t)}`);
+                    if (t.scenario) lines.push(`  Scenario: ${t.scenario}`);
                     lines.push('');
                 });
             }

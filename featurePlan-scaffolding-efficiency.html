@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Feature Implementation Plan – {{FEATURE_TITLE}}</title>
+    <title>Feature Implementation Plan – scaffolding efficiency</title>
     <style>
         :root{
             --bg:#0B0D10; --panel:#131619; --tree:#0E1013; --field:#0E1114; --line:#23272C;
@@ -178,22 +178,22 @@
                 <div class="meta" id="tree-brand-meta">featurePlan</div>
             </div>
 
-            <div class="tree-group">Problem</div>
-            <button class="tnode" data-target="#overview-section">Feature Overview</button>
+            <div class="tree-group">Review</div>
+            <button class="tnode" data-target="#overview-section">Overview</button>
             <button class="tnode" data-target="#questions-section">Open Questions<span class="flag" id="nav-questions-flag" style="display:none;"></span></button>
-
-            <div class="tree-group">Solution</div>
-            <button class="tnode" data-target="#architecture-section">Design &amp; Architecture</button>
+            <button class="tnode" data-target="#acceptance-section">Acceptance Criteria</button>
+            <button class="tnode" data-target="#patterns-section">Design Patterns</button>
             <button class="tnode" data-target="#approach-section">Solution Approach</button>
+
+            <div class="tree-group">Build pipeline</div>
             <button class="tnode" data-target="#folder-section">Folder Structure</button>
-            <button class="tnode" data-target="#files-section">File Manifest</button>
             <div id="tree-files"></div>
-            <button class="tnode" data-target="#acceptance-section">Acceptance &amp; Tests</button>
-            <button class="tnode" data-target="#edges-section">Edge Cases</button>
 
             <div class="tree-group">Reference</div>
             <button class="tnode" data-target="#logic-section">Logic Steps</button>
             <button class="tnode" data-target="#contracts-section">Contracts</button>
+            <button class="tnode" data-target="#edges-section">Edge Cases</button>
+            <button class="tnode" data-target="#tests-section">Tests</button>
 
             <div class="tree-foot"><span class="dot" id="tree-foot-dot"></span><span id="tree-foot-text">No open questions</span></div>
         </nav>
@@ -203,9 +203,10 @@
                 <div class="wrap">
                     <div class="topline">
                         <span><button id="nav-toggle-btn" class="btn btn-sm">☰</button> featurePlan · <b id="topline-file">plan.html</b></span>
+                        <span id="topline-module"></span>
                     </div>
 
-                    <h1>⚙️ Feature Implementation Plan – {{FEATURE_TITLE}}</h1>
+                    <h1>⚙️ Feature Implementation Plan – scaffolding efficiency</h1>
                     <p class="sub">File-by-file plan for building a feature inside an existing codebase — co-authored: the AI drafts, the human decides. Resolve open questions, edit any section, then copy the plan back; human edits are tagged in the export and override the AI draft.</p>
 
                     <div class="alert" id="alert-banner" style="display:none;"></div>
@@ -222,17 +223,21 @@
                         <div class="pipe-row" id="pipeline-row"></div>
                     </div>
 
-                    <!-- PROBLEM: FEATURE OVERVIEW -->
+                    <!-- OVERVIEW -->
                     <div class="section" id="overview-section">
                         <h2 class="section-head">📌 Feature Overview</h2>
-                        <p class="section-desc">The AI's own words: what was asked, what it understood, and how this fits the existing codebase — one free-form narrative, not a form.</p>
                         <div class="section-body">
-                            <div><label>Feature Title</label><input id="feature-title" placeholder="e.g. Add two-factor authentication" /></div>
-                            <div class="mt-1"><label>Overview (the ask, what the AI understood, and the existing code it touches)</label><textarea id="feature-overview" rows="6" placeholder="e.g. You asked to 'add 2FA to login'. I read AuthService.php and the users table; I understand this as a TOTP second factor verified at login, with enrollment from the profile page. The login flow currently..."></textarea></div>
+                            <div class="flex-row">
+                                <div style="flex:2;"><label>Feature Title</label><input id="feature-title" placeholder="e.g. Add two-factor authentication" /></div>
+                                <div style="flex:1;"><label>Target Module / Context</label><input id="feature-module" placeholder="e.g. User Service" /></div>
+                            </div>
+                            <div class="mt-1"><label>Captured Intent (the user's original ask, verbatim, plus what was inferred from it)</label><textarea id="feature-intent" rows="2" placeholder="e.g. User asked: 'add 2FA to login'. Inferred: TOTP second factor verified at login; enrollment managed from the profile page."></textarea></div>
+                            <div class="mt-1"><label>User Story / Goal</label><textarea id="feature-goal" rows="2" placeholder="As a user, I want to ... so that ..."></textarea></div>
+                            <div class="mt-1"><label>Existing Codebase Context (files, classes, DB schemas that already exist)</label><textarea id="feature-context" rows="2" placeholder="e.g. We already have User.php, AuthService.php, and a 'users' table with columns..."></textarea></div>
                         </div>
                     </div>
 
-                    <!-- PROBLEM: OPEN QUESTIONS & DECISIONS -->
+                    <!-- OPEN QUESTIONS & DECISIONS -->
                     <div class="section" id="questions-section">
                         <h2 class="section-head">❓ Open Questions & Decisions</h2>
                         <p class="section-desc">Ambiguities the AI could not resolve from the ask or the code. <strong>The human decides here.</strong> An empty Decision exports as UNRESOLVED and blocks implementation.</p>
@@ -242,16 +247,35 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: DESIGN PATTERN & ARCHITECTURE -->
-                    <div class="section" id="architecture-section">
-                        <h2 class="section-head">🧩 Design Pattern &amp; Architecture</h2>
-                        <p class="section-desc">The AI explains the pattern choices and draws the architecture in its own words — prose, ASCII diagrams, whatever communicates the design best. Edit freely to redirect it.</p>
+                    <!-- ACCEPTANCE CRITERIA -->
+                    <div class="section" id="acceptance-section">
+                        <h2 class="section-head">✅ Acceptance Criteria</h2>
+                        <p class="section-desc">Testable conditions that define "done". Each criterion states an expected behaviour and how to verify it.</p>
                         <div class="section-body">
-                            <textarea id="feature-architecture" rows="12" placeholder="e.g. Layered flow, one new service:&#10;&#10;  LoginController ──▶ AuthService ──▶ TotpService  [NEW]&#10;                          │&#10;                          └──▶ UserRepository&#10;&#10;Why: TOTP logic is isolated in TotpService so AuthService stays..."></textarea>
+                            <div id="acceptance-container"></div>
+                            <button id="add-acceptance-btn" class="btn btn-outline btn-block mt-1">＋ Add acceptance criterion</button>
                         </div>
                     </div>
 
-                    <!-- SOLUTION: APPROACH & RATIONALE -->
+                    <!-- DESIGN PATTERNS & OVERRIDES -->
+                    <div class="section" id="patterns-section">
+                        <h2 class="section-head">🧩 Design Patterns & Architectural Overrides</h2>
+                        <p class="section-desc">Explicitly state which patterns to use. <strong>Change these to alter the architecture</strong> (e.g., switch from Repository to Service Layer).</p>
+                        <div class="section-body">
+                            <div class="flex-row">
+                                <div style="flex:1;"><label>Core Pattern</label><input id="pattern-core" placeholder="e.g. MVC, Layered Architecture" value="Layered (Controller -> Service -> Repository)" /></div>
+                                <div style="flex:1;"><label>Business Logic Pattern</label><input id="pattern-business" placeholder="e.g. Transaction Script, Domain Model" value="Transaction Script" /></div>
+                            </div>
+                            <div class="mt-1"><label>Specific Pattern Implementations (e.g., Factory vs Builder, Repository vs DAO)</label>
+                                <textarea id="pattern-specific" rows="2" placeholder="e.g. Use Repository pattern for User data. Use Factory pattern to create complex DTOs."></textarea>
+                            </div>
+                            <div class="mt-1"><label>Explicit Overrides / Constraints (Change these to deviate from standard patterns)</label>
+                                <textarea id="pattern-overrides" rows="2" placeholder="e.g. Do NOT create a separate Repository for this; put logic directly in Service. Use Singleton for CacheManager."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION APPROACH -->
                     <div class="section" id="approach-section">
                         <h2 class="section-head">💡 Solution Approach & Rationale</h2>
                         <p class="section-desc">Explain the high-level design decisions, trade-offs, and rationale before diving into implementation. This section helps reviewers understand the "why" before the "what".</p>
@@ -261,7 +285,7 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: RESULTING FOLDER STRUCTURE -->
+                    <!-- RESULTING FOLDER STRUCTURE -->
                     <div class="section" id="folder-section">
                         <h2 class="section-head">🌳 Resulting Folder Structure</h2>
                         <p class="section-desc">Tree of the affected directories after the change. Mark every touched file <strong>[CREATE]</strong>, <strong>[UPDATE]</strong>, or <strong>[DELETE]</strong>; must match the file manifest below.</p>
@@ -270,7 +294,7 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: FILE MANIFEST -->
+                    <!-- FILE MANIFEST -->
                     <div class="section" id="files-section">
                         <h2 class="section-head">📂 File Change Manifest (In Order of Execution)</h2>
                         <p class="section-desc">List every file that needs to be created, updated, or deleted. Order them by build sequence. Add pseudo-code for each.</p>
@@ -280,27 +304,7 @@
                         </div>
                     </div>
 
-                    <!-- SOLUTION: ACCEPTANCE CRITERIA & TEST CASES -->
-                    <div class="section" id="acceptance-section">
-                        <h2 class="section-head">✅ Acceptance Criteria &amp; Test Cases</h2>
-                        <p class="section-desc">Testable conditions that define "done", each paired with the test case that proves it.</p>
-                        <div class="section-body">
-                            <div id="acceptance-container"></div>
-                            <button id="add-acceptance-btn" class="btn btn-outline btn-block mt-1">＋ Add criterion + test</button>
-                        </div>
-                    </div>
-
-                    <!-- SOLUTION: EDGE CASES -->
-                    <div class="section" id="edges-section">
-                        <h2 class="section-head">🚨 Edge Cases & Error Handling</h2>
-                        <p class="section-desc">What happens when things go wrong? Specify validation rules, exceptions, and fallbacks.</p>
-                        <div class="section-body">
-                            <div id="edges-container"></div>
-                            <button id="add-edge-btn" class="btn btn-outline btn-block mt-1">＋ Add edge case</button>
-                        </div>
-                    </div>
-
-                    <!-- REFERENCE: CORE BUSINESS LOGIC -->
+                    <!-- CORE BUSINESS LOGIC -->
                     <div class="section" id="logic-section">
                         <h2 class="section-head">🧠 Core Business Logic (Detailed Pseudo-Code)</h2>
                         <p class="section-desc">The main algorithm or orchestration of the feature. Write this in plain English + pseudo-code so an AI can translate it into actual code.</p>
@@ -310,13 +314,33 @@
                         </div>
                     </div>
 
-                    <!-- REFERENCE: API / FUNCTION CONTRACTS -->
+                    <!-- API / FUNCTION CONTRACTS -->
                     <div class="section" id="contracts-section">
                         <h2 class="section-head">📡 Function / API Contracts</h2>
                         <p class="section-desc">Inputs, outputs, signatures for the main entry points (Controllers, Event Handlers, CLI commands).</p>
                         <div class="section-body">
                             <div id="contracts-container"></div>
                             <button id="add-contract-btn" class="btn btn-outline btn-block mt-1">＋ Add contract</button>
+                        </div>
+                    </div>
+
+                    <!-- EDGE CASES -->
+                    <div class="section" id="edges-section">
+                        <h2 class="section-head">🚨 Edge Cases & Error Handling</h2>
+                        <p class="section-desc">What happens when things go wrong? Specify validation rules, exceptions, and fallbacks.</p>
+                        <div class="section-body">
+                            <div id="edges-container"></div>
+                            <button id="add-edge-btn" class="btn btn-outline btn-block mt-1">＋ Add edge case</button>
+                        </div>
+                    </div>
+
+                    <!-- TESTING STRATEGY -->
+                    <div class="section" id="tests-section">
+                        <h2 class="section-head">🧪 Testing Strategy</h2>
+                        <p class="section-desc">Specific test scenarios per file or logic unit.</p>
+                        <div class="section-body">
+                            <div id="tests-container"></div>
+                            <button id="add-test-btn" class="btn btn-outline btn-block mt-1">＋ Add test scenario</button>
                         </div>
                     </div>
                 </div>
@@ -335,7 +359,7 @@
     <script>
         // Filled by featurePlan-inject.js from the AI's plan. Falls back to an
         // empty plan when opened without injection (e.g. developing the template).
-        const INITIAL_DATA = {{INITIAL_DATA_JSON}};
+        const INITIAL_DATA = {"title":"scaffolding efficiency","module":"agents/boilerplats (deployed to ~/.agents/boilerplats; guard + hint hooks shared across Claude Code, Copilot, Pi)","intent":"User asked: \"use the feature-plan to make the scaffolding more efficient\". Inferred: a feature plan for the boilerplate generator (scaffold.js + templates + hint/guard hooks) targeting flow efficiency — fewer tool calls per scaffold use, fewer invocations for multi-file boilerplate, lower token cost of the injected hint.","goal":"As an agent user of the generator, I want to discover template fields, scaffold several files, and inject into python/sh without extra reads, invocations, or flags, so that boilerplate creation costs fewer tool calls and fewer injected tokens per session.","context":"scaffold.js (191 lines): parseArgs/render/writeNewFile/injectIntoFile, one file per invocation, marker defaults to '// scaffold:inject' with python/sh requiring an explicit --marker '# scaffold:inject'. 75 templates across 6 langs; each self-documents its Data fields in a first-line '{{!-- Data: {...} --}}' comment, so today the agent must Read each .hbs before using it. AGENT-HINT.md (1,545B) is injected by claude/hooks/boilerplate-hint.sh on keyword-matching prompts, by copilot/hooks/session-start.sh every session, and by Pi — one source, three consumers. claude/hooks/boilerplate-guard.sh (shared by copilot's pre-tool-use.sh) enforces the mandate; its deny message repeats the full CLI synopsis. Tests: agents/boilerplats/test/scaffold.test.js.","folderStructure":"├── agents/\n│   └── boilerplats/\n│       ├── AGENT-HINT.md    [UPDATE]\n│       ├── scaffold.js    [UPDATE]\n│       └── test/\n│           └── scaffold.test.js    [UPDATE]\n└── claude/\n    └── hooks/\n        └── boilerplate-guard.sh    [UPDATE]","patternCore":"Single-purpose Node CLI + Handlebars templates + shell hook enforcement","patternBusiness":"Transaction Script","patternSpecific":"New CLI capabilities extend scaffold.js's existing arg-switch and reuse render/writeNewFile/injectIntoFile untouched. Template Data comments stay the single source of field docs — --describe parses them at run time, no separate metadata file to keep in sync.","patternOverrides":"Do not weaken the MANDATORY mandate wording in AGENT-HINT.md or the guard's deny behaviour — enforcement text is load-bearing. No new npm dependencies.","openQuestions":[{"question":"Batch manifest format for scaffolding several files in one invocation?","options":"A) Generic entries array (recommended): --batch \u003cfile.json> where the file is [{ lang, template, out, data, inject?, marker? }] — one shape, works everywhere\nB) Option A plus direct featurePlan JSON support: scaffold.js maps a featurePlan-\u003cslug>.json files[] manifest to entries via a scaffold hint per file — bridges /feature-plan plans straight into scaffolding, but couples the two tools' schemas\nC) No batch mode — keep one invocation per file","decision":"","id":"q-1"},{"question":"How should template field docs reach the agent?","options":"A) Add scaffold.js --describe (recommended): prints every template's Data comment per lang in one Bash call, replacing per-template .hbs Reads; AGENT-HINT.md stays trimmed and points at it\nB) Embed a full field cheat-sheet in AGENT-HINT.md — zero extra calls but grows the injected hint by ~1KB in all three harnesses, against the token goal","decision":"","id":"q-2"},{"question":"Marker handling for python/sh (today: explicit --marker required or injection falls back to last '}', which python/sh files may not have)?","options":"A) Infer the marker from --lang (recommended): python/sh default to '# scaffold:inject', explicit --marker still wins; removes a footgun plus the hint prose explaining it\nB) Keep the explicit requirement — one less implicit behaviour, but keeps the per-prompt explanation cost and the failure mode","decision":"","id":"q-3"}],"solutionApproach":[{"aspect":"Field discovery","rationale":"Templates already self-document (first-line Data comment). --describe walks boilerplats/\u003clang>/*.hbs, extracts those comments, and prints a per-template one-liner. One Bash call replaces N Read calls per session, and there is no second metadata source to drift.","id":"s-1"},{"aspect":"Batch scaffolding","rationale":"--batch pre-validates every entry (template exists, JSON parses, create-mode target absent) before writing anything, then applies entries in order reusing the existing render/write/inject functions. All-or-nothing on validation failures so a typo in entry 4 never leaves entries 1-3 as orphaned partial output.","id":"s-2"},{"aspect":"Injected-token cost","rationale":"AGENT-HINT.md trims from 1,545B to ≤800B: mandate + command synopsis + marker rule + member/inject rule, with field docs delegated to --describe (per q-2A) and the python/sh marker paragraph dropped once inference lands (per q-3A). One edit pays off in all three harnesses since they share the file; the guard's deny message shrinks the same way.","id":"s-3"},{"aspect":"Cross-harness reach","rationale":"No copilot/pi-specific work: copilot's pre-tool-use.sh sources claude's boilerplate-guard.sh and both copilot and Pi inject the same AGENT-HINT.md, so scaffold.js + hint + guard edits propagate everywhere via ./setup.sh.","id":"s-4"}],"acceptanceCriteria":[{"criterion":"One Bash call (scaffold.js --describe, optionally --lang/--template scoped) lists the Data fields of every template without reading any .hbs.","verification":"Run --describe and --describe --lang python; output names all templates with their Data fields; unit test asserts the parse.","id":"a-1"},{"criterion":"A batch manifest scaffolds N files in one invocation; a validation error in any entry means no file is written at all.","verification":"Unit test: 3-entry manifest creates 3 files; manifest with one bad template name writes zero files and exits 1.","id":"a-2"},{"criterion":"python/sh injection works without --marker, landing above '# scaffold:inject'; explicit --marker still overrides.","verification":"Unit test injecting into a python file with no --marker flag.","id":"a-3"},{"criterion":"AGENT-HINT.md ≤800B while keeping the MANDATORY mandate, the command synopsis, the marker-retention rule, and the member/--inject rule.","verification":"wc -c; read-through against the retained-rules list; guard deny message updated in the same spirit.","id":"a-4"},{"criterion":"All existing and new scaffold tests pass; the guard hook still blocks hand-written boilerplate and marker removal.","verification":"node --test agents/boilerplats/test/scaffold.test.js; hooks/test-hook.sh selftest (or the repo's hook test entry point).","id":"a-5"}],"files":[{"order":1,"action":"update","path":"agents/boilerplats/scaffold.js","description":"Add --describe, --batch, and lang-based marker inference (per q-1/q-2/q-3)","pseudoCode":"const LANG_MARKERS = { python: '# scaffold:inject', sh: '# scaffold:inject' }; // default stays '//'\nfunction defaultMarker(lang) { return LANG_MARKERS[lang] || DEFAULT_MARKER; }\n\nfunction describe(lang, template) {\n  // for each boilerplats/\u003clang>/\u003ct>.hbs: read first line, extract {{!-- Data: ... --}}\n  // print '\u003clang>/\u003ct>: { fields }'; unknown lang -> list available langs\n}\n\nfunction runBatch(manifestPath) {\n  const entries = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));\n  // pass 1: validate every entry (template exists, data parses, create target absent)\n  // pass 2: apply entries via render + writeNewFile/injectIntoFile\n}\n\n// main(): '--describe' and '--batch \u003cfile>' branch before the required-args check;\n// inject path uses args.marker || defaultMarker(args.lang)","id":"f-1"},{"order":2,"action":"update","path":"agents/boilerplats/test/scaffold.test.js","description":"Tests for describe parsing, batch all-or-nothing, marker inference","pseudoCode":"test('describe lists Data fields for every python template', …);\ntest('batch creates all entries in one run', …);\ntest('batch with one invalid entry writes nothing and throws', …);\ntest('inject into python file uses # marker without --marker', …);\ntest('explicit --marker overrides the lang default', …);","id":"f-2"},{"order":3,"action":"update","path":"agents/boilerplats/AGENT-HINT.md","description":"Trim 1,545B → ≤800B; point field discovery at --describe; drop python/sh marker prose (inferred now); mention --batch","pseudoCode":"## Boilerplate generator\nMANDATORY for \u003ckinds> in \u003clangs> — never hand-write; a hook blocks hand-written files.\n    node ~/.agents/boilerplats/scaffold.js --lang \u003clang> --template \u003cname> --out \u003cpath> --data '\u003cjson>' [--inject] [--batch \u003cmanifest.json>]\nField docs: scaffold.js --describe [--lang \u003clang>]. Markers are lang-aware; never remove a scaffold:inject marker. Add members with --inject --template member, then fill logic with ordinary edits.","id":"f-3"},{"order":4,"action":"update","path":"claude/hooks/boilerplate-guard.sh","description":"Deny message points at --describe instead of restating template/field details (guard logic unchanged)","pseudoCode":"deny \"blocked hand-written file\" \\\n\"Blocked: boilerplate files must be created with the generator.\\n  node ~/.agents/boilerplats/scaffold.js --lang \u003clang> --template \u003cname> --out \u003cpath> --data '\u003cjson>'\\nFields: scaffold.js --describe --lang \u003clang>. Members: --inject --template member.\"","id":"f-4"}],"logicSteps":[],"contracts":[{"name":"CLI: node scaffold.js --describe [--lang \u003clang>] [--template \u003cname>]","inputs":"Optional lang/template filters; no other flags required","outputs":"stdout: one line per template — '\u003clang>/\u003ctemplate>: { Field, Field… }' from the .hbs Data comment; exit 1 with the available-langs list on an unknown lang","id":"c-1"},{"name":"CLI: node scaffold.js --batch \u003cmanifest.json>","inputs":"JSON array: [{ lang, template, out, data?: object, inject?: bool, marker?: string, force?: bool }] (per q-1)","outputs":"stdout: one 'Created/Injected …' line per entry; validation failure in any entry → exit 1, nothing written, message naming the failing entry index","id":"c-2"}],"edgeCases":[{"condition":"--batch manifest is not an array, or an entry misses lang/template/out","handling":"Exit 1 naming the entry index; no files written (validation pass runs first).","id":"e-1"},{"condition":"Template .hbs first line has no Data comment","handling":"--describe prints '\u003clang>/\u003ctemplate>: (no Data comment)' rather than skipping it silently.","id":"e-2"},{"condition":"Batch entry with inject:true whose target lacks the marker","handling":"Same as single-run: last-'}' fallback with a warning; for python/sh (no '}') the validation pass fails the entry up front.","id":"e-3"},{"condition":"Hint trim weakens enforcement","handling":"Retained-rules checklist (mandate, synopsis, marker retention, member rule) reviewed against the old hint; guard behaviour untouched, only its message shortened.","id":"e-4"}],"testScenarios":[{"target":"scaffold.js::defaultMarker","scenario":"Returns '# scaffold:inject' for python and sh, '// scaffold:inject' otherwise, and is overridden by an explicit --marker.","id":"t-1"}]};
     </script>
     <script>
         // ------------------------------------------------------------------
@@ -363,16 +387,23 @@
         function emptyData() {
             return {
                 title: '',
-                overview: '',
-                architecture: '',
+                module: '',
+                intent: '',
+                goal: '',
+                context: '',
                 folderStructure: '',
+                patternCore: 'Layered (Controller -> Service -> Repository)',
+                patternBusiness: 'Transaction Script',
+                patternSpecific: '',
+                patternOverrides: '',
                 openQuestions: [],
                 solutionApproach: [],
                 acceptanceCriteria: [],
                 files: [],
                 logicSteps: [],
                 contracts: [],
-                edgeCases: []
+                edgeCases: [],
+                testScenarios: []
             };
         }
 
@@ -471,15 +502,17 @@
         // ------------------------------------------------------------------
         const SEED = normalize(JSON.parse(JSON.stringify(INITIAL_DATA || {})));
 
-        const SCALAR_KEYS = ['title', 'overview', 'architecture', 'folderStructure'];
+        const SCALAR_KEYS = ['title', 'module', 'intent', 'goal', 'context', 'folderStructure',
+            'patternCore', 'patternBusiness', 'patternSpecific', 'patternOverrides'];
         const SECTION_FIELDS = {
             openQuestions: ['question', 'options', 'decision'],
             solutionApproach: ['aspect', 'rationale'],
-            acceptanceCriteria: ['criterion', 'testCase'],
+            acceptanceCriteria: ['criterion', 'verification'],
             files: ['order', 'action', 'path', 'description', 'pseudoCode'],
             logicSteps: ['step', 'pseudo'],
             contracts: ['name', 'inputs', 'outputs'],
-            edgeCases: ['condition', 'handling']
+            edgeCases: ['condition', 'handling'],
+            testScenarios: ['target', 'scenario']
         };
 
         function scalarTag(key) {
@@ -528,9 +561,10 @@
             renderLogic();
             renderContracts();
             renderEdges();
+            renderTests();
 
             renderFeatureOverview();
-            renderArchitecture();
+            renderPatterns();
             renderPipeline();
             renderTreeFiles();
             addCollapseTogglesToCards();
@@ -563,14 +597,22 @@
 
         function renderFeatureOverview() {
             document.getElementById('feature-title').value = data.title || '';
-            document.getElementById('feature-overview').value = data.overview || '';
+            document.getElementById('feature-module').value = data.module || '';
+            document.getElementById('feature-intent').value = data.intent || '';
+            document.getElementById('feature-goal').value = data.goal || '';
+            document.getElementById('feature-context').value = data.context || '';
 
             document.getElementById('topline-file').textContent = data.title || 'Untitled';
+            document.getElementById('topline-module').textContent = data.module || '';
             document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature';
+            document.getElementById('tree-brand-meta').textContent = (data.module || 'Module not set') + ' · featurePlan';
         }
 
-        function renderArchitecture() {
-            document.getElementById('feature-architecture').value = data.architecture || '';
+        function renderPatterns() {
+            document.getElementById('pattern-core').value = data.patternCore || '';
+            document.getElementById('pattern-business').value = data.patternBusiness || '';
+            document.getElementById('pattern-specific').value = data.patternSpecific || '';
+            document.getElementById('pattern-overrides').value = data.patternOverrides || '';
             document.getElementById('folder-structure').value = data.folderStructure || '';
         }
 
@@ -1014,7 +1056,7 @@
         function renderAcceptance() {
             const fields = [
                 { key: 'criterion', label: 'Criterion (Given / When / Then, or a testable statement)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Given a user with 2FA enabled, when they log in without a code, then the login is rejected with 2fa_required.' },
-                { key: 'testCase', label: 'Test Case (the test that proves it)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Integration test on POST /login: valid password, no OTP code, expect 401 with 2fa_required.' }
+                { key: 'verification', label: 'How to Verify', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Integration test on POST /login; manual check via curl.' }
             ];
             renderSimpleList('acceptance-container', data.acceptanceCriteria, fields, 'Criterion', 'add-acceptance-btn');
         }
@@ -1044,6 +1086,14 @@
             renderSimpleList('edges-container', data.edgeCases, fields, 'Edge Case', 'add-edge-btn');
         }
 
+        function renderTests() {
+            const fields = [
+                { key: 'target', label: 'Target File / Method', type: 'text', placeholder: 'NewService::execute()' },
+                { key: 'scenario', label: 'Test Scenario', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('tests-container', data.testScenarios, fields, 'Test', 'add-test-btn');
+        }
+
         // ------------------------------------------------------------------
         // Event Bindings for Add Buttons
         //
@@ -1062,23 +1112,38 @@
 
         bindAdd('add-question-btn', 'openQuestions', { question: '', options: '', decision: '' });
         bindAdd('add-approach-btn', 'solutionApproach', { aspect: '', rationale: '' });
-        bindAdd('add-acceptance-btn', 'acceptanceCriteria', { criterion: '', testCase: '' });
+        bindAdd('add-acceptance-btn', 'acceptanceCriteria', { criterion: '', verification: '' });
         bindAdd('add-file-btn', 'files', { order: data.files.length + 1, action: 'create', path: '', description: '',
             pseudoCode: '' });
         bindAdd('add-logic-btn', 'logicSteps', { step: '', pseudo: '' });
         bindAdd('add-contract-btn', 'contracts', { name: '', inputs: '', outputs: '' });
         bindAdd('add-edge-btn', 'edgeCases', { condition: '', handling: '' });
+        bindAdd('add-test-btn', 'testScenarios', { target: '', scenario: '' });
 
         // Input bindings for top-level fields
         document.getElementById('feature-title').addEventListener('input', (e) => { data.title = e.target.value;
             saveData();
             document.getElementById('topline-file').textContent = data.title || 'Untitled';
             document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature'; });
-        document.getElementById('feature-overview').addEventListener('input', (e) => { data.overview = e.target.value;
+        document.getElementById('feature-module').addEventListener('input', (e) => { data.module = e.target.value;
+            saveData();
+            document.getElementById('topline-module').textContent = data.module || '';
+            document.getElementById('tree-brand-meta').textContent = (data.module || 'Module not set') + ' · featurePlan'; });
+        document.getElementById('feature-intent').addEventListener('input', (e) => { data.intent = e.target.value;
             saveData(); });
-        document.getElementById('feature-architecture').addEventListener('input', (e) => { data.architecture = e.target.value;
+        document.getElementById('feature-goal').addEventListener('input', (e) => { data.goal = e.target.value;
             saveData(); });
         document.getElementById('folder-structure').addEventListener('input', (e) => { data.folderStructure = e.target.value;
+            saveData(); });
+        document.getElementById('feature-context').addEventListener('input', (e) => { data.context = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-core').addEventListener('input', (e) => { data.patternCore = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-business').addEventListener('input', (e) => { data.patternBusiness = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-specific').addEventListener('input', (e) => { data.patternSpecific = e.target.value;
+            saveData(); });
+        document.getElementById('pattern-overrides').addEventListener('input', (e) => { data.patternOverrides = e.target.value;
             saveData(); });
 
         // Static nav items (the dynamic file leaves bind their own click handler)
@@ -1104,13 +1169,10 @@
             }
             lines.push('');
             lines.push(`FEATURE TITLE: ${data.title || 'Not set'}${scalarTag('title')}`);
-            lines.push('');
-            lines.push(`--- FEATURE OVERVIEW ---${scalarTag('overview')}`);
-            if (!data.overview) {
-                lines.push('(No overview written)');
-            } else {
-                data.overview.split('\n').forEach(line => lines.push(line));
-            }
+            lines.push(`TARGET MODULE: ${data.module || 'Not set'}${scalarTag('module')}`);
+            lines.push(`CAPTURED INTENT: ${data.intent || 'Not set'}${scalarTag('intent')}`);
+            lines.push(`USER STORY: ${data.goal || 'Not set'}${scalarTag('goal')}`);
+            lines.push(`EXISTING CONTEXT: ${data.context || 'Not set'}${scalarTag('context')}`);
             lines.push('');
 
             // Open Questions & Decisions
@@ -1130,13 +1192,24 @@
             }
             lines.push('');
 
-            // Design Pattern & Architecture
-            lines.push(`--- DESIGN PATTERN & ARCHITECTURE ---${scalarTag('architecture')}`);
-            if (!data.architecture) {
-                lines.push('(No architecture described)');
+            // Acceptance Criteria
+            lines.push('--- ACCEPTANCE CRITERIA ---');
+            if (data.acceptanceCriteria.length === 0) {
+                lines.push('(No acceptance criteria defined)');
             } else {
-                data.architecture.split('\n').forEach(line => lines.push(line));
+                data.acceptanceCriteria.forEach((a, idx) => {
+                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}${itemTag('acceptanceCriteria', a)}`);
+                    if (a.verification) lines.push(`  Verify: ${a.verification}`);
+                    lines.push('');
+                });
             }
+            lines.push('');
+
+            lines.push('--- DESIGN PATTERNS & OVERRIDES ---');
+            lines.push(`Core Pattern: ${data.patternCore || 'Not set'}${scalarTag('patternCore')}`);
+            lines.push(`Business Logic Pattern: ${data.patternBusiness || 'Not set'}${scalarTag('patternBusiness')}`);
+            lines.push(`Specific Implementations: ${data.patternSpecific || 'None'}${scalarTag('patternSpecific')}`);
+            lines.push(`Explicit Overrides: ${data.patternOverrides || 'None'}${scalarTag('patternOverrides')}`);
             lines.push('');
 
             // Solution Approach
@@ -1185,30 +1258,6 @@
                 });
             }
 
-            // Acceptance Criteria & Test Cases
-            lines.push('--- ACCEPTANCE CRITERIA & TEST CASES ---');
-            if (data.acceptanceCriteria.length === 0) {
-                lines.push('(No acceptance criteria defined)');
-            } else {
-                data.acceptanceCriteria.forEach((a, idx) => {
-                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}${itemTag('acceptanceCriteria', a)}`);
-                    if (a.testCase) lines.push(`  Test Case: ${a.testCase}`);
-                    lines.push('');
-                });
-            }
-
-            // Edge Cases
-            lines.push('--- EDGE CASES & ERROR HANDLING ---');
-            if (data.edgeCases.length === 0) {
-                lines.push('(No edge cases defined)');
-            } else {
-                data.edgeCases.forEach(e => {
-                    lines.push(`Condition: ${e.condition || 'Untitled'}${itemTag('edgeCases', e)}`);
-                    if (e.handling) lines.push(`  Handling: ${e.handling}`);
-                    lines.push('');
-                });
-            }
-
             // Logic
             lines.push('--- CORE BUSINESS LOGIC (PSEUDO-CODE) ---');
             if (data.logicSteps.length === 0) {
@@ -1234,6 +1283,30 @@
                     lines.push(`Signature: ${c.name || 'Unnamed'}${itemTag('contracts', c)}`);
                     if (c.inputs) lines.push(`  Inputs: ${c.inputs}`);
                     if (c.outputs) lines.push(`  Outputs: ${c.outputs}`);
+                    lines.push('');
+                });
+            }
+
+            // Edge Cases
+            lines.push('--- EDGE CASES & ERROR HANDLING ---');
+            if (data.edgeCases.length === 0) {
+                lines.push('(No edge cases defined)');
+            } else {
+                data.edgeCases.forEach(e => {
+                    lines.push(`Condition: ${e.condition || 'Untitled'}${itemTag('edgeCases', e)}`);
+                    if (e.handling) lines.push(`  Handling: ${e.handling}`);
+                    lines.push('');
+                });
+            }
+
+            // Tests
+            lines.push('--- TESTING STRATEGY ---');
+            if (data.testScenarios.length === 0) {
+                lines.push('(No tests defined)');
+            } else {
+                data.testScenarios.forEach(t => {
+                    lines.push(`Target: ${t.target || 'Untitled'}${itemTag('testScenarios', t)}`);
+                    if (t.scenario) lines.push(`  Scenario: ${t.scenario}`);
                     lines.push('');
                 });
             }

@@ -4,7 +4,7 @@
   "description": "Interactive AI-assisted feature planning skill",
   "main": "featurePlan-inject.js",
   "scripts": {
-    "test": "node --test featurePlan-inject.test.js featurePlan-harness-listener.test.js"
+    "test": "node --test featurePlan-inject.test.js featurePlan-harness-listener.test.js featurePlan-serve.test.js"
   },
   "keywords": ["feature-plan", "planning", "ai"],
   "dependencies": {

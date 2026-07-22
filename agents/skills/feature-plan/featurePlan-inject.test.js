@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unit tests for featurePlan-inject.js. Run with: node --test agents/skills/featurePlan/featurePlan-inject.test.js
+// Unit tests for featurePlan-inject.js. Run with: node --test agents/skills/feature-plan/featurePlan-inject.test.js
 
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -8,6 +8,8 @@ const {
   escapeHtml,
   toScriptJson,
   deriveFolderStructure,
+  extractInitialData,
+  mergePlans,
   normalizePlan,
   injectContent,
   loadTemplate,
@@ -22,20 +24,14 @@ const TEMPLATE_PATH = path.join(__dirname, 'featurePlan-template.html');
 function sampleConfig(overrides = {}) {
   return {
     title: 'Add two-factor authentication',
-    module: 'User Service',
-    intent: 'User asked: "add 2FA to login". Inferred: TOTP second factor verified at login.',
-    goal: 'As a user, I want to require a second factor at login so that a stolen password alone cannot compromise my account.',
-    context: 'Existing User.php, AuthService.php, and a users table with columns id, email, password_hash.',
+    overview: 'User asked: "add 2FA to login". I understand this as a TOTP second factor verified at login, with enrollment from the profile page. Existing User.php, AuthService.php, and a users table with columns id, email, password_hash.',
+    architecture: 'Layered flow, one new service:\n\n  LoginController -> AuthService -> TotpService [NEW]\n\nTOTP logic is isolated in TotpService; no separate Repository for OTP — reuse UserRepository.',
     folderStructure: 'src/\n├── Auth/\n│   └── AuthService.php    [UPDATE]\n└── Security/\n    └── TotpService.php    [CREATE]',
-    patternCore: 'Layered (Controller -> Service -> Repository)',
-    patternBusiness: 'Transaction Script',
-    patternSpecific: 'Use Repository for User; Factory for OTP enrollment DTO.',
-    patternOverrides: 'No separate Repository for OTP — reuse UserRepository.',
     openQuestions: [
       { id: 'q1', question: 'Mandatory enrollment at next login, or opt-in?', options: 'A) Mandatory (recommended)\nB) Opt-in from profile', decision: '' }
     ],
     acceptanceCriteria: [
-      { id: 'a1', criterion: 'Login without a code is rejected with 2fa_required when 2FA is enabled', verification: 'Integration test on POST /login.' }
+      { id: 'a1', criterion: 'Login without a code is rejected with 2fa_required when 2FA is enabled', testCase: 'Integration test on POST /login.' }
     ],
     files: [
       { id: 'f1', order: 1, action: 'create', path: 'src/Security/TotpService.php', description: 'TOTP enrollment + verification', pseudoCode: 'class TotpService {\n  public function enroll(User $user): string { /* generate secret */ }\n  public function verify(User $user, string $code): bool { /* check code */ }\n}' },
@@ -49,10 +45,6 @@ function sampleConfig(overrides = {}) {
     ],
     edgeCases: [
       { id: 'e1', condition: 'User has 2FA enabled but no code provided', handling: 'Return 401 with reason "2fa_required".' }
-    ],
-    testScenarios: [
-      { id: 't1', target: 'TotpService::enroll()', scenario: 'Returns a base32 secret that decodes to 20+ digits.' },
-      { id: 't2', target: 'AuthService::login() with bad code', scenario: 'Returns 401 and increments failed_2fa counter.' }
     ],
     ...overrides
   };
@@ -76,47 +68,22 @@ test('toScriptJson escapes </script> breakout and line separators', () => {
 test('normalizePlan accepts the same key names as the template data model', () => {
   const plan = normalizePlan({
     title: 'T',
-    module: 'M',
-    intent: 'I',
-    goal: 'G',
-    context: 'C',
-    folderStructure: 'F',
-    patternCore: 'PC',
-    patternBusiness: 'PB',
-    patternSpecific: 'PS',
-    patternOverrides: 'PO'
+    overview: 'O',
+    architecture: 'A',
+    folderStructure: 'F'
   });
   assert.strictEqual(plan.title, 'T');
-  assert.strictEqual(plan.module, 'M');
-  assert.strictEqual(plan.intent, 'I');
-  assert.strictEqual(plan.goal, 'G');
-  assert.strictEqual(plan.context, 'C');
+  assert.strictEqual(plan.overview, 'O');
+  assert.strictEqual(plan.architecture, 'A');
   assert.strictEqual(plan.folderStructure, 'F');
-  assert.strictEqual(plan.patternCore, 'PC');
-  assert.strictEqual(plan.patternBusiness, 'PB');
-  assert.strictEqual(plan.patternSpecific, 'PS');
-  assert.strictEqual(plan.patternOverrides, 'PO');
 });
 
 test('normalizePlan fills string defaults for missing top-level keys', () => {
   const plan = normalizePlan({});
   assert.strictEqual(plan.title, '');
-  assert.strictEqual(plan.module, '');
-  assert.strictEqual(plan.intent, '');
-  assert.strictEqual(plan.goal, '');
-  assert.strictEqual(plan.context, '');
+  assert.strictEqual(plan.overview, '');
+  assert.strictEqual(plan.architecture, '');
   assert.strictEqual(plan.folderStructure, '');
-  assert.strictEqual(plan.patternSpecific, '');
-  assert.strictEqual(plan.patternOverrides, '');
-});
-
-test('normalizePlan falls back to standard pattern defaults when omitted', () => {
-  // Ensures the same defaults the template ships, so an injected plan that
-  // forgets the pattern fields still renders the conventional layered +
-  // transaction-script scaffolding.
-  const plan = normalizePlan({});
-  assert.strictEqual(plan.patternCore, 'Layered (Controller -> Service -> Repository)');
-  assert.strictEqual(plan.patternBusiness, 'Transaction Script');
 });
 
 test('normalizePlan fills empty arrays for missing section arrays', () => {
@@ -132,8 +99,7 @@ test('normalizePlan fills per-field defaults for sparse section items', () => {
     files: [{ id: 'f-1' }],
     logicSteps: [{ id: 'l-1' }],
     contracts: [{ id: 'c-1' }],
-    edgeCases: [{ id: 'e-1' }],
-    testScenarios: [{ id: 't-1' }]
+    edgeCases: [{ id: 'e-1' }]
   });
   // Identity preserved
   assert.strictEqual(plan.files[0].id, 'f-1');
@@ -145,12 +111,11 @@ test('normalizePlan fills per-field defaults for sparse section items', () => {
   assert.strictEqual(plan.files[0].pseudoCode, '');
   assert.strictEqual(plan.contracts[0].name, '');
   assert.strictEqual(plan.contracts[0].inputs, '');
-  assert.strictEqual(plan.testScenarios[0].target, '');
   assert.strictEqual(plan.edgeCases[0].condition, '');
   assert.strictEqual(plan.edgeCases[0].handling, '');
   assert.strictEqual(plan.acceptanceCriteria[0].id, 'a-1');
   assert.strictEqual(plan.acceptanceCriteria[0].criterion, '');
-  assert.strictEqual(plan.acceptanceCriteria[0].verification, '');
+  assert.strictEqual(plan.acceptanceCriteria[0].testCase, '');
 });
 
 test('normalizePlan coerces `order` to Number so the sort works', () => {
@@ -164,16 +129,16 @@ test('normalizePlan coerces `order` to Number so the sort works', () => {
 
 test('normalizePlan preserves full content of every section type', () => {
   const plan = normalizePlan(sampleConfig());
-  assert.strictEqual(plan.intent.startsWith('User asked:'), true);
+  assert.strictEqual(plan.overview.startsWith('User asked:'), true);
+  assert.strictEqual(plan.architecture.includes('TotpService [NEW]'), true);
   assert.strictEqual(plan.folderStructure.includes('[CREATE]'), true);
-  assert.strictEqual(plan.acceptanceCriteria[0].verification, 'Integration test on POST /login.');
+  assert.strictEqual(plan.acceptanceCriteria[0].testCase, 'Integration test on POST /login.');
   assert.strictEqual(plan.files.length, 2);
   assert.strictEqual(plan.files[0].action, 'create');
   assert.strictEqual(plan.files[1].action, 'update');
   assert.strictEqual(plan.logicSteps[0].step, 'Validate credentials');
   assert.strictEqual(plan.contracts[0].name, 'POST /api/v2/verify-2fa');
   assert.strictEqual(plan.edgeCases[0].handling, 'Return 401 with reason "2fa_required".');
-  assert.strictEqual(plan.testScenarios[1].scenario, 'Returns 401 and increments failed_2fa counter.');
 });
 
 test('normalizePlan fills openQuestions defaults and preserves content', () => {
@@ -244,13 +209,11 @@ test('injectContent embeds the plan as valid, parseable JSON', () => {
   assert.ok(match, 'INITIAL_DATA assignment not found');
   const parsed = JSON.parse(match[1]);
   assert.strictEqual(parsed.title, 'Add two-factor authentication');
-  assert.strictEqual(parsed.module, 'User Service');
-  assert.strictEqual(parsed.goal.length > 0, true);
-  assert.strictEqual(parsed.patternCore, 'Layered (Controller -> Service -> Repository)');
+  assert.strictEqual(parsed.overview.length > 0, true);
+  assert.strictEqual(parsed.architecture.includes('TotpService [NEW]'), true);
   assert.strictEqual(parsed.files[0].path, 'src/Security/TotpService.php');
   assert.strictEqual(parsed.files[1].action, 'update');
   assert.strictEqual(parsed.logicSteps[0].step, 'Validate credentials');
-  assert.strictEqual(parsed.testScenarios[1].scenario, 'Returns 401 and increments failed_2fa counter.');
 });
 
 test('injectContent escapes the feature title but keeps the JSON payload intact', () => {
@@ -279,13 +242,13 @@ test('injectContent emits every section from the sample config', () => {
   const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig());
   for (const marker of [
     'Add two-factor authentication',                  // title
-    'User Service',                                    // module
+    'enrollment from the profile page',                // overview
+    'TotpService [NEW]',                               // architecture
     'TotpService.php', 'AuthService.php',              // files
     'TOTP enrollment', 'Wire TOTP',                    // file descriptions
     'POST /api/v2/verify-2fa',                         // contract
     'User has 2FA enabled',                            // edge case
     'rejected with 2fa_required',                      // acceptance criterion
-    'TotpService::enroll()',                           // test target
     'Mandatory enrollment at next login',              // open question
   ]) {
     assert.ok(html.includes(marker), `expected injection output to contain ${JSON.stringify(marker)}`);
@@ -329,7 +292,7 @@ test('end-to-end: inject + write produces a complete HTML file with parseable JS
     const parsed = JSON.parse(match[1]);
     assert.strictEqual(parsed.title, 'Add two-factor authentication');
     assert.strictEqual(parsed.files.length, 2);
-    assert.strictEqual(parsed.testScenarios.length, 2);
+    assert.strictEqual(parsed.acceptanceCriteria.length, 1);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -397,6 +360,84 @@ test('CLI main() rejects a missing-args invocation with a usage message', () => 
   );
 });
 
+test('extractInitialData round-trips the plan out of generated HTML', () => {
+  const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig());
+  const extracted = extractInitialData(html);
+  assert.strictEqual(extracted.title, 'Add two-factor authentication');
+  assert.strictEqual(extracted.files.length, 2);
+});
+
+test('extractInitialData throws on HTML without the INITIAL_DATA anchor', () => {
+  assert.throws(() => extractInitialData('<html><body>hand-edited</body></html>'),
+    /No INITIAL_DATA found/);
+});
+
+test('mergePlans keeps existing item ids, applies same-id updates, appends new ones', () => {
+  const existing = normalizePlan(sampleConfig());
+  const merged = mergePlans(existing, {
+    files: [
+      { id: 'f1', description: 'TOTP service (revised)' },       // same-id update
+      { id: 'f9', order: 3, action: 'create', path: 'src/new.php', description: 'brand new' }
+    ]
+  });
+  assert.strictEqual(merged.files.length, 3);
+  assert.strictEqual(merged.files[0].id, 'f1');
+  assert.strictEqual(merged.files[0].description, 'TOTP service (revised)');
+  assert.strictEqual(merged.files[0].path, 'src/Security/TotpService.php', 'untouched fields survive');
+  assert.strictEqual(merged.files[2].id, 'f9');
+  // Sections absent from the incoming config survive untouched.
+  assert.strictEqual(merged.openQuestions.length, 1);
+  assert.strictEqual(merged.edgeCases[0].id, 'e1');
+});
+
+test('mergePlans: incoming scalars win only when non-empty', () => {
+  const existing = normalizePlan(sampleConfig());
+  const merged = mergePlans(existing, { overview: 'Revised overview', title: '' });
+  assert.strictEqual(merged.overview, 'Revised overview');
+  assert.strictEqual(merged.title, 'Add two-factor authentication', 'empty incoming title keeps existing');
+});
+
+test('mergePlans re-derives folderStructure from the merged manifest', () => {
+  const existing = normalizePlan(sampleConfig());
+  const merged = normalizePlan(mergePlans(existing, {
+    files: [{ id: 'f9', order: 3, action: 'create', path: 'src/Extra.php', description: 'x' }]
+  }));
+  assert.ok(merged.folderStructure.includes('Extra.php    [CREATE]'));
+  assert.ok(merged.folderStructure.includes('TotpService.php    [CREATE]'));
+});
+
+test('CLI update-in-place: second run merges into the existing HTML', () => {
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'featurePlan-merge-'));
+  const jsonPath = path.join(tmpDir, 'plan.json');
+  const htmlPath = path.join(tmpDir, 'plan.html');
+  const scriptPath = path.join(__dirname, 'featurePlan-inject.js');
+
+  try {
+    fs.writeFileSync(jsonPath, JSON.stringify(sampleConfig()));
+    const first = execFileSync(process.execPath, [scriptPath, jsonPath, htmlPath], { stdio: 'pipe' }).toString();
+    assert.ok(first.includes('✓ Generated'), 'first run generates');
+
+    // Second run: only a delta config — prior sections must survive.
+    fs.writeFileSync(jsonPath, JSON.stringify({
+      files: [{ id: 'f3', order: 3, action: 'create', path: 'src/Security/RecoveryCodes.php', description: 'recovery codes' }]
+    }));
+    const second = execFileSync(process.execPath, [scriptPath, jsonPath, htmlPath], { stdio: 'pipe' }).toString();
+    assert.ok(second.includes('✓ Updated (merged)'), 'second run merges');
+
+    const parsed = extractInitialData(fs.readFileSync(htmlPath, 'utf-8'));
+    assert.strictEqual(parsed.title, 'Add two-factor authentication', 'title survives delta run');
+    assert.strictEqual(parsed.files.length, 3);
+    assert.strictEqual(parsed.openQuestions.length, 1, 'untouched sections survive');
+    assert.ok(parsed.folderStructure.includes('RecoveryCodes.php    [CREATE]'), 'tree re-derived');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('createPatch generates a properly formatted patch operation', () => {
   const patch = createPatch('files', 'f-1', 'description', 'New description', 'update');
   assert.strictEqual(patch.type, 'patch');
@@ -413,7 +454,7 @@ test('createPatch defaults action to "update"', () => {
 });
 
 test('createAddPatch generates an add operation', () => {
-  const item = { criterion: 'New criterion', verification: 'Manual test' };
+  const item = { criterion: 'New criterion', testCase: 'Manual test' };
   const patch = createAddPatch('acceptanceCriteria', item);
   assert.strictEqual(patch.type, 'patch');
   assert.strictEqual(patch.section, 'acceptanceCriteria');

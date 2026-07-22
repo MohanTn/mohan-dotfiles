@@ -11,8 +11,7 @@
  *
  * Usage: node featurePlan-inject.js <input-json> <output-html> [template-path]
  *
- * See claude/commands/featurePlan.md / copilot/skills/featurePlan/SKILL.md
- * for the JSON schema.
+ * See this folder's SKILL.md for the JSON schema.
  */
 
 const fs = require('fs');
@@ -50,18 +49,17 @@ function loadTemplate(templatePath) {
 // default value (empty for free text, the first option for selects).
 //
 // NOTE: This table MUST stay in sync with the bindAdd() inline defaults in
-// agents/skills/featurePlan/featurePlan-template.html — both describe the
+// agents/skills/feature-plan/featurePlan-template.html — both describe the
 // same per-section field schema, and adding or renaming a field requires
 // changes in both places.
 const ITEM_FIELD_DEFAULTS = {
   openQuestions:    { question: '', options: '', decision: '' },
   solutionApproach: { aspect: '', rationale: '' },
-  acceptanceCriteria: { criterion: '', verification: '' },
+  acceptanceCriteria: { criterion: '', testCase: '' },
   files:            { order: 0, action: 'create', path: '', description: '', pseudoCode: '' },
   logicSteps:       { step: '', pseudo: '' },
   contracts:        { name: '', inputs: '', outputs: '' },
-  edgeCases:        { condition: '', handling: '' },
-  testScenarios:    { target: '', scenario: '' }
+  edgeCases:        { condition: '', handling: '' }
 };
 
 // Sections are top-level arrays in the config + the emptyData() template.
@@ -118,18 +116,66 @@ function deriveFolderStructure(files) {
   return lines.join('\n');
 }
 
+// Scalar plan fields merged by mergePlans (folderStructure is excluded: it is
+// re-derived from the merged files[] unless the incoming config overrides it).
+const SCALAR_KEYS = ['title', 'overview', 'architecture'];
+
+// Pulls the embedded plan back out of a previously generated output HTML.
+// Throws when the anchor is missing or unparseable (hand-edited file) so the
+// CLI can refuse to corrupt it instead of silently overwriting.
+function extractInitialData(html) {
+  const match = html.match(/const INITIAL_DATA = ([\s\S]*?);\n/);
+  if (!match) {
+    throw new Error('No INITIAL_DATA found — not a generated featurePlan HTML');
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch (e) {
+    throw new Error(`INITIAL_DATA in existing HTML is not valid JSON: ${e.message}`);
+  }
+}
+
+// Update-in-place merge: applies an incoming config on top of the plan already
+// embedded in the output HTML. Existing items keep their id and position,
+// same-id items take the incoming fields, unknown-id items append, and items
+// absent from the incoming config survive — never a blind overwrite. Human
+// browser edits are not in the file (they live in localStorage keyed by the
+// title); the template reconciles them against the new seed on load.
+function mergePlans(existing, incoming) {
+  const merged = { ...existing };
+  for (const key of SCALAR_KEYS) {
+    if (incoming[key]) merged[key] = incoming[key];
+  }
+  // Let normalizePlan re-derive the tree from the merged manifest unless the
+  // incoming config explicitly overrides it.
+  merged.folderStructure = incoming.folderStructure || '';
+
+  for (const section of SECTIONS) {
+    const existingItems = Array.isArray(existing[section])
+      ? existing[section].map(it => ({ ...it }))
+      : [];
+    const incomingItems = Array.isArray(incoming[section]) ? incoming[section] : [];
+    for (const inc of incomingItems) {
+      const target = inc && inc.id !== undefined
+        ? existingItems.find(it => it.id === inc.id)
+        : undefined;
+      if (target) {
+        Object.assign(target, inc);
+      } else {
+        existingItems.push({ ...inc });
+      }
+    }
+    merged[section] = existingItems;
+  }
+  return merged;
+}
+
 function normalizePlan(config) {
   const normalized = {
-    title:            config.title || '',
-    module:           config.module || '',
-    intent:           config.intent || '',
-    goal:             config.goal || '',
-    context:          config.context || '',
-    folderStructure:  config.folderStructure || '',
-    patternCore:      config.patternCore || 'Layered (Controller -> Service -> Repository)',
-    patternBusiness:  config.patternBusiness || 'Transaction Script',
-    patternSpecific:  config.patternSpecific || '',
-    patternOverrides: config.patternOverrides || ''
+    title:           config.title || '',
+    overview:        config.overview || '',
+    architecture:    config.architecture || '',
+    folderStructure: config.folderStructure || ''
   };
 
   for (const section of SECTIONS) {
@@ -170,11 +216,9 @@ function main() {
     console.error('Usage: node featurePlan-inject.js <input-json> <output-html> [template-path]');
     console.error('');
     console.error('Arguments:');
-    console.error('  <input-json>    JSON with title, module, intent, goal, context,');
-    console.error('                  patternCore, patternBusiness, patternSpecific,');
-    console.error('                  patternOverrides, openQuestions, solutionApproach,');
-    console.error('                  acceptanceCriteria, files, logicSteps, contracts,');
-    console.error('                  edgeCases, testScenarios');
+    console.error('  <input-json>    JSON with title, overview, architecture,');
+    console.error('                  openQuestions, solutionApproach, acceptanceCriteria,');
+    console.error('                  files, logicSteps, contracts, edgeCases');
     console.error('                  (folderStructure is derived from files[] unless supplied)');
     console.error('  <output-html>   Path to write the final feature plan document');
     console.error('  [template-path] HTML template (default: featurePlan-template.html next to this script)');
@@ -189,11 +233,17 @@ function main() {
     if (!fs.existsSync(inputJsonPath)) {
       throw new Error(`Input JSON not found: ${inputJsonPath}`);
     }
-    const config = JSON.parse(fs.readFileSync(inputJsonPath, 'utf-8'));
+    let config = JSON.parse(fs.readFileSync(inputJsonPath, 'utf-8'));
+    // Update-in-place: an existing output HTML is merged into, not replaced.
+    const updating = fs.existsSync(outputHtmlPath);
+    if (updating) {
+      const existing = extractInitialData(fs.readFileSync(outputHtmlPath, 'utf-8'));
+      config = mergePlans(existing, config);
+    }
     const template = loadTemplate(templatePath);
     const html = injectContent(template, config);
     fs.writeFileSync(outputHtmlPath, html, 'utf-8');
-    console.log(`✓ Generated: ${outputHtmlPath}`);
+    console.log(updating ? `✓ Updated (merged): ${outputHtmlPath}` : `✓ Generated: ${outputHtmlPath}`);
   } catch (error) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
@@ -232,11 +282,14 @@ module.exports = {
   escapeHtml,
   toScriptJson,
   deriveFolderStructure,
+  extractInitialData,
+  mergePlans,
   normalizePlan,
   injectContent,
   loadTemplate,
   createPatch,
   createAddPatch,
   SECTIONS,
+  SCALAR_KEYS,
   ITEM_FIELD_DEFAULTS
 };
