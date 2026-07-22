@@ -7,9 +7,12 @@ const path = require('path');
 const {
   escapeHtml,
   toScriptJson,
+  deriveFolderStructure,
   normalizePlan,
   injectContent,
   loadTemplate,
+  createPatch,
+  createAddPatch,
   SECTIONS,
   ITEM_FIELD_DEFAULTS
 } = require('./featurePlan-inject.js');
@@ -28,6 +31,9 @@ function sampleConfig(overrides = {}) {
     patternBusiness: 'Transaction Script',
     patternSpecific: 'Use Repository for User; Factory for OTP enrollment DTO.',
     patternOverrides: 'No separate Repository for OTP — reuse UserRepository.',
+    openQuestions: [
+      { id: 'q1', question: 'Mandatory enrollment at next login, or opt-in?', options: 'A) Mandatory (recommended)\nB) Opt-in from profile', decision: '' }
+    ],
     acceptanceCriteria: [
       { id: 'a1', criterion: 'Login without a code is rejected with 2fa_required when 2FA is enabled', verification: 'Integration test on POST /login.' }
     ],
@@ -170,6 +176,47 @@ test('normalizePlan preserves full content of every section type', () => {
   assert.strictEqual(plan.testScenarios[1].scenario, 'Returns 401 and increments failed_2fa counter.');
 });
 
+test('normalizePlan fills openQuestions defaults and preserves content', () => {
+  const plan = normalizePlan({ openQuestions: [{ id: 'q-1' }] });
+  assert.strictEqual(plan.openQuestions[0].id, 'q-1');
+  assert.strictEqual(plan.openQuestions[0].question, '');
+  assert.strictEqual(plan.openQuestions[0].options, '');
+  assert.strictEqual(plan.openQuestions[0].decision, '');
+  const full = normalizePlan(sampleConfig());
+  assert.strictEqual(full.openQuestions[0].question, 'Mandatory enrollment at next login, or opt-in?');
+  assert.strictEqual(full.openQuestions[0].decision, '');
+});
+
+test('deriveFolderStructure builds a tree with action markers from files[]', () => {
+  const tree = deriveFolderStructure([
+    { action: 'update', path: 'src/Auth/AuthService.php' },
+    { action: 'create', path: 'src/Security/TotpService.php' }
+  ]);
+  assert.ok(tree.includes('src/') || tree.includes('src'), 'root directory rendered');
+  assert.ok(tree.includes('AuthService.php    [UPDATE]'));
+  assert.ok(tree.includes('TotpService.php    [CREATE]'));
+  assert.ok(tree.includes('├── ') && tree.includes('└── '), 'ASCII branches rendered');
+});
+
+test('deriveFolderStructure returns empty string for no usable paths', () => {
+  assert.strictEqual(deriveFolderStructure([]), '');
+  assert.strictEqual(deriveFolderStructure([{ action: 'create', path: '' }]), '');
+  assert.strictEqual(deriveFolderStructure(undefined), '');
+});
+
+test('normalizePlan derives folderStructure from files when omitted', () => {
+  const config = sampleConfig();
+  delete config.folderStructure;
+  const plan = normalizePlan(config);
+  assert.ok(plan.folderStructure.includes('AuthService.php    [UPDATE]'));
+  assert.ok(plan.folderStructure.includes('TotpService.php    [CREATE]'));
+});
+
+test('normalizePlan keeps an explicitly supplied folderStructure', () => {
+  const plan = normalizePlan(sampleConfig());
+  assert.strictEqual(plan.folderStructure, sampleConfig().folderStructure);
+});
+
 test('normalizePlan ignores non-array sections (defensive: bad input)', () => {
   const plan = normalizePlan({ files: 'not-an-array', logicSteps: null });
   assert.deepStrictEqual(plan.files, []);
@@ -239,6 +286,7 @@ test('injectContent emits every section from the sample config', () => {
     'User has 2FA enabled',                            // edge case
     'rejected with 2fa_required',                      // acceptance criterion
     'TotpService::enroll()',                           // test target
+    'Mandatory enrollment at next login',              // open question
   ]) {
     assert.ok(html.includes(marker), `expected injection output to contain ${JSON.stringify(marker)}`);
   }
@@ -347,4 +395,28 @@ test('CLI main() rejects a missing-args invocation with a usage message', () => 
     /Usage:.*featurePlan-inject\.js/.test(stderr),
     `expected usage message on stderr, got: ${JSON.stringify(stderr)}`
   );
+});
+
+test('createPatch generates a properly formatted patch operation', () => {
+  const patch = createPatch('files', 'f-1', 'description', 'New description', 'update');
+  assert.strictEqual(patch.type, 'patch');
+  assert.strictEqual(patch.section, 'files');
+  assert.strictEqual(patch.itemId, 'f-1');
+  assert.strictEqual(patch.field, 'description');
+  assert.strictEqual(patch.value, 'New description');
+  assert.strictEqual(patch.action, 'update');
+});
+
+test('createPatch defaults action to "update"', () => {
+  const patch = createPatch('files', 'f-1', 'path', 'src/NewFile.php');
+  assert.strictEqual(patch.action, 'update');
+});
+
+test('createAddPatch generates an add operation', () => {
+  const item = { criterion: 'New criterion', verification: 'Manual test' };
+  const patch = createAddPatch('acceptanceCriteria', item);
+  assert.strictEqual(patch.type, 'patch');
+  assert.strictEqual(patch.section, 'acceptanceCriteria');
+  assert.strictEqual(patch.action, 'add');
+  assert.deepStrictEqual(patch.item, item);
 });

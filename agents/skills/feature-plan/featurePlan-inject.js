@@ -54,6 +54,7 @@ function loadTemplate(templatePath) {
 // same per-section field schema, and adding or renaming a field requires
 // changes in both places.
 const ITEM_FIELD_DEFAULTS = {
+  openQuestions:    { question: '', options: '', decision: '' },
   solutionApproach: { aspect: '', rationale: '' },
   acceptanceCriteria: { criterion: '', verification: '' },
   files:            { order: 0, action: 'create', path: '', description: '', pseudoCode: '' },
@@ -79,6 +80,44 @@ function normalizeItem(sectionKey, raw) {
   return out;
 }
 
+// Builds the "Resulting Folder Structure" ASCII tree from files[] so the AI
+// never authors it by hand — the manifest is the single source of truth for
+// which paths change. Returns '' when there are no usable paths.
+function deriveFolderStructure(files) {
+  const entries = (files || [])
+    .filter(f => f && f.path)
+    .sort((a, b) => a.path.localeCompare(b.path));
+  if (entries.length === 0) return '';
+
+  const root = { children: {} };
+  for (const f of entries) {
+    let node = root;
+    const parts = f.path.split('/').filter(Boolean);
+    parts.forEach((part, i) => {
+      node.children[part] = node.children[part] || { children: {} };
+      node = node.children[part];
+      if (i === parts.length - 1) {
+        node.marker = `[${String(f.action || 'update').toUpperCase()}]`;
+      }
+    });
+  }
+
+  const lines = [];
+  const walk = (node, prefix) => {
+    const names = Object.keys(node.children);
+    names.forEach((name, i) => {
+      const child = node.children[name];
+      const isLast = i === names.length - 1;
+      const isDir = Object.keys(child.children).length > 0;
+      const label = name + (isDir && !child.marker ? '/' : '');
+      lines.push(prefix + (isLast ? '└── ' : '├── ') + label + (child.marker ? `    ${child.marker}` : ''));
+      walk(child, prefix + (isLast ? '    ' : '│   '));
+    });
+  };
+  walk(root, '');
+  return lines.join('\n');
+}
+
 function normalizePlan(config) {
   const normalized = {
     title:            config.title || '',
@@ -98,6 +137,12 @@ function normalizePlan(config) {
     normalized[section] = Array.isArray(items)
       ? items.map(it => normalizeItem(section, it))
       : [];
+  }
+
+  // The manifest is the single source of truth for touched paths; derive the
+  // tree unless the config explicitly overrides it.
+  if (!normalized.folderStructure) {
+    normalized.folderStructure = deriveFolderStructure(normalized.files);
   }
 
   return normalized;
@@ -126,10 +171,11 @@ function main() {
     console.error('');
     console.error('Arguments:');
     console.error('  <input-json>    JSON with title, module, intent, goal, context,');
-    console.error('                  folderStructure, patternCore, patternBusiness,');
-    console.error('                  patternSpecific, patternOverrides, solutionApproach,');
+    console.error('                  patternCore, patternBusiness, patternSpecific,');
+    console.error('                  patternOverrides, openQuestions, solutionApproach,');
     console.error('                  acceptanceCriteria, files, logicSteps, contracts,');
     console.error('                  edgeCases, testScenarios');
+    console.error('                  (folderStructure is derived from files[] unless supplied)');
     console.error('  <output-html>   Path to write the final feature plan document');
     console.error('  [template-path] HTML template (default: featurePlan-template.html next to this script)');
     process.exit(1);
@@ -158,12 +204,39 @@ if (require.main === module) {
   main();
 }
 
+// Utility functions for harness/socket integration
+
+// Build a patch operation for a specific field in a section item
+function createPatch(section, itemId, field, value, action = 'update') {
+  return {
+    type: 'patch',
+    section,
+    itemId,
+    field,
+    value,
+    action
+  };
+}
+
+// Utility to add an item to a section
+function createAddPatch(section, item) {
+  return {
+    type: 'patch',
+    section,
+    action: 'add',
+    item
+  };
+}
+
 module.exports = {
   escapeHtml,
   toScriptJson,
+  deriveFolderStructure,
   normalizePlan,
   injectContent,
   loadTemplate,
+  createPatch,
+  createAddPatch,
   SECTIONS,
   ITEM_FIELD_DEFAULTS
 };

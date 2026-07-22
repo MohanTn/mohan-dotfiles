@@ -1,33 +1,39 @@
-# featurePlan: shared template + injection script
+# featurePlan: shared template + injection script + WebSocket AI integration
 
-The common layer behind Claude Code's `/featurePlan` command (`claude/commands/featurePlan.md`) and Copilot CLI's `featurePlan` skill (`copilot/skills/featurePlan/SKILL.md`): one HTML template and one Node.js injection script, no tool-specific content. Both tools reference this directory at its fixed path (`agents/skills/featurePlan/` deployed to `~/.agents/skills/featurePlan/` via `nix/agents.nix`). Neither `claude/` nor `copilot/` keeps its own copy of the template or the inject script.
+The common layer behind Claude Code's `/featurePlan` command (`claude/commands/featurePlan.md`) and Copilot CLI's `featurePlan` skill (`copilot/skills/featurePlan/SKILL.md`): one HTML template, one Node.js injection script, WebSocket client for real-time AI chat, and a harness listener for bidirectional communication. Both tools reference this directory at its fixed path (`agents/skills/featurePlan/` deployed to `~/.agents/skills/featurePlan/` via `nix/agents.nix`). Neither `claude/` nor `copilot/` keeps its own copy of the template or the inject script.
+
+The new interactive mode allows users to ask clarifying questions about design decisions while editing the plan, with an AI agent responding in real-time and suggesting fine-grained patches to plan sections.
 
 ## What the document is for
 
-`/featurePlan` produces a **feature implementation plan** as a working document, not a passive spec. The AI drafts the plan's structure (feature overview, design patterns, solution approach & rationale, ordered file manifest, core business logic pseudo-code, function/API contracts, edge cases, testing strategy) and seeds an editable HTML page. The human reviews the approach, then edits every section in the browser — reordering files, refining pseudo-code, adding edge cases — and exports the result as plain text via **Copy AI-Ready Plan**. Everything is editable in-browser and persists per document via `localStorage` (key derived from `document.title`, so different `featurePlan-<slug>.html` files don't share state).
+`/featurePlan` produces a **co-authored feature implementation plan**: the AI drafts, the human decides. The AI seeds an editable HTML page (feature overview, open questions, design patterns, solution approach, ordered file manifest, pseudo-code, contracts, edge cases, tests — redundant sections skipped, see below). The human resolves the **Open Questions**, edits any section in the browser, and exports via **Copy AI-Ready Plan**. The export diffs against the AI's original draft and tags human changes `[HUMAN-EDITED]` / `[HUMAN-ADDED]` so the implementing AI treats them as authoritative; an undecided open question exports as `UNRESOLVED` and blocks implementation. Everything persists per document via `localStorage` (key derived from `document.title`, so different `featurePlan-<slug>.html` files don't share state).
 
 The on-page sections in order:
 
 - **Feature Overview** — title, target module, captured intent (user's ask verbatim + inferred reading), user story/goal, and existing-codebase context.
+- **Open Questions & Decisions** — ambiguities the AI couldn't resolve, each with drafted options and a human-owned `decision` field. Empty decision = `UNRESOLVED` in the export; the approval gate shows the unresolved count live.
 - **Acceptance Criteria** — testable "done" conditions, each with how to verify it.
 - **Design Patterns & Architectural Overrides** — core pattern (e.g. Layered), business-logic pattern (e.g. Transaction Script), specific implementations (Factory vs Builder, Repository vs DAO), and explicit overrides/constraints.
-- **Solution Approach & Rationale** — high-level design decisions, trade-offs, and the reasoning behind key choices before diving into implementation details.
-- **Resulting Folder Structure** — ASCII tree of the affected directories after the change, each touched file marked `[CREATE]`, `[UPDATE]`, or `[DELETE]`.
-- **File Change Manifest (In Order of Execution)** — ordered list of files with `action` (create/update/delete), `path`, `description`, and `pseudoCode` per file. Sorted by a numeric `order` field; reorderable in the UI.
-- **Core Business Logic (Detailed Pseudo-Code)** — step-by-step algorithm that an AI can translate into actual code.
-- **Function / API Contracts** — entry points (Controllers, Event Handlers, CLI commands) with inputs and outputs.
+- **Solution Approach & Rationale** — settled design decisions and trade-offs; anything still open lives in Open Questions instead.
+- **Resulting Folder Structure** — ASCII tree derived by the inject script from the file manifest (`[CREATE]` / `[UPDATE]` / `[DELETE]` markers); the AI no longer authors it, the human can still edit it.
+- **File Change Manifest (In Order of Execution)** — ordered list of files with `action` (create/update/delete), `path`, `description`, and `pseudoCode` per file. Sorted by a numeric `order` field; reorderable in the UI. The single source of truth for touched paths.
+- **Core Business Logic (Detailed Pseudo-Code)** — *skippable:* only cross-file orchestration the manifest pseudo-code doesn't already show.
+- **Function / API Contracts** — *skippable:* only new/changed public entry points.
 - **Edge Cases & Error Handling** — what happens when things go wrong.
-- **Testing Strategy** — per-file/per-method test scenarios.
+- **Testing Strategy** — *skippable:* only scenarios beyond the acceptance-criteria verifications.
+
+Skippable sections keep each fact in exactly one place; the AI emits `[]` when another section already carries the content.
 
 The **Export & Execution** card adds a **Copy AI-Ready Plan** button (full document as plain text, ready to paste into any coding AI) and a **Reset all data** button.
 
 ## Two-stage workflow
 
-1. **Content (the AI).** Generates the plan as **structured JSON** — scalar fields (`title`, `module`, `intent`, `goal`, `context`, `folderStructure`, `patternCore`, `patternBusiness`, `patternSpecific`, `patternOverrides`) and section arrays (`solutionApproach`, `acceptanceCriteria`, `files`, `logicSteps`, `contracts`, `edgeCases`, `testScenarios`). Cheap in tokens: no template boilerplate is regenerated.
-2. **Injection (the script).** `featurePlan-inject.js` merges that JSON into `featurePlan-template.html` deterministically, embedding it as the page's `INITIAL_DATA`. The AI never reads or rewrites the template.
+1. **Content (the AI).** Generates the plan as **structured JSON** — scalar fields (`title`, `module`, `intent`, `goal`, `context`, `patternCore`, `patternBusiness`, `patternSpecific`, `patternOverrides`) and section arrays (`openQuestions`, `solutionApproach`, `acceptanceCriteria`, `files`, `logicSteps`, `contracts`, `edgeCases`, `testScenarios`). Cheap in tokens: no template boilerplate is regenerated, and `folderStructure` is derived from `files[]` (supply it only to override).
+2. **Injection (the script).** `featurePlan-inject.js` merges that JSON into `featurePlan-template.html` deterministically, embedding it as the page's `INITIAL_DATA`. The AI never reads or rewrites the template. `INITIAL_DATA` doubles as the provenance baseline the export diffs against.
 
 ## Usage
 
+### Standard (offline) mode
 ```bash
 # First draft
 /featurePlan add two-factor authentication
@@ -35,6 +41,42 @@ The **Export & Execution** card adds a **Copy AI-Ready Plan** button (full docum
 # Refinement: open the file, edit any section directly in the browser, click
 # "Copy AI-Ready Plan", paste the block back so the AI can implement.
 ```
+
+### Interactive mode (requires harness)
+The harness (Claude Code, Copilot, Pi) can launch an interactive session:
+
+```javascript
+// In the harness (e.g. Claude Code skill):
+const listener = require('./featurePlan-harness-listener');
+const port = 3001; // or any free port
+
+const server = listener.createServer(port, {
+  aiAgent: async (input) => {
+    const { section, question, plan } = input;
+    // Forward to your AI agent, receive response + patches
+    return {
+      response: 'Your clarification here',
+      patches: [
+        { type: 'patch', section: 'files', itemId: 'f-1', field: 'description', value: 'Updated', action: 'update' }
+      ]
+    };
+  }
+});
+
+await server.start();
+// Open the HTML with query param: file:///path/to/featurePlan.html?socket-port=3001
+// User can now type questions and see real-time responses + plan updates
+await server.stop(); // when done
+```
+
+User workflow in interactive mode:
+1. Hover over any section header and click the **💬 Comment** button.
+2. Side panel opens on the right; type a question (e.g., "Why singleton pattern?").
+3. Click **Send**. The question is transmitted over WebSocket to the harness.
+4. AI responds with clarification text and optional patch operations.
+5. Plan sections update live in the browser.
+6. Comments are stored locally in browser storage, not exported.
+7. Continue editing and building the plan.
 
 Manual injection (either tool, same path):
 
@@ -47,7 +89,7 @@ node agents/skills/featurePlan/featurePlan-inject.js featurePlan.json featurePla
 
 ## JSON structure
 
-Top-level keys: 10 scalar pattern/feature fields (`title`, `module`, `intent`, `goal`, `context`, `folderStructure`, `patternCore`, `patternBusiness`, `patternSpecific`, `patternOverrides`) plus 7 section arrays.
+Top-level keys: 9 scalar pattern/feature fields (`title`, `module`, `intent`, `goal`, `context`, `patternCore`, `patternBusiness`, `patternSpecific`, `patternOverrides`) plus 8 section arrays. `folderStructure` is accepted but normally omitted (derived from `files[]`).
 
 ```json
 {
@@ -56,11 +98,13 @@ Top-level keys: 10 scalar pattern/feature fields (`title`, `module`, `intent`, `
   "intent": "User asked: \"add 2FA to login\". Inferred: TOTP second factor verified at login; enrollment managed from the profile page.",
   "goal": "As a user, I want to require a second factor at login so that a stolen password alone cannot compromise my account.",
   "context": "Existing User.php, AuthService.php, and a users table with columns id, email, password_hash.",
-  "folderStructure": "src/\n├── Auth/\n│   └── AuthService.php    [UPDATE]\n└── Security/\n    └── TotpService.php    [CREATE]",
   "patternCore": "Layered (Controller -> Service -> Repository)",
   "patternBusiness": "Transaction Script",
   "patternSpecific": "Use Repository for User; Factory for OTP enrollment DTO.",
   "patternOverrides": "No separate Repository for OTP — reuse UserRepository.",
+  "openQuestions": [
+    { "id": "q1", "question": "Is TOTP enrollment mandatory at next login, or opt-in from the profile page?", "options": "A) Mandatory at next login (recommended)\nB) Opt-in from profile settings", "decision": "" }
+  ],
   "solutionApproach": [
     { "id": "s1", "aspect": "Architecture", "rationale": "Separate TOTP logic into its own service to keep auth concerns modular. This allows future 2FA methods (SMS, hardware keys) without touching AuthService." },
     { "id": "s2", "aspect": "Performance", "rationale": "Store TOTP secrets encrypted in the users table, not in a separate table. Reduces DB lookups during login; trade-off is we can't easily audit secret rotations, but we can log them in an audit table separately." }
@@ -94,12 +138,16 @@ Allowed select values: `files.action` ∈ { create, update, delete }. The script
 
 ## Files
 
-- **featurePlan-template.html** — the template with `{{FEATURE_TITLE}}` (for `<title>` and `<h1>`) and `{{INITIAL_DATA_JSON}}` markers. Renders every section entirely client-side from the injected data object. Uses `localStorage` key `'feature-impl-plan:' + document.title` so each `featurePlan-<slug>.html` keeps its own state. Migrates the legacy `'feature-impl-plan-data'` (used by the original pasted template's single-key layout) to the per-doc key on first load, then deletes the legacy entry.
-- **featurePlan-inject.js** — reads JSON, escapes the title, and embeds the rest of the plan as a JSON literal (`INITIAL_DATA`) inside a `<script>` tag, escaping `</script>` breakout and the U+2028/U+2029 line-terminator characters that `JSON.stringify` leaves raw. `normalizePlan` applies per-section defaults via a single `ITEM_FIELD_DEFAULTS` table. Template path is optional.
-- **featurePlan-inject.test.js** — unit tests for the injection script and template contract. Run with `node --test agents/skills/featurePlan/featurePlan-inject.test.js`. Covers escaping, script-breakout/line-terminator safety, default-filling for both top-level and per-section fields, and an end-to-end disk round-trip.
+- **featurePlan-template.html** — the template with `{{FEATURE_TITLE}}` (for `<title>` and `<h1>`) and `{{INITIAL_DATA_JSON}}` markers. Renders every section entirely client-side from the injected data object. Uses `localStorage` key `'feature-impl-plan:' + document.title` so each `featurePlan-<slug>.html` keeps its own state. Migrates the legacy `'feature-impl-plan-data'` (used by the original pasted template's single-key layout) to the per-doc key on first load, then deletes the legacy entry. Keeps a `SEED` snapshot of `INITIAL_DATA` at load; the export compares against it to emit `[HUMAN-EDITED]` / `[HUMAN-ADDED]` provenance tags. **NEW:** Includes a side panel for inline comments/questions and real-time AI chat when launched via harness with `?socket-port=PORT`.
+- **featurePlan-inject.js** — reads JSON, escapes the title, and embeds the rest of the plan as a JSON literal (`INITIAL_DATA`) inside a `<script>` tag, escaping `</script>` breakout and the U+2028/U+2029 line-terminator characters that `JSON.stringify` leaves raw. `normalizePlan` applies per-section defaults via a single `ITEM_FIELD_DEFAULTS` table and derives `folderStructure` from `files[]` when absent (`deriveFolderStructure`). Template path is optional. **NEW:** Exports `createPatch` and `createAddPatch` utilities for harness to build patch operations.
+- **featurePlan-socket-client.js** — WebSocket client for browser page. Manages connection to harness listener, sends user questions over socket, receives AI responses and patch operations, auto-reconnects on disconnect, queues messages when offline. Exports `FeaturePlanSocket` class for use in the template.
+- **featurePlan-harness-listener.js** — WebSocket server for harness (Claude Code, Copilot, Pi). Listens for questions from the HTML page, forwards to an AI agent function, sends patch operations back to the page. Supports custom AI agent or defaults to a no-op echo. Broadcasts responses to all connected clients.
+- **featurePlan-inject.test.js** — unit tests for the injection script and template contract. Run with `node --test featurePlan-inject.test.js`. Covers escaping, script-breakout/line-terminator safety, default-filling for both top-level and per-section fields, and an end-to-end disk round-trip.
+- **featurePlan-harness-listener.test.js** — unit tests for the WebSocket listener. Covers instantiation, server start/stop, AI agent integration.
+- **package.json** — dependencies (ws for WebSocket). Run `npm install` before using the harness listener.
 
-The instruction files that drive generation stay in each tool's directory (`claude/commands/featurePlan.md`, `copilot/skills/featurePlan/SKILL.md`): they're prose, not shared boilerplate, and differ in voice and path references. Both point at this folder's script and template by the same fixed `~/.agents/skills/featurePlan/` path.
+The instruction file that drives generation is this folder's `SKILL.md`; it points at the script and template by the fixed `~/.agents/skills/featurePlan/` path.
 
 ## Extending
 
-To add a new section: add its HTML container + add button + `bindAdd` call to the template with a `renderXxx()` function, then add the section key + per-field defaults to `ITEM_FIELD_DEFAULTS` in this folder's inject script, plus a test. The template and the script each hold one half of the per-section schema; both must evolve together, and both files contain a `NOTE` comment pointing at the other to keep them in sync. Finally, document the new JSON key in **both** `claude/commands/featurePlan.md` and `copilot/skills/featurePlan/SKILL.md` (they aren't shared). The AI's next generation picks up the new format.
+To add a new section: add its HTML container + add button + `bindAdd` call to the template with a `renderXxx()` function and its field list in the export's `SECTION_FIELDS` (for provenance tagging), then add the section key + per-field defaults to `ITEM_FIELD_DEFAULTS` in this folder's inject script, plus a test. The template and the script each hold one half of the per-section schema; both must evolve together, and both files contain a `NOTE` comment pointing at the other to keep them in sync. Finally, document the new JSON key in `SKILL.md`. The AI's next generation picks up the new format.

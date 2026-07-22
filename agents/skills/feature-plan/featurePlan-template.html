@@ -275,12 +275,169 @@
             background: #fee2e2;
             color: #b91c1c;
         }
+
+        /* Side panel for comments */
+        .side-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 340px;
+            height: 100vh;
+            background: #ffffff;
+            border-left: 1px solid #e2e8f0;
+            box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .side-panel.open {
+            transform: translateX(0);
+        }
+        .panel-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: #0f172a;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+            padding: 0;
+        }
+        .close-btn:hover {
+            color: #1e293b;
+        }
+        .comments-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        .comment-item {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .comment-item:last-child {
+            border-bottom: none;
+        }
+        .comment-author {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #0f172a;
+        }
+        .comment-time {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-left: 0.5rem;
+        }
+        .comment-text {
+            font-size: 0.9rem;
+            color: #475569;
+            margin-top: 0.3rem;
+            word-wrap: break-word;
+        }
+        .comment-ai-response {
+            background: #f0f4f8;
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #334155;
+        }
+        .comment-input {
+            padding: 1rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .comment-input textarea {
+            resize: none;
+            font-family: inherit;
+            font-size: 0.85rem;
+            height: 60px;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+        }
+        .comment-input button {
+            padding: 0.4rem 0.8rem;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .comment-input button:hover {
+            background: #1d4ed8;
+        }
+        .comment-input button:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+        }
+        .section-header-actions {
+            display: none;
+            gap: 0.3rem;
+        }
+        .card h2:hover .section-header-actions {
+            display: flex;
+        }
+        .comment-btn {
+            padding: 0.2rem 0.5rem;
+            background: #eff6ff;
+            border: 1px solid #2563eb;
+            color: #2563eb;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .comment-btn:hover {
+            background: #dbeafe;
+        }
+        .offline-message {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            padding: 0.75rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+        .connection-status {
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .connection-status.connected {
+            background: #f0fdf4;
+            color: #166534;
+        }
+        .connection-status.disconnected {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
     </style>
 </head>
 <body>
 
     <h1>⚙️ Feature Implementation Plan – {{FEATURE_TITLE}}</h1>
-    <p class="subtitle">Ultra-detailed, file-by-file plan for building a feature inside an existing codebase. <br>Edit every detail, then copy the plan to feed into an AI or hand off to a developer.</p>
+    <p class="subtitle">File-by-file plan for building a feature inside an existing codebase — co-authored: the AI drafts, the human decides. <br>Resolve open questions, edit any section, then copy the plan back; human edits are tagged in the export and override the AI draft.</p>
 
     <!-- OVERVIEW -->
     <div class="card">
@@ -292,6 +449,14 @@
         <div class="mt-1"><label>Captured Intent (the user's original ask, verbatim, plus what was inferred from it)</label><textarea id="feature-intent" rows="2" placeholder="e.g. User asked: 'add 2FA to login'. Inferred: TOTP second factor verified at login; enrollment managed from the profile page."></textarea></div>
         <div class="mt-1"><label>User Story / Goal</label><textarea id="feature-goal" rows="2" placeholder="As a user, I want to ... so that ..."></textarea></div>
         <div class="mt-1"><label>Existing Codebase Context (files, classes, DB schemas that already exist)</label><textarea id="feature-context" rows="2" placeholder="e.g. We already have User.php, AuthService.php, and a 'users' table with columns..."></textarea></div>
+    </div>
+
+    <!-- OPEN QUESTIONS & DECISIONS -->
+    <div class="card">
+        <h2>❓ Open Questions & Decisions</h2>
+        <p class="text-muted text-small">Ambiguities the AI could not resolve from the ask or the code. <strong>The human decides here.</strong> An empty Decision exports as UNRESOLVED and blocks implementation.</p>
+        <div id="questions-container"></div>
+        <button id="add-question-btn" class="btn btn-outline btn-block mt-1">＋ Add open question</button>
     </div>
 
     <!-- ACCEPTANCE CRITERIA -->
@@ -377,7 +542,7 @@
     <div class="card">
         <h2>📋 Export & Execution</h2>
         <div class="approval-gate">
-            <strong>✅ Ready to generate code when:</strong> File manifest is ordered, logic is pseudo-coded, and patterns are defined.
+            <strong>✅ Ready to generate code when:</strong> every open question has a decision, the file manifest is ordered, and the human has reviewed each section. <span id="gate-questions"></span>
         </div>
         <div class="flex-row mt-1">
             <button id="copy-btn">📋 Copy AI-Ready Plan</button>
@@ -426,6 +591,7 @@
                 patternBusiness: 'Transaction Script',
                 patternSpecific: '',
                 patternOverrides: '',
+                openQuestions: [],
                 solutionApproach: [],
                 acceptanceCriteria: [],
                 files: [],
@@ -462,6 +628,50 @@
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             } catch (e) { /* ignore */ }
+            updateGate();
+        }
+
+        // ------------------------------------------------------------------
+        // Provenance: SEED is the AI's original draft (INITIAL_DATA). The
+        // export compares current data against it and tags human changes so
+        // the implementing AI treats them as authoritative.
+        // ------------------------------------------------------------------
+        const SEED = normalize(JSON.parse(JSON.stringify(INITIAL_DATA || {})));
+
+        const SCALAR_KEYS = ['title', 'module', 'intent', 'goal', 'context', 'folderStructure',
+            'patternCore', 'patternBusiness', 'patternSpecific', 'patternOverrides'];
+        const SECTION_FIELDS = {
+            openQuestions: ['question', 'options', 'decision'],
+            solutionApproach: ['aspect', 'rationale'],
+            acceptanceCriteria: ['criterion', 'verification'],
+            files: ['order', 'action', 'path', 'description', 'pseudoCode'],
+            logicSteps: ['step', 'pseudo'],
+            contracts: ['name', 'inputs', 'outputs'],
+            edgeCases: ['condition', 'handling'],
+            testScenarios: ['target', 'scenario']
+        };
+
+        function scalarTag(key) {
+            return String(data[key] || '') !== String(SEED[key] || '') ? ' [HUMAN-EDITED]' : '';
+        }
+
+        function itemTag(section, item) {
+            const seed = (SEED[section] || []).find(s => s.id !== undefined && s.id === item.id);
+            if (!seed) return ' [HUMAN-ADDED]';
+            const changed = SECTION_FIELDS[section].some(k => String(item[k] || '') !== String(seed[k] || ''));
+            return changed ? ' [HUMAN-EDITED]' : '';
+        }
+
+        function unresolvedQuestions() {
+            return data.openQuestions.filter(q => !(q.decision || '').trim());
+        }
+
+        function updateGate() {
+            const el = document.getElementById('gate-questions');
+            if (!el) return;
+            const n = unresolvedQuestions().length;
+            el.textContent = data.openQuestions.length === 0 ? ''
+                : n ? `⚠ ${n} open question(s) unresolved.` : 'All open questions decided.';
         }
 
         function generateId() {
@@ -472,6 +682,7 @@
         // Rendering Helpers
         // ------------------------------------------------------------------
         function renderAll() {
+            renderQuestions();
             renderApproach();
             renderAcceptance();
             renderFiles();
@@ -490,6 +701,7 @@
             document.getElementById('pattern-business').value = data.patternBusiness || '';
             document.getElementById('pattern-specific').value = data.patternSpecific || '';
             document.getElementById('pattern-overrides').value = data.patternOverrides || '';
+            updateGate();
         }
 
         // Generic render for simple item lists (logic, contracts, edges, tests)
@@ -710,6 +922,15 @@
         // ------------------------------------------------------------------
         // Render specific sections
         // ------------------------------------------------------------------
+        function renderQuestions() {
+            const fields = [
+                { key: 'question', label: 'Question (what must the human decide?)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Should enrollment be mandatory at next login, or opt-in from the profile page?' },
+                { key: 'options', label: 'Options (AI-drafted, one per line)', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'decision', label: 'Decision (human-owned; empty = UNRESOLVED)', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('questions-container', data.openQuestions, fields, 'Question', 'add-question-btn');
+        }
+
         function renderApproach() {
             const fields = [
                 { key: 'aspect', label: 'Decision Area (e.g. Architecture, Integration, Performance)', type: 'text', placeholder: 'e.g. Database Strategy' },
@@ -763,7 +984,7 @@
         // Event Bindings for Add Buttons
         //
         // NOTE: The inline default items below MUST stay in sync with the
-        // ITEM_FIELD_DEFAULTS table in agents/skills/featurePlan/featurePlan-inject.js
+        // ITEM_FIELD_DEFAULTS table in agents/skills/feature-plan/featurePlan-inject.js
         // — both describe the same per-section field schema, and adding or
         // renaming a field requires changes in both places.
         // ------------------------------------------------------------------
@@ -775,6 +996,7 @@
             });
         }
 
+        bindAdd('add-question-btn', 'openQuestions', { question: '', options: '', decision: '' });
         bindAdd('add-approach-btn', 'solutionApproach', { aspect: '', rationale: '' });
         bindAdd('add-acceptance-btn', 'acceptanceCriteria', { criterion: '', verification: '' });
         bindAdd('add-file-btn', 'files', { order: data.files.length + 1, action: 'create', path: '', description: '',
@@ -813,12 +1035,35 @@
             const lines = [];
             lines.push('FEATURE IMPLEMENTATION PLAN (AI-READY PROMPT)');
             lines.push('==============================================');
+            lines.push('Provenance: [HUMAN-EDITED] / [HUMAN-ADDED] tags mark human changes to the AI draft.');
+            lines.push('Treat tagged content as authoritative over anything untagged.');
+            const unresolved = unresolvedQuestions().length;
+            if (unresolved) {
+                lines.push(`⚠ ${unresolved} OPEN QUESTION(S) UNRESOLVED — do not implement; ask the human to decide first.`);
+            }
             lines.push('');
-            lines.push(`FEATURE TITLE: ${data.title || 'Not set'}`);
-            lines.push(`TARGET MODULE: ${data.module || 'Not set'}`);
-            lines.push(`CAPTURED INTENT: ${data.intent || 'Not set'}`);
-            lines.push(`USER STORY: ${data.goal || 'Not set'}`);
-            lines.push(`EXISTING CONTEXT: ${data.context || 'Not set'}`);
+            lines.push(`FEATURE TITLE: ${data.title || 'Not set'}${scalarTag('title')}`);
+            lines.push(`TARGET MODULE: ${data.module || 'Not set'}${scalarTag('module')}`);
+            lines.push(`CAPTURED INTENT: ${data.intent || 'Not set'}${scalarTag('intent')}`);
+            lines.push(`USER STORY: ${data.goal || 'Not set'}${scalarTag('goal')}`);
+            lines.push(`EXISTING CONTEXT: ${data.context || 'Not set'}${scalarTag('context')}`);
+            lines.push('');
+
+            // Open Questions & Decisions
+            lines.push('--- OPEN QUESTIONS & DECISIONS ---');
+            if (data.openQuestions.length === 0) {
+                lines.push('(No open questions — the ask was unambiguous)');
+            } else {
+                data.openQuestions.forEach((q, idx) => {
+                    lines.push(`Question ${idx+1}: ${q.question || 'Untitled'}${itemTag('openQuestions', q)}`);
+                    if (q.options) {
+                        lines.push('  Options:');
+                        q.options.split('\n').forEach(line => lines.push(`    ${line}`));
+                    }
+                    lines.push(`  Decision: ${(q.decision || '').trim() || '(UNRESOLVED — human must decide before implementation)'}`);
+                    lines.push('');
+                });
+            }
             lines.push('');
 
             // Acceptance Criteria
@@ -827,7 +1072,7 @@
                 lines.push('(No acceptance criteria defined)');
             } else {
                 data.acceptanceCriteria.forEach((a, idx) => {
-                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}`);
+                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}${itemTag('acceptanceCriteria', a)}`);
                     if (a.verification) lines.push(`  Verify: ${a.verification}`);
                     lines.push('');
                 });
@@ -835,10 +1080,10 @@
             lines.push('');
 
             lines.push('--- DESIGN PATTERNS & OVERRIDES ---');
-            lines.push(`Core Pattern: ${data.patternCore || 'Not set'}`);
-            lines.push(`Business Logic Pattern: ${data.patternBusiness || 'Not set'}`);
-            lines.push(`Specific Implementations: ${data.patternSpecific || 'None'}`);
-            lines.push(`Explicit Overrides: ${data.patternOverrides || 'None'}`);
+            lines.push(`Core Pattern: ${data.patternCore || 'Not set'}${scalarTag('patternCore')}`);
+            lines.push(`Business Logic Pattern: ${data.patternBusiness || 'Not set'}${scalarTag('patternBusiness')}`);
+            lines.push(`Specific Implementations: ${data.patternSpecific || 'None'}${scalarTag('patternSpecific')}`);
+            lines.push(`Explicit Overrides: ${data.patternOverrides || 'None'}${scalarTag('patternOverrides')}`);
             lines.push('');
 
             // Solution Approach
@@ -847,7 +1092,7 @@
                 lines.push('(No approach decisions documented)');
             } else {
                 data.solutionApproach.forEach((s, idx) => {
-                    lines.push(`Decision ${idx+1}: ${s.aspect || 'Untitled'}`);
+                    lines.push(`Decision ${idx+1}: ${s.aspect || 'Untitled'}${itemTag('solutionApproach', s)}`);
                     if (s.rationale) {
                         s.rationale.split('\n').forEach(line => {
                             lines.push(`  ${line}`);
@@ -858,7 +1103,7 @@
             }
 
             // Folder structure
-            lines.push('--- RESULTING FOLDER STRUCTURE ---');
+            lines.push(`--- RESULTING FOLDER STRUCTURE ---${scalarTag('folderStructure')}`);
             if (!data.folderStructure) {
                 lines.push('(No folder structure defined)');
             } else {
@@ -875,7 +1120,7 @@
                 lines.push('(No files defined)');
             } else {
                 sortedFiles.forEach((f, idx) => {
-                    lines.push(`[${idx+1}] ${f.action.toUpperCase()} | ${f.path || 'Untitled'}`);
+                    lines.push(`[${idx+1}] ${f.action.toUpperCase()} | ${f.path || 'Untitled'}${itemTag('files', f)}`);
                     if (f.description) lines.push(`    Description: ${f.description}`);
                     if (f.pseudoCode) {
                         lines.push(`    Pseudo-code:`);
@@ -893,7 +1138,7 @@
                 lines.push('(No logic steps defined)');
             } else {
                 data.logicSteps.forEach((l, idx) => {
-                    lines.push(`Step ${idx+1}: ${l.step || 'Untitled'}`);
+                    lines.push(`Step ${idx+1}: ${l.step || 'Untitled'}${itemTag('logicSteps', l)}`);
                     if (l.pseudo) {
                         l.pseudo.split('\n').forEach(line => {
                             lines.push(`  ${line}`);
@@ -909,7 +1154,7 @@
                 lines.push('(No contracts defined)');
             } else {
                 data.contracts.forEach(c => {
-                    lines.push(`Signature: ${c.name || 'Unnamed'}`);
+                    lines.push(`Signature: ${c.name || 'Unnamed'}${itemTag('contracts', c)}`);
                     if (c.inputs) lines.push(`  Inputs: ${c.inputs}`);
                     if (c.outputs) lines.push(`  Outputs: ${c.outputs}`);
                     lines.push('');
@@ -922,7 +1167,7 @@
                 lines.push('(No edge cases defined)');
             } else {
                 data.edgeCases.forEach(e => {
-                    lines.push(`Condition: ${e.condition || 'Untitled'}`);
+                    lines.push(`Condition: ${e.condition || 'Untitled'}${itemTag('edgeCases', e)}`);
                     if (e.handling) lines.push(`  Handling: ${e.handling}`);
                     lines.push('');
                 });
@@ -934,7 +1179,7 @@
                 lines.push('(No tests defined)');
             } else {
                 data.testScenarios.forEach(t => {
-                    lines.push(`Target: ${t.target || 'Untitled'}`);
+                    lines.push(`Target: ${t.target || 'Untitled'}${itemTag('testScenarios', t)}`);
                     if (t.scenario) lines.push(`  Scenario: ${t.scenario}`);
                     lines.push('');
                 });
@@ -972,6 +1217,236 @@
         // Initial Render
         // ------------------------------------------------------------------
         renderAll();
+    </script>
+
+    <!-- Side panel for comments and AI chat -->
+    <div class="side-panel" id="side-panel">
+        <div class="panel-header">
+            <h3>💬 Questions & Clarifications</h3>
+            <button class="close-btn" id="close-panel-btn">✕</button>
+        </div>
+        <div class="connection-status disconnected" id="connection-status">
+            Offline — open via harness for AI responses
+        </div>
+        <div class="comments-list" id="comments-list"></div>
+        <div class="comment-input">
+            <textarea id="comment-text" placeholder="Ask a question about this section..." maxlength="500"></textarea>
+            <button id="send-comment-btn" disabled>Send</button>
+        </div>
+    </div>
+
+    <!-- Script for socket client and comment handling -->
+    <script src="featurePlan-socket-client.js"></script>
+    <script>
+        // ------------------------------------------------------------------
+        // WebSocket & Comment Integration
+        // ------------------------------------------------------------------
+        let socket = null;
+        let currentSection = null;
+        let comments = {};
+
+        function loadComments() {
+            try {
+                const stored = localStorage.getItem('feature-comments:' + document.title);
+                comments = stored ? JSON.parse(stored) : {};
+            } catch (e) {
+                comments = {};
+            }
+        }
+
+        function saveComments() {
+            try {
+                localStorage.setItem('feature-comments:' + document.title, JSON.stringify(comments));
+            } catch (e) { /* ignore */ }
+        }
+
+        function initSocket() {
+            const params = new URLSearchParams(window.location.search);
+            const port = params.get('socket-port');
+
+            if (!port) {
+                console.log('No socket-port provided. Comments will work locally only.');
+                document.getElementById('send-comment-btn').disabled = true;
+                return;
+            }
+
+            socket = new FeaturePlanSocket(port);
+
+            socket.on('connect', () => {
+                document.getElementById('connection-status').className = 'connection-status connected';
+                document.getElementById('connection-status').textContent = '✓ Connected to AI';
+                document.getElementById('send-comment-btn').disabled = false;
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').className = 'connection-status disconnected';
+                document.getElementById('connection-status').textContent = '✗ Disconnected from AI';
+                document.getElementById('send-comment-btn').disabled = true;
+            });
+
+            socket.on('response', (msg) => {
+                if (currentSection && comments[currentSection]) {
+                    const lastComment = comments[currentSection][comments[currentSection].length - 1];
+                    lastComment.aiResponse = msg.text;
+                    saveComments();
+                    renderComments();
+                }
+            });
+
+            socket.on('patch', (msg) => {
+                applyPatch(msg);
+            });
+
+            socket.on('error', (err) => {
+                console.error('Socket error:', err);
+            });
+        }
+
+        function openCommentPanel(sectionId) {
+            currentSection = sectionId;
+            if (!comments[sectionId]) {
+                comments[sectionId] = [];
+            }
+            document.getElementById('side-panel').classList.add('open');
+            document.getElementById('comment-text').focus();
+            renderComments();
+        }
+
+        function closeCommentPanel() {
+            document.getElementById('side-panel').classList.remove('open');
+            currentSection = null;
+        }
+
+        function renderComments() {
+            const list = document.getElementById('comments-list');
+            list.innerHTML = '';
+
+            if (!currentSection || !comments[currentSection]) {
+                list.innerHTML = '<div class="offline-message">No questions for this section yet.</div>';
+                return;
+            }
+
+            const sectionComments = comments[currentSection];
+            sectionComments.forEach((comment) => {
+                const div = document.createElement('div');
+                div.className = 'comment-item';
+
+                const header = document.createElement('div');
+                header.innerHTML = `<span class="comment-author">You</span><span class="comment-time">${new Date(comment.time).toLocaleTimeString()}</span>`;
+                div.appendChild(header);
+
+                const text = document.createElement('div');
+                text.className = 'comment-text';
+                text.textContent = comment.text;
+                div.appendChild(text);
+
+                if (comment.aiResponse) {
+                    const response = document.createElement('div');
+                    response.className = 'comment-ai-response';
+                    response.innerHTML = `<strong>AI:</strong> ${comment.aiResponse}`;
+                    div.appendChild(response);
+                }
+
+                list.appendChild(div);
+            });
+
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function sendComment() {
+            const text = document.getElementById('comment-text').value.trim();
+            if (!text) return;
+
+            if (!comments[currentSection]) {
+                comments[currentSection] = [];
+            }
+
+            const comment = {
+                time: Date.now(),
+                text: text,
+                aiResponse: null
+            };
+
+            comments[currentSection].push(comment);
+            saveComments();
+            document.getElementById('comment-text').value = '';
+            renderComments();
+
+            // Send to AI if socket is connected
+            if (socket && socket.isConnected()) {
+                socket.sendQuestion(currentSection, text, data);
+            } else if (socket) {
+                console.warn('Socket not connected. Queueing message.');
+            }
+        }
+
+        function applyPatch(patch) {
+            const { section, itemId, field, value, action } = patch;
+
+            if (!data[section]) {
+                console.warn(`Unknown section: ${section}`);
+                return;
+            }
+
+            if (action === 'update' && itemId) {
+                const item = data[section].find(i => i.id === itemId);
+                if (item) {
+                    item[field] = value;
+                }
+            } else if (action === 'add') {
+                data[section].push({ id: generateId(), ...patch.item });
+            } else if (action === 'delete' && itemId) {
+                const idx = data[section].findIndex(i => i.id === itemId);
+                if (idx >= 0) data[section].splice(idx, 1);
+            }
+
+            saveData();
+            renderAll();
+        }
+
+        // Expose currentPlan for harness to read
+        Object.defineProperty(window, 'currentPlan', {
+            get: function() {
+                return data;
+            }
+        });
+
+        // Event listeners
+        document.getElementById('close-panel-btn').addEventListener('click', closeCommentPanel);
+        document.getElementById('send-comment-btn').addEventListener('click', sendComment);
+        document.getElementById('comment-text').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                sendComment();
+            }
+        });
+
+        // Add +Comment buttons to section headers
+        function addCommentButtons() {
+            document.querySelectorAll('.card h2').forEach((h2) => {
+                if (h2.querySelector('.section-header-actions')) return; // already added
+
+                const actions = document.createElement('span');
+                actions.className = 'section-header-actions';
+
+                const btn = document.createElement('button');
+                btn.className = 'comment-btn';
+                btn.textContent = '💬 Comment';
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const cardBody = h2.closest('.card');
+                    const sectionId = cardBody.id || h2.textContent.trim().toLowerCase().replace(/\s+/g, '-').substring(0, 20);
+                    openCommentPanel(sectionId);
+                });
+
+                actions.appendChild(btn);
+                h2.appendChild(actions);
+            });
+        }
+
+        // Initialize
+        loadComments();
+        initSocket();
+        addCommentButtons();
     </script>
 
 </body>
