@@ -32,6 +32,7 @@ Derive `<slug>` from the feature name: a few words, lowercased, spaces→hyphens
 3. Run `node ~/.agents/skills/feature-plan/featurePlan-inject.js featurePlan-<slug>.json featurePlan-<slug>.html`.
    If `featurePlan-<slug>.html` already exists, the same command **merges into it** (update-in-place: existing items keep their ids, same-id items take the new fields, new items append, browser-side human edits survive). Never delete or recreate an existing plan file, and never change its `title` on an update — retitling detaches the user's browser edits.
 4. Delete the temporary JSON.
+5. Open the generated plan in the browser: `npx -y chrome-devtools-axi open file://<absolute path to featurePlan-<slug>.html>`. On an update the page may already be open — re-run the same `open` command to reload it.
 
 **Mode B — Implement.** The user pastes the **"Copy AI-Ready Plan"** export.
 1. `[HUMAN-EDITED]` / `[HUMAN-ADDED]` tags override your original draft wherever they conflict.
@@ -87,7 +88,7 @@ To let the user ask questions from inside the plan page: `node ~/.agents/skills/
 Print to chat:
 1. The filename (`featurePlan-<slug>.html`).
 2. One line per non-empty section ("openQuestions: 1, files: 4 (1 create, 3 update), …"); name any section skipped under the skip rules.
-3. Next step: "Open the file, **decide the open questions**, edit any section directly in the browser, then click **Copy AI-Ready Plan** and paste the block back — your edits are tagged and override my draft; I'll implement strictly per the plan."
+3. Next step: "The plan is open in your browser — **decide the open questions**, edit any section directly in the browser, then click **Copy AI-Ready Plan** and paste the block back — your edits are tagged and override my draft; I'll implement strictly per the plan."
 
 ---
 
