@@ -117,6 +117,11 @@ class ParseSessionTest(unittest.TestCase):
         s2 = sa._error_signature("Read", "EISDIR: ... read '/b/two/three'")
         self.assertEqual(s1, s2)
 
+    def test_error_signature_whitespace_only(self):
+        # Truthy but strips to empty: splitlines() is [], must not IndexError.
+        self.assertEqual(sa._error_signature("Bash", "   "), "Bash:")
+        self.assertEqual(sa._error_signature("Bash", "\n"), "Bash:")
+
     def test_prompts_and_file_ops(self):
         rows = [
             {"type": "user", "message": {"content": "first ask"}},

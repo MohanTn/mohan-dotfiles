@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Fixed
+
+- Defensive improvements to error handling: prevent IndexError on malformed error signatures, separate conflict marker detection from whitespace diagnostics in merge conflict hooks, and clean up unused permissions.
+
 ### Changed
 
 - Added automatic browser opening of generated feature plan HTML files via chrome-devtools-axi, and updated user-facing instructions to reflect that plans are now opened automatically rather than requiring manual opening

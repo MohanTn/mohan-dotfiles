@@ -212,7 +212,8 @@ def _error_signature(tool, msg):
     """Collapse the volatile parts of an error message (paths, numbers, quoted
     values) so repeated deterministic failures group under one signature — the
     ones worth turning into a script or guard."""
-    m = (msg or "").strip().splitlines()[0] if msg else ""
+    lines = (msg or "").strip().splitlines()
+    m = lines[0] if lines else ""
     m = re.sub(r"'[^']*'", "'…'", m)
     m = re.sub(r'"[^"]*"', '"…"', m)
     m = re.sub(r"/\S+", "/…", m)

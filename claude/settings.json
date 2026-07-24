@@ -2,9 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(rg *)",
-      "Bash(git diff *)",
-      "Bash(*/check-conflicts.sh)",
-      "Bash(*/check-conflicts.sh *)"
+      "Bash(git diff *)"
     ]
   },
   "hooks": {
