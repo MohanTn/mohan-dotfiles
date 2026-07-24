@@ -30,6 +30,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Added
 
+- Adds session-analytics.py, a comprehensive workflow analytics tool that parses session transcripts from Claude, Copilot, and Pi harnesses into a unified format and provides interactive views for browsing, searching, and annotating sessions with aggregate dashboards and metrics. Also adds merge-conflict detection utility and updates nix deployment.
 - Implements width-responsive prompt path segment that adapts to terminal dimensions. Adds Nix tests to validate path collapsing behavior, updates oh-my-posh theme to use responsive width template, and configures zsh to re-render prompt on terminal resize.
 - This redesigns the feature-plan skill with a simplified 3-field schema (overview, architecture), adds WebSocket-based interactive mode for real-time AI Q&A, implements file-based JSONL bridge for harness-agnostic integration, and reorganizes the UI into Problem/Solution/Reference sections. The inject script now supports update-in-place merging with human-edit preservation.
 - Transformed featurePlan template from card-based light layout to dark-themed shell layout with left sidebar tree navigation, dashboard stat tiles showing plan health, build pipeline visualization, and refactored JavaScript for new nav paradigm. Updated skill metadata and hook documentation.
