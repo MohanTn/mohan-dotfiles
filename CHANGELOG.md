@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format is based on 
 
 ### Changed
 
+- Add permission allowances for the conflict detection hook (`check-conflicts.sh`) to the settings, allowing it to be called by automated workflows without requiring user approval each time. The script detects merge conflicts, unmerged files, and leftover markers using git diagnostics.
 - Added automatic browser opening of generated feature plan HTML files via chrome-devtools-axi, and updated user-facing instructions to reflect that plans are now opened automatically rather than requiring manual opening
 - Enhanced the feature-plan skill documentation and UI with emphasis on brevity, skimmability, and concrete analogies. Rewrote section descriptions to use relatable metaphors (renovation plan, contractor questions, floor plans, recipes, trip backups) making each section's purpose clearer to users.
 - README rewritten from technical file reference to step-by-step setup guide with troubleshooting and everyday workflows. nix/packages.nix adds glab and hunkdiff npm installation, removes lazygit, and clarifies custom package comments.
