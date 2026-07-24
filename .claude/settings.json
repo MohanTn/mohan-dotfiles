@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(rg *)",
-      "Bash(oh-my-posh init *)"
+      "Bash(oh-my-posh init *)",
+      "Bash(bash claude/hooks/check-conflicts.sh)",
+      "Bash(bash claude/hooks/check-conflicts.sh *)"
     ]
   }
 }
