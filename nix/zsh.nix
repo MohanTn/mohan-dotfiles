@@ -66,6 +66,22 @@
       # right, like p10k's transient prompt).
       eval "$(oh-my-posh init zsh --config ${../zsh/oh-my-posh-catppuccin-mocha.omp.json})"
 
+      # Width-aware path segment. The theme's path max_width is a template
+      # reading $COLUMNS, which zsh keeps current but doesn't export, so
+      # oh-my-posh (a child process) can't see it unless we mark it exported.
+      export COLUMNS
+
+      # oh-my-posh bakes PS1 into a literal string in precmd, so a resize
+      # leaves the on-screen prompt (and the right-aligned dotted filler)
+      # stale until the next command. Re-render it on SIGWINCH while the
+      # line editor is active so the path shortens as you drag the edge.
+      TRAPWINCH() {
+        if (( $+functions[_omp_get_prompt] )) && zle; then
+          eval "$(_omp_get_prompt primary --eval)"
+          zle reset-prompt
+        fi
+      }
+
       # Extra completion definitions. blockf stops zinit auto-adding the
       # plugin's fpath entries twice; home-manager's compinit already ran
       # before this block, so re-run it to pick the new completions up.

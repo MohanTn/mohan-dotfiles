@@ -19,10 +19,11 @@
         },
         {
           "foreground": "p:pink",
-          "options": {
+          "properties": {
             "folder_icon": "\ue5fe ",
             "home_icon": "~",
-            "style": "agnoster_short"
+            "style": "powerlevel",
+            "max_width": "{{ if .Env.COLUMNS }}{{ sub (atoi .Env.COLUMNS) 40 }}{{ else }}9999{{ end }}"
           },
           "style": "plain",
           "template": "{{ .Path }} ",

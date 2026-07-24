@@ -177,6 +177,48 @@
             cat "$out"
           '';
 
+        # The prompt's path segment must shrink with the terminal. Renders
+        # the real theme at several $COLUMNS values against a deep fake path
+        # and checks the parent folders collapse to single letters as the
+        # window narrows. Also pins the settings key: this oh-my-posh reads
+        # `properties`, and a segment using `options` is silently ignored,
+        # which is exactly how the width template would fail unnoticed.
+        prompt-width = pkgs.runCommand "prompt-width"
+          { nativeBuildInputs = [ pkgs.bash pkgs.oh-my-posh pkgs.jq ];
+            theme = ./zsh/oh-my-posh-catppuccin-mocha.omp.json;
+          }
+          ''
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME"
+            deep="$HOME/REPO/mohan-dotfiles/agents/skills/feature-plan/references"
+
+            render() {
+              COLUMNS="$1" oh-my-posh print primary --config "$theme" \
+                --pwd "$deep" --shell zsh --terminal-width "$1" \
+                | sed 's/\x1b\[[0-9;]*m//g; s/%{//g; s/%}//g'
+            }
+
+            echo "-- path segment reads 'properties', not 'options'"
+            jq -e '.blocks[0].segments[] | select(.type == "path") | .properties.max_width' "$theme" >/dev/null
+
+            echo "-- wide terminal keeps the full path"
+            render 200 | grep -qF 'mohan-dotfiles/agents/skills/feature-plan/references'
+
+            echo "-- narrow terminal collapses the parents"
+            render 70 | grep -qF '~/R/m/a/s/f/references'
+
+            echo "-- intermediate width shortens only as much as it must"
+            render 90 | grep -qF '~/R/m/agents/skills/feature-plan/references'
+
+            echo "-- unset COLUMNS falls back to the unshortened path"
+            oh-my-posh print primary --config "$theme" --pwd "$deep" --shell zsh \
+              | sed 's/\x1b\[[0-9;]*m//g' \
+              | grep -qF 'mohan-dotfiles/agents/skills/feature-plan/references'
+
+            echo "all prompt width checks passed" > "$out"
+            cat "$out"
+          '';
+
         # setup.sh: lint it, then exercise the doctor drift audit against a
         # synthetic Home Manager profile (clean, hand-edited, deleted).
         setup-script = pkgs.runCommand "setup-script"
