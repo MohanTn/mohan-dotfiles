@@ -198,6 +198,17 @@
       # fully containerized against the current directory (see docker/).
       source ${../zsh/agent-containers.zsh}
 
+      # `gcm`/`mri`: local-model commit-message and MR-intent helpers backed
+      # by little-coder + llama.cpp (install is opt-in via
+      # nix/little-coder.nix's enableLittleCoder; the functions error
+      # helpfully when it's off).
+      source ${../zsh/little-coder.zsh}
+
+      # Homebrew on PATH when installed (opt-in via nix/homebrew.nix's
+      # enableHomebrew); no-op otherwise. Sourced after the Nix paths are set
+      # so brew's bin lands behind them, never shadowing the base toolchain.
+      source ${../zsh/homebrew.zsh}
+
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
       [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

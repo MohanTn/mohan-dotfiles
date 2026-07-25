@@ -11,5 +11,9 @@
     enableGitHubCopilot = false;
     enableLocalScribe = false;
     enableGitConfig = false;
+    enableLittleCoder = false;
+    littleCoderGpu = false;
+    enableHomebrew = false;
+    brewPackages = [ ];
   };
 }
