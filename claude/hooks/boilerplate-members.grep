@@ -1,0 +1,22 @@
+# Declaration shapes that count as "this edit ADDS a member", one extended-regex
+# per line. boilerplate-guard.sh counts matches in old_string vs new_string on
+# every Edit to a boilerplate-shaped file: more declarations in the new text
+# means a method/function/endpoint is being hand-written, which must go through
+# the generator (scaffold_inject, which adopts the file if it is still legacy).
+# Editing the BODY of an existing member leaves the count unchanged and stays
+# free, which is what keeps ordinary bugfixing in brownfield code unblocked.
+# Lines starting with # and blank lines are stripped before use.
+
+# --- C# ---
+^[[:space:]]*(public|private|protected|internal)[[:space:]]+[A-Za-z_].*\(
+\[Http(Get|Post|Put|Delete|Patch)\]
+
+# --- python / javascript / typescript ---
+^[[:space:]]*(async[[:space:]]+)?(def|function)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(
+^[[:space:]]*(export[[:space:]]+)?(const|let|var)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[:=].*=>
+^[[:space:]]*(public|private|protected|readonly|static|async)?[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\([^)]*\)[[:space:]]*(:[^{]*)?\{[[:space:]]*$
+^[[:space:]]*@(app|router)\.(get|post|put|delete|patch|route)
+^[[:space:]]*(app|router)\.(get|post|put|delete|patch|use)[[:space:]]*\(
+
+# --- go ---
+^func[[:space:]]*(\([^)]*\)[[:space:]]*)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(

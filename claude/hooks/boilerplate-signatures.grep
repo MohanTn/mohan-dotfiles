@@ -1,0 +1,30 @@
+# Content signatures of boilerplate-shaped code, one extended-regex per line.
+# boilerplate-guard.sh matches new-file content against these IN ADDITION to
+# the filename check, so renaming a file (orders-controller.ts -> orders-api.ts)
+# does not exempt it from the scaffold mandate. Lines starting with # and blank
+# lines are stripped before use.
+#
+# Lives next to the guard, not next to the templates, so every consumer that
+# already has claude/hooks (Claude, Copilot via CLAUDE_HOOKS_HOME, Pi via
+# runClaudeHook, the docker images, the flake selftest sandbox) gets it with no
+# extra wiring — a guard that silently degrades to filename-only when ~/.agents
+# is missing would reopen the rename hole it exists to close.
+# Adding a template under agents/boilerplats/<lang>/ means adding its shape here.
+
+# --- framework / controller shapes ---
+\[ApiController\]
+ControllerBase
+express\.Router
+Router\(\)
+APIRouter\(
+http\.ServeMux
+
+# --- layered-architecture type names (whatever the file is called) ---
+interface I[A-Za-z]+Repository
+class [A-Za-z]+(Controller|Repository|Handler|Factory|Validator|Mapper)
+type [A-Za-z]+(Controller|Repository|Handler|Factory|Validator|Mapper) struct
+interface [A-Za-z]+(Command|Query|Request|Response)
+
+# --- validator shapes ---
+function validate[A-Z]
+def validate_

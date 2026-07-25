@@ -24,7 +24,8 @@ declare -A HOOK_INFO=(
   [user-prompt-submit.sh]="UserPromptSubmit::clear prior loop/goal state, hint the MCP reader for @-referenced documents"
   [boilerplate-hint.sh]="UserPromptSubmit::point at ~/.agents/boilerplats/scaffold.js on boilerplate-flavored prompts"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
-  [boilerplate-guard.sh]="PreToolUse (Edit/Write)::mandate scaffold.js for new boilerplate files, protect scaffold:inject markers"
+  [boilerplate-guard.sh]="PreToolUse (Edit/Write)::mandate the scaffold generator for new boilerplate files (by name AND by content signature), protect scaffold:inject markers"
+  [bash-write-guard.sh]="PreToolUse (Bash)::block shell redirection/heredoc/tee writes into code files (the write-around of boilerplate-guard)"
   [pre-tool-use-goal-capture.sh]="PreToolUse (*)::capture the stated GOAL: line from the transcript"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
@@ -58,6 +59,11 @@ default_payload() {
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Write",
           tool_input:{file_path:"/tmp/does-not-exist/OrdersController.cs", content:"public class OrdersController {}"}}'
+      ;;
+    bash-write-guard.sh)
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Bash",
+          tool_input:{command:"cat > src/OrdersRequest.ts <<EOF\nexport interface OrdersRequest {}\nEOF"}}'
       ;;
     pre-tool-use-goal-capture.sh | pre-tool-use-loop-breaker.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -313,6 +319,102 @@ cmd_selftest() {
   expect_exit "boilerplate-guard allows an ordinary edit to a boilerplate file" \
     boilerplate-guard.sh \
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Edit", tool_input:{file_path:"/tmp/does-not-exist/OrdersController.cs", old_string:"throw new NotImplementedException();", new_string:"return Ok();"}}')" \
+    0
+
+  # Rename-proofing: the same content under an innocent name must still be
+  # blocked, or the mandate is one `mv` away from being optional.
+  expect_exit "boilerplate-guard blocks renamed boilerplate by content signature" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/does-not-exist/orders-api.ts", content:"import { Router } from \"express\";\nconst r = Router();\nexport default r;"}}')" \
+    2
+
+  expect_exit "boilerplate-guard blocks a renamed repository class" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/does-not-exist/store.ts", content:"export class OrderRepository {}"}}')" \
+    2
+
+  expect_exit "boilerplate-guard allows an ordinary code file that matches no signature" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/does-not-exist/math-utils.ts", content:"export const add = (a: number, b: number) => a + b;"}}')" \
+    0
+
+  # Brownfield adoption: hand-writing a member into a legacy (unmarked) file is
+  # blocked so it goes through the generator, which adopts the file on the way.
+  # Editing the body of an existing member stays free — that is what keeps
+  # adoption an ongoing discovery rather than a bulk marker bootstrap.
+  local legacy_dir legacy_cs legacy_py plain_ts
+  legacy_dir=$(mktemp -d)
+  legacy_cs="$legacy_dir/OrdersController.cs"
+  legacy_py="$legacy_dir/store.py"
+  plain_ts="$legacy_dir/format.ts"
+  printf 'public class OrdersController : ControllerBase\n{\n    public IActionResult Get(int id)\n    {\n        return Ok(id);\n    }\n}\n' > "$legacy_cs"
+  printf 'class OrderRepository:\n    def get(self, id):\n        return None\n' > "$legacy_py"
+  printf 'export const fmt = (n) => n.toFixed(2);\n' > "$plain_ts"
+
+  expect_exit "boilerplate-guard blocks hand-writing a member into a legacy file" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" --arg f "$legacy_cs" '{session_id:"selftest", cwd:$cwd, tool_name:"Edit", tool_input:{file_path:$f, old_string:"    }\n}", new_string:"    }\n\n    public IActionResult List()\n    {\n        return Ok();\n    }\n}"}}')" \
+    2
+
+  expect_exit "boilerplate-guard allows editing the body of an existing member" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" --arg f "$legacy_cs" '{session_id:"selftest", cwd:$cwd, tool_name:"Edit", tool_input:{file_path:$f, old_string:"return Ok(id);", new_string:"return Ok(_svc.Get(id));"}}')" \
+    0
+
+  # store.py is boilerplate by CONTENT only (its name says nothing), which is
+  # what makes adoption work on a legacy tree that never followed a convention.
+  expect_exit "boilerplate-guard blocks a hand-written method in a legacy python repository" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" --arg f "$legacy_py" '{session_id:"selftest", cwd:$cwd, tool_name:"Edit", tool_input:{file_path:$f, old_string:"        return None", new_string:"        return None\n\n    def list_all(self):\n        return []"}}')" \
+    2
+
+  expect_exit "boilerplate-guard leaves non-boilerplate files free to grow" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" --arg f "$plain_ts" '{session_id:"selftest", cwd:$cwd, tool_name:"Edit", tool_input:{file_path:$f, old_string:"export const fmt = (n) => n.toFixed(2);", new_string:"export const fmt = (n) => n.toFixed(2);\nexport function round(n) { return Math.round(n); }"}}')" \
+    0
+  rm -rf "$legacy_dir"
+
+  # Test files carry boilerplate-shaped fixtures by nature, so gating them only
+  # yields false positives (this suite's own subject, boilerplats, tripped it).
+  expect_exit "boilerplate-guard exempts test files carrying boilerplate fixtures" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/does-not-exist/orders.test.ts", content:"const fixture = `class OrderRepository {}`;"}}')" \
+    0
+
+  expect_exit "boilerplate-guard still gates production code next to tests" \
+    boilerplate-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/does-not-exist/orders.ts", content:"export class OrderRepository {}"}}')" \
+    2
+
+  # bash-write-guard: the shell path around the Write/Edit gate
+  expect_exit "bash-write-guard blocks a heredoc write into a code file" \
+    bash-write-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"cat > src/OrdersRequest.ts <<EOF\nexport interface OrdersRequest {}\nEOF"}}')" \
+    2
+
+  expect_exit "bash-write-guard blocks an append into a code file" \
+    bash-write-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"echo x >> lib/util.py"}}')" \
+    2
+
+  expect_exit "bash-write-guard exempts the scaffold generator itself" \
+    bash-write-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"node ~/.agents/boilerplats/scaffold.js --lang typescript --template request --out src/x.ts --data \"{}\" > /dev/null"}}')" \
+    0
+
+  expect_exit "bash-write-guard blocks staging a file and renaming it into place" \
+    bash-write-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"printf x > /tmp/a.txt && mv /tmp/a.txt /tmp/OrdersController.cs"}}')" \
+    2
+
+  expect_exit "bash-write-guard allows an ordinary code-to-code rename" \
+    bash-write-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"mv src/Foo.cs src/Bar.cs"}}')" \
+    0
+
+  expect_exit "bash-write-guard allows ordinary commands and non-code redirects" \
+    bash-write-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"rg foo src/ | tee /tmp/results.txt"}}')" \
     0
 
   # overwrite rules need a real file: marked file loses marker -> block, keeps marker -> allow

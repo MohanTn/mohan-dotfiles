@@ -64,20 +64,15 @@ if [ "$file_count" -le "$MAX_FILES" ] && command -v ctags >/dev/null 2>&1; then
 fi
 
 {
-  echo "# Repo map: $root"
-  printf 'Generated %s | %s files' "$(date '+%Y-%m-%d %H:%M')" "$file_count"
+  printf '# repo-map %s | %s files' "$root" "$file_count"
   if [ "$symbol_count" -gt 0 ]; then
-    printf ', %s symbols\n' "$symbol_count"
+    printf ', %s syms\n' "$symbol_count"
   elif [ "$file_count" -gt "$MAX_FILES" ]; then
-    printf ' (over %s, symbol pass skipped)\n' "$MAX_FILES"
+    printf ' (>%s, syms skipped)\n' "$MAX_FILES"
   else
     printf '\n'
   fi
-  echo
-  echo "Folder -> file -> symbol index of every tracked file. Symbols are shown as"
-  echo "\`name (kind) :line\`; line numbers were current at generation time."
-  echo "Files with no extractable symbols are grouped under 'Other files'."
-  echo
+  printf 'fmt: dir/ then "file: name:line ..."; "+" line lists files with no symbols\n'
 
   # Sort by directory then basename: a plain path sort interleaves a/b/c.py
   # between a/x.py and a/y.py, which would reopen the same folder heading twice.
@@ -91,16 +86,16 @@ fi
       # applied when awk reaches them in the argument list, i.e. after BEGIN.
       BEGIN { while ((getline line < SYMS) > 0) {
                 split(line, f, "|")
-                sym[f[1]] = sym[f[1]] sprintf("- %s (%s) :%s\n", f[2], f[3], f[4])
+                sym[f[1]] = sym[f[1]] sprintf("%s:%s ", f[2], f[4])
               } }
       function flush_plain() {
-        if (plain != "") { printf "\nOther files: %s\n", plain; plain = "" }
+        if (plain != "") { printf "+%s\n", plain; plain = "" }
       }
       {
         dir = $1; base = $2; path = $3
-        if (dir != cur) { flush_plain(); printf "\n## %s\n", dir; cur = dir }
-        if (path in sym) { printf "\n### %s\n%s", base, sym[path] }
-        else { plain = (plain == "") ? base : plain ", " base }
+        if (dir != cur) { flush_plain(); printf "\n%s/\n", dir; cur = dir }
+        if (path in sym) { s = sym[path]; sub(/ $/, "", s); printf "%s: %s\n", base, s }
+        else { plain = (plain == "") ? base : plain " " base }
       }
       END { flush_plain() }
     '

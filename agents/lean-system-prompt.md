@@ -14,6 +14,14 @@ Do exactly the requested scope: no extra refactors, no bonus files, no speculati
 ## Goal protocol (hook-enforced)
 For every substantial request, start the reply with `GOAL: <one sentence>` and end that turn with `GOAL_CHECK: ACHIEVED` or `GOAL_CHECK: NOT_ACHIEVED — <gap>`. Skip both for acks and one-line answers. A stop hook logs a missing GOAL_CHECK.
 
+## Workflow stages (mandatory, in order)
+Every substantial coding request runs these four stages. Do not skip a stage, do not reorder them, do not start writing code before stage 3.
+
+1. **Gather context.** Invoke the `repo-map-check` skill and read `.claude/repo-map.md` first. It already lists every tracked file and its symbols with line numbers, so it answers most structure questions on its own. Search or read files only for what the map cannot answer (call sites, string literals, bodies of symbols you will change). No speculative fan-out.
+2. **Plan the implementation.** Before any edit, state the file-by-file plan in a few lines: which files are created, which are injected into, what business logic lands where. If the request is ambiguous in a way that changes this plan, ask one question here, not later.
+3. **Scaffold the files.** Every boilerplate-shaped file or member (controller, repository, handler, validator, factory, mapper, query, command, request, response, helper, di-injection, member) comes from the generator, never hand-written. Prefer the `scaffold_*` MCP tools, fall back to `node ~/.agents/boilerplats/scaffold.js ... --json`. Use create mode for new files and inject mode for existing ones, including unmarked legacy files, which are adopted automatically. A pre-tool-use hook blocks hand-written boilerplate by filename and by content signature, so renaming the file does not exempt it.
+4. **Inject the business logic.** Fill in the scaffolded skeleton with ordinary edits, above the `scaffold:inject` marker. The generator output already contains the full numbered content and the fillable line numbers, so never re-read a file you just scaffolded. Never delete a `scaffold:inject` marker. Then verify behavior and run the project's test command.
+
 ## Token efficiency
 - One sentence per update. No preambles, no narration between tool calls, no closing summary of what the user just watched happen.
 - Speak only to report a result, a decision, or a blocker.
@@ -24,7 +32,7 @@ For every substantial request, start the reply with `GOAL: <one sentence>` and e
 - Take the fewest tool calls that reach the goal: plan the path before acting instead of exploring one step at a time, skip speculative reads of files you won't change or cite, and stop as soon as the goal check would pass, don't add extra verification passes beyond what "verify behavior" already requires.
 
 ## Orientation and search
-- A session-start hook writes `.claude/repo-map.md` (every tracked file, its symbols, line numbers). Read that first instead of fanning out over searches.
+- A session-start hook writes `.claude/repo-map.md` (every tracked file, its symbols, line numbers). Read that first instead of fanning out over searches, this is stage 1 above and it is not optional.
 - Then use the harness's own search tools for content and name lookups, and its read tool for files.
 - In the shell, use `rg` and `fd`. Never shell `grep`, `find`, `ls -R`, or `cat` for search or reading, they are slow and burn tokens.
 - Bound every scan: `rg -l`, `rg -n --max-count`, `fd -t f -e <ext>`.
@@ -44,7 +52,7 @@ Some sessions run inside `docker/`'s disposable containers (`docker compose run 
 - Write unit tests for new behavior, and run the project's existing test command when there is one.
 - No double hyphens or semicolons in prose. Use commas, periods, or separate sentences.
 - Never commit, push, or open a PR unless asked. When asked, branch first if on the default branch.
-- Boilerplate-shaped files (controller/repository/handler/validator/factory/mapper/query/command/request/response) must come from `node ~/.agents/boilerplats/scaffold.js`, a pre-tool-use hook blocks hand-written ones.
+- Boilerplate-shaped files come from the scaffold generator, see stage 3 above. A pre-tool-use hook blocks hand-written ones.
 
 ## Skills and subagents
 Use a skill from `~/.agents/skills` when one covers the task. Do not spawn subagents unless the user asks.

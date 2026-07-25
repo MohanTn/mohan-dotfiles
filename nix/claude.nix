@@ -36,4 +36,18 @@
       run ${pkgs.bash}/bin/bash -c '${pkgs.curl}/bin/curl -fsSL https://claude.ai/install.sh | ${pkgs.bash}/bin/bash'
     fi
   '';
+
+  # Scaffold MCP server (agents/boilerplats/mcp-server.js): registered at user
+  # scope so every project gets the scaffold_* tools. Claude Code keeps
+  # user-scope MCP servers in ~/.claude.json, which it rewrites at runtime, so
+  # this goes through `claude mcp add` (idempotent via the `mcp get` probe)
+  # instead of a home.file entry. Deps land in ~/.cache/boilerplats via
+  # agents.nix's boilerplatsDeps, which mcp-server.js falls back to.
+  home.activation.scaffoldMcp = lib.hm.dag.entryAfter [ "installClaude" ] ''
+    claudeBin="$HOME/.local/bin/claude"
+    command -v claude >/dev/null 2>&1 && claudeBin="$(command -v claude)"
+    if [ -x "$claudeBin" ] && ! "$claudeBin" mcp get scaffold >/dev/null 2>&1; then
+      run "$claudeBin" mcp add --scope user scaffold -- ${pkgs.nodejs}/bin/node "$HOME/.agents/boilerplats/mcp-server.js" || true
+    fi
+  '';
 }
