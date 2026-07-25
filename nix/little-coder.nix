@@ -83,6 +83,9 @@ let
   # writeShellScriptBin, so the body is shellcheck'd at build time too.
   llamaServerGpuWrapper = pkgs.writeShellApplication {
     name = "llama-server";
+    # util-linux for flock, which serializes concurrent wrapper invocations
+    # rebuilding the GPU lib symlink farm (see zsh/llama-server-gpu.sh).
+    runtimeInputs = [ pkgs.util-linux ];
     text = ''
       LITTLE_CODER_LLAMA_SERVER="''${LITTLE_CODER_LLAMA_SERVER:-${llamaCpp}/bin/llama-server}"
       export LITTLE_CODER_LLAMA_SERVER

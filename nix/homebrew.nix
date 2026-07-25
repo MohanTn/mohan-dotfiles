@@ -47,10 +47,19 @@ in
           # skips its confirmation prompt; the sudo password prompt stays.
           echo "Installing Homebrew (may prompt for your password)..."
           installer="$(mktemp)"
-          ${pkgs.curl}/bin/curl -fsSL -o "$installer" \
+          # Safety net: guarantees the temp file is removed even if the
+          # download or installer fails and the script exits early under
+          # set -eu, before the explicit cleanup below is reached.
+          trap 'rm -f "$installer"' EXIT
+          # HEAD is intentionally unpinned: this is upstream Homebrew's own
+          # documented bootstrap URL, and the installer itself resolves the
+          # actual brew version to install. Bounded timeouts keep a stalled
+          # or unreachable connection from hanging activation indefinitely.
+          $DRY_RUN_CMD ${pkgs.curl}/bin/curl -fsSL --connect-timeout 10 --max-time 300 -o "$installer" \
             https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
           $DRY_RUN_CMD NONINTERACTIVE=1 ${pkgs.bash}/bin/bash "$installer"
-          rm -f "$installer"
+          $DRY_RUN_CMD rm -f "$installer"
+          trap - EXIT
           for c in ${escapeShellArgs brewCandidates}; do
             if [ -x "$c" ]; then brew_bin="$c"; break; fi
           done

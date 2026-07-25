@@ -265,7 +265,7 @@
             fi
 
             # GPU offload: nix/little-coder.nix exports LITTLE_CODER_NGL only
-            # when littleCoderCuda is on, so the flag must appear exactly then
+            # when littleCoderGpu is on, so the flag must appear exactly then
             # — a CPU build that silently got -ngl (or a GPU build that did
             # not) is the failure this pins down. Stubs stand in for the
             # server (records its argv, then reports healthy) and for curl

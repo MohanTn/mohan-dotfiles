@@ -25,18 +25,31 @@ icd_dirs="${LITTLE_CODER_VK_ICD_DIRS:-/usr/share/vulkan/icd.d /etc/vulkan/icd.d}
 
 # The stamp marks a completed farm; deleting it (or the directory) is how you
 # force a rebuild after a driver upgrade.
-if [ ! -e "$farm/.stamp" ]; then
-  rm -rf "$farm"
-  mkdir -p "$farm"
-  # shellcheck disable=SC2086  # the *_dirs vars are deliberately word-split
-  for dir in $lib_dirs; do
-    [ -d "$dir" ] || continue
-    for lib in "$dir"/libnvidia-*.so* "$dir"/libGLX_nvidia.so* "$dir"/libcuda.so*; do
-      [ -e "$lib" ] && ln -sf "$lib" "$farm/"
+#
+# The check-then-rebuild below is serialized with a flock on a lock file that
+# lives next to (not inside) $farm, so it survives the rm -rf. Without this,
+# two wrappers starting close together (a quick restart, two sessions
+# launching at once) could both see the stamp missing and race: one's
+# rm -rf "$farm" can delete the directory out from under the other's
+# in-progress ln -sf loop, which fails under this script's set -euo pipefail
+# and aborts startup. The lock makes the second invocation simply wait, then
+# see the completed stamp and skip rebuilding.
+mkdir -p "$(dirname "$farm")"
+(
+  flock -x 9
+  if [ ! -e "$farm/.stamp" ]; then
+    rm -rf "$farm"
+    mkdir -p "$farm"
+    # shellcheck disable=SC2086  # the *_dirs vars are deliberately word-split
+    for dir in $lib_dirs; do
+      [ -d "$dir" ] || continue
+      for lib in "$dir"/libnvidia-*.so* "$dir"/libGLX_nvidia.so* "$dir"/libcuda.so*; do
+        [ -e "$lib" ] && ln -sf "$lib" "$farm/"
+      done
     done
-  done
-  touch "$farm/.stamp"
-fi
+    touch "$farm/.stamp"
+  fi
+) 9>"$farm.lock"
 
 if [ ! -e "$farm/libGLX_nvidia.so.0" ] && [ ! -e "$farm/libcuda.so.1" ]; then
   echo "llama-server: no NVIDIA driver libraries found in: $lib_dirs" >&2
