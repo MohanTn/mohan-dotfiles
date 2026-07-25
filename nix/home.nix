@@ -10,6 +10,8 @@ in
   imports = [
     ./packages.nix
     ./optional-packages.nix
+    ./nix-conf.nix
+    ./homebrew.nix
     ./maintenance.nix
     ./zsh.nix
     ./alacritty.nix
@@ -18,6 +20,7 @@ in
     ./claude.nix
     ./copilot.nix
     ./pi.nix
+    ./little-coder.nix
     ./tmux.nix
     ./nvim.nix
     configPath

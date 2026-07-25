@@ -4,8 +4,21 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Added
+
+- Implements little-coder as a fourth optional harness backed by a Gemma-4-E4B GGUF model served by llama.cpp, adds Homebrew package manager support with formula management, enables optional Vulkan GPU acceleration, upgrades llama.cpp via nixpkgs-unstable, and improves Nix experimental features handling via managed nix.conf.
+- Homebrew as an opt-in package manager (`nix/homebrew.nix`, prompt 8 of `setup-packages.sh`): installs brew when missing and keeps the formulae listed in `brewPackages` installed on every `./setup.sh`. `zsh/homebrew.zsh` puts brew on `PATH` behind the Nix toolchain so a brew dependency can never shadow the managed git/curl/python, covered by the new `homebrew-shellenv` flake check.
+
 ### Fixed
 
+- little-coder failed to start with `unknown model architecture`: nixos-25.05 pins llama.cpp b5311 (May 2025), which knows neither `gemma4` nor `gemma3n`. `flake.nix` now takes `llama-cpp` (only that package) from a new `nixpkgs-unstable` input via an overlay; everything else stays on 25.05.
+
+### Changed
+
+- The daily `tools-maintenance` user timer now also cleans the Nix store: it expires Home Manager generations older than 7 days (they are GC roots, so this must come first) and then runs `nix-collect-garbage --delete-older-than 7d` with the system's own nix client, not a second one from this flake. Service timeout raised to 45 minutes so the first collection is not killed at systemd's 90-second default.
+- little-coder's llama-server can run on the GPU: `customPackages.littleCoderGpu` (prompt 7a of `setup-packages.sh`) swaps in a Vulkan `llama-cpp` and exports `LITTLE_CODER_NGL` (`littleCoderGpuLayers`, default 99) so `zsh/little-coder.zsh` passes `-ngl`. Vulkan rather than CUDA: the CUDA closure runs to tens of GB with nothing in the binary cache, which filled `/nix` outright. `zsh/llama-server-gpu.sh` wires in the host driver on non-NixOS hosts — it links only `libnvidia-*`/`libGLX_nvidia*`/`libcuda*` into `~/.cache/little-coder/gpu-libs`, points `VK_ICD_FILENAMES` at the distro's ICD manifest, and exits non-zero (rather than falling back to a silent CPU run) when either is missing. Covered by the new `llama-server-gpu` check, which drives it against a fake `/usr` tree and never builds llama.cpp.
+- little-coder's default model is now `unsloth/gemma-4-E4B-it-qat-GGUF` (`gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf`, 4.22 GB QAT quant) instead of Gemma 3n E4B, in `nix/little-coder.nix` and the `zsh/little-coder.zsh` fallback path.
+- Permanent fix for `experimental Nix feature 'nix-command' is disabled` on machines whose Nix enables neither `nix-command` nor `flakes`: `nix/nix-conf.nix` manages `~/.config/nix/nix.conf` with `extra-experimental-features` (appending to, not replacing, `/etc/nix/nix.conf`) and includes an unmanaged `~/.config/nix/nix.conf.local` for machine-local settings, while `setup.sh` exports the same features via `NIX_CONFIG` to cover the bootstrap window before the first activation.
 - Defensive improvements to error handling: prevent IndexError on malformed error signatures, separate conflict marker detection from whitespace diagnostics in merge conflict hooks, and clean up unused permissions.
 
 ### Changed

@@ -3,16 +3,45 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    # Only source of packages that must be newer than the 25.05 freeze; see
+    # the llama-cpp overlay below. Deliberately not `follows`-ed anywhere.
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager = {
       url = "github:nix-community/home-manager/release-25.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, home-manager }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager }:
     let
       system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+
+      # llama.cpp, and nothing else, tracks unstable. nixos-25.05 pins build
+      # b5311 (May 2025), which knows neither the `gemma4` architecture
+      # nix/little-coder.nix's model uses nor its `gemma3n` predecessor: with
+      # it, the model loads far enough to print its metadata and then dies
+      # with "unknown model architecture". Unstable's b10063 has both (see
+      # LLM_ARCH_GEMMA4 in src/llama-arch.cpp). Model formats move faster than
+      # a NixOS release, so pinning the runtime to the release channel while
+      # the model comes from Hugging Face's latest cannot work. Everything
+      # else stays on 25.05 — this is one package, not a channel bump.
+      unstable = nixpkgs-unstable.legacyPackages.${system};
+      llamaCppOverlay = _final: _prev: {
+        inherit (unstable) llama-cpp;
+        # GPU build, referenced only when customPackages.littleCoderGpu is on
+        # (nix/little-coder.nix). Vulkan rather than CUDA on purpose: the CUDA
+        # path pulls the unfree toolkit — libcublas alone unpacks over 3GB,
+        # the closure runs to tens of GB, and cache.nixos.org carries none of
+        # it (that combination is what filled /nix here). Vulkan reaches the
+        # same NVIDIA GPU through the host driver's ICD for a few hundred MB,
+        # at roughly 10-20% less throughput. Either way an override means no
+        # cache hit for llama.cpp itself, so expect it to compile locally.
+        llama-cpp-vulkan = unstable.llama-cpp.override { vulkanSupport = true; };
+      };
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ llamaCppOverlay ];
+      };
       # Read at eval time so this flake works unmodified on any machine or
       # account name; every nix invocation of it therefore needs --impure
       # (bootstrap.sh, README, and the CI workflow all pass it).
@@ -177,6 +206,105 @@
             cat "$out"
           '';
 
+        # zsh/little-coder.zsh's gcm/mri helpers, linted and driven against a
+        # stub little-coder binary in a throwaway repo (LITTLE_CODER_NO_SERVER=1
+        # skips llama-server management): exit-code contract, prompt content,
+        # and diff truncation. The file is kept bash-compatible on purpose so
+        # shellcheck (no zsh dialect support) and bash can exercise it.
+        little-coder-helpers = pkgs.runCommand "little-coder-helpers"
+          { nativeBuildInputs = [ pkgs.bash pkgs.zsh pkgs.shellcheck pkgs.git ]; }
+          ''
+            set -euo pipefail
+            helpers=${./zsh/little-coder.zsh}
+
+            echo "-- lint: zsh -n + shellcheck (bash dialect)"
+            zsh -n "$helpers"
+            shellcheck --shell=bash "$helpers"
+
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME"
+            stub="$TMPDIR/bin"
+            mkdir -p "$stub"
+            cat > "$stub/little-coder" <<'STUB'
+            #!${pkgs.runtimeShell}
+            printf '%s\n' "$@" > "''${LC_STUB_ARGS:?}"
+            echo stub-message
+            STUB
+            chmod +x "$stub/little-coder"
+            export PATH="$stub:$PATH"
+            export LITTLE_CODER_NO_SERVER=1
+            export LC_STUB_ARGS="$TMPDIR/stub-args"
+
+            git init -q -b main "$TMPDIR/repo"
+            cd "$TMPDIR/repo"
+            git config user.email t@t && git config user.name t
+            echo one > f.txt && git add f.txt && git commit -qm init
+
+            echo "-- gcm: nothing staged -> exit 1 + stderr message"
+            if msg=$(bash -c "source $helpers; gcm" 2>&1); then
+              echo "expected gcm to fail with nothing staged" >&2; exit 1
+            fi
+            echo "$msg" | grep -q 'nothing staged'
+
+            echo "-- gcm: staged change reaches the stub, oversized diff truncated"
+            head -c 20000 /dev/zero | tr '\0' 'x' > big.txt
+            git add big.txt
+            bash -c "source $helpers; gcm" | grep -q stub-message
+            grep -q 'conventional commit message' "$LC_STUB_ARGS"
+            grep -q '\[diff truncated\]' "$LC_STUB_ARGS"
+
+            echo "-- mri: branch diff vs main reaches the stub"
+            git checkout -qb feature && git commit -qm big
+            bash -c "source $helpers; mri" | grep -q stub-message
+            grep -q 'merge request' "$LC_STUB_ARGS"
+
+            echo "-- mri: on main with no diff -> exit 1"
+            git checkout -q main
+            if bash -c "source $helpers; mri" 2>/dev/null; then
+              echo "expected mri to fail on main" >&2; exit 1
+            fi
+
+            # GPU offload: nix/little-coder.nix exports LITTLE_CODER_NGL only
+            # when littleCoderGpu is on, so the flag must appear exactly then
+            # — a CPU build that silently got -ngl (or a GPU build that did
+            # not) is the failure this pins down. Stubs stand in for the
+            # server (records its argv, then reports healthy) and for curl
+            # (the health probe reads that same marker).
+            echo "-- llama-server: -ngl passed only when LITTLE_CODER_NGL is set"
+            srv="$TMPDIR/srvbin"
+            mkdir -p "$srv"
+            cat > "$srv/llama-server" <<'STUB'
+            #!${pkgs.runtimeShell}
+            printf '%s ' "$@" > "$LC_SERVER_ARGS"
+            touch "$LC_SERVER_UP"
+            sleep 2
+            STUB
+            cat > "$srv/curl" <<'STUB'
+            #!${pkgs.runtimeShell}
+            [ -e "$LC_SERVER_UP" ]
+            STUB
+            chmod +x "$srv/llama-server" "$srv/curl"
+            export PATH="$srv:$PATH"
+            export LC_SERVER_ARGS="$TMPDIR/server-args" LC_SERVER_UP="$TMPDIR/server-up"
+            export LITTLE_CODER_NO_SERVER=0
+            export LITTLE_CODER_GGUF="$TMPDIR/model.gguf"
+            touch "$LITTLE_CODER_GGUF"
+
+            rm -f "$LC_SERVER_UP"
+            LITTLE_CODER_NGL=42 bash -c "source $helpers; _lc_ensure_server"
+            grep -q -- '-ngl 42' "$LC_SERVER_ARGS"
+
+            rm -f "$LC_SERVER_UP" "$LC_SERVER_ARGS"
+            bash -c "source $helpers; _lc_ensure_server"
+            if grep -q -- '-ngl' "$LC_SERVER_ARGS"; then
+              echo "CPU build must not be given -ngl: $(cat "$LC_SERVER_ARGS")" >&2
+              exit 1
+            fi
+
+            echo "all little-coder helper checks passed" > "$out"
+            cat "$out"
+          '';
+
         # The prompt's path segment must shrink with the terminal. Renders
         # the real theme at several $COLUMNS values against a deep fake path
         # and checks the parent folders collapse to single letters as the
@@ -216,6 +344,135 @@
               | grep -qF 'mohan-dotfiles/agents/skills/feature-plan/references'
 
             echo "all prompt width checks passed" > "$out"
+            cat "$out"
+          '';
+
+        # zsh/llama-server-gpu.sh: the wrapper that lets a Nix-built Vulkan
+        # llama.cpp reach the host NVIDIA driver. Driven against a fake /usr
+        # tree and a stub server binary — so this check never builds
+        # llama-cpp-vulkan — asserting the three things that make or break it:
+        # only NVIDIA libraries reach LD_LIBRARY_PATH, the ICD manifest is
+        # discovered, and a machine with no driver fails loudly instead of
+        # falling back to a silent CPU run.
+        llama-server-gpu = pkgs.runCommand "llama-server-gpu"
+          { nativeBuildInputs = [ pkgs.bash pkgs.shellcheck ]; }
+          ''
+            set -euo pipefail
+            script=${./zsh/llama-server-gpu.sh}
+
+            echo "-- lint"
+            shellcheck --shell=bash "$script"
+
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME" "$TMPDIR/usrlib" "$TMPDIR/icd" "$TMPDIR/bin"
+            touch "$TMPDIR/usrlib/libGLX_nvidia.so.0" \
+                  "$TMPDIR/usrlib/libnvidia-glcore.so.550.0" \
+                  "$TMPDIR/usrlib/libstdc++.so.6"
+            echo '{}' > "$TMPDIR/icd/nvidia_icd.json"
+
+            cat > "$TMPDIR/bin/server-stub" <<'STUB'
+            #!${pkgs.runtimeShell}
+            echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+            echo "VK_ICD_FILENAMES=$VK_ICD_FILENAMES"
+            echo "ARGS=$*"
+            STUB
+            chmod +x "$TMPDIR/bin/server-stub"
+
+            export LITTLE_CODER_LLAMA_SERVER="$TMPDIR/bin/server-stub"
+            export LITTLE_CODER_GPU_LIBS="$TMPDIR/farm"
+            export LITTLE_CODER_GPU_LIB_DIRS="$TMPDIR/usrlib"
+            export LITTLE_CODER_VK_ICD_DIRS="$TMPDIR/icd"
+
+            echo "-- driver libs farmed, ICD found, args forwarded"
+            res=$(bash "$script" -m model.gguf -ngl 99)
+            echo "$res"
+            grep -q "LD_LIBRARY_PATH=$TMPDIR/farm" <<<"$res"
+            grep -q "VK_ICD_FILENAMES=$TMPDIR/icd/nvidia_icd.json" <<<"$res"
+            grep -q 'ARGS=-m model.gguf -ngl 99' <<<"$res"
+
+            echo "-- only NVIDIA libraries are exposed, not the whole host dir"
+            [ -e "$TMPDIR/farm/libGLX_nvidia.so.0" ]
+            [ -e "$TMPDIR/farm/libnvidia-glcore.so.550.0" ]
+            if [ -e "$TMPDIR/farm/libstdc++.so.6" ]; then
+              echo "host libstdc++ must not be linked into the farm" >&2; exit 1
+            fi
+
+            echo "-- an existing VK_ICD_FILENAMES is respected"
+            # Captured, not piped into grep -q: grep exits at the first match
+            # and the stub then dies of SIGPIPE mid-output, which pipefail
+            # reports as a failed check.
+            preset=$(VK_ICD_FILENAMES=/preset.json bash "$script")
+            grep -q 'VK_ICD_FILENAMES=/preset.json' <<<"$preset"
+
+            echo "-- no driver libraries -> exit 1, not a silent CPU run"
+            rm -rf "$TMPDIR/farm"
+            if LITTLE_CODER_GPU_LIB_DIRS="$TMPDIR/empty" bash "$script" 2>"$TMPDIR/err"; then
+              echo "expected failure without driver libraries" >&2; exit 1
+            fi
+            grep -q 'no NVIDIA driver libraries' "$TMPDIR/err"
+
+            echo "-- no ICD manifest -> exit 1 with an actionable message"
+            rm -rf "$TMPDIR/farm"
+            if LITTLE_CODER_VK_ICD_DIRS="$TMPDIR/empty" bash "$script" 2>"$TMPDIR/err2"; then
+              echo "expected failure without an ICD manifest" >&2; exit 1
+            fi
+            grep -q 'no NVIDIA Vulkan ICD manifest' "$TMPDIR/err2"
+
+            echo "all llama-server GPU wrapper checks passed" > "$out"
+            cat "$out"
+          '';
+
+        # zsh/homebrew.zsh: brew must end up on PATH when it is installed, and
+        # *behind* the Nix toolchain (brew shellenv prepends by default, which
+        # would let a brew dependency shadow the managed git/curl/python).
+        # Also asserts the file is a no-op when no brew exists, since
+        # nix/zsh.nix sources it unconditionally. Bash-compatible on purpose so
+        # shellcheck and bash can exercise it.
+        homebrew-shellenv = pkgs.runCommand "homebrew-shellenv"
+          { nativeBuildInputs = [ pkgs.bash pkgs.zsh pkgs.shellcheck ]; }
+          ''
+            set -euo pipefail
+            helpers=${./zsh/homebrew.zsh}
+
+            echo "-- lint: zsh -n + shellcheck (bash dialect)"
+            zsh -n "$helpers"
+            shellcheck --shell=bash "$helpers"
+
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME/.linuxbrew/bin"
+            cat > "$HOME/.linuxbrew/bin/brew" <<STUB
+            #!${pkgs.runtimeShell}
+            echo "export HOMEBREW_PREFIX=$HOME/.linuxbrew"
+            echo "export HOMEBREW_CELLAR=$HOME/.linuxbrew/Cellar"
+            echo "export PATH=$HOME/.linuxbrew/bin:\$PATH"
+            STUB
+            chmod +x "$HOME/.linuxbrew/bin/brew"
+
+            cat > assert.sh <<'CHECK'
+            source "$1"
+            [ "$HOMEBREW_PREFIX" = "$HOME/.linuxbrew" ] || {
+              echo "HOMEBREW_PREFIX not exported: '$HOMEBREW_PREFIX'" >&2; exit 1; }
+            case "$PATH" in
+              /nix-toolchain/bin:*) ;;
+              *) echo "Nix paths must stay first, got: $PATH" >&2; exit 1 ;;
+            esac
+            case "$PATH" in
+              *"$HOME/.linuxbrew/bin:$HOME/.linuxbrew/sbin") ;;
+              *) echo "brew paths must come last, got: $PATH" >&2; exit 1 ;;
+            esac
+            CHECK
+
+            echo "-- installed brew: exported, and appended after the Nix paths"
+            env -i HOME="$HOME" PATH=/nix-toolchain/bin \
+              ${pkgs.bash}/bin/bash assert.sh "$helpers"
+
+            echo "-- no brew installed: sourcing is a silent no-op"
+            noop=$(env -i HOME="$TMPDIR/empty" PATH=/nix-toolchain/bin \
+              ${pkgs.bash}/bin/bash -c 'source "$1"; echo "$PATH"' _ "$helpers" 2>&1)
+            [ "$noop" = "/nix-toolchain/bin" ] || {
+              echo "expected an unchanged PATH, got: $noop" >&2; exit 1; }
+
+            echo "all homebrew shellenv checks passed" > "$out"
             cat "$out"
           '';
 
@@ -260,6 +517,18 @@
             echo "-- migrate_pre_nix_dotfiles: folds a hand-written zshrc into .zshrc.local"
             # shellcheck disable=SC1090
             source "$script"
+
+            echo "-- nix-command/flakes are forced on for every nix call it makes"
+            case "''${NIX_CONFIG:-}" in
+              *"extra-experimental-features = nix-command flakes"*) ;;
+              *) echo "setup.sh must export the flake feature flags" >&2; exit 1 ;;
+            esac
+
+            echo "-- an existing NIX_CONFIG is kept, not clobbered"
+            NIX_CONFIG="access-tokens = github.com=secret" \
+              bash -c 'source "$1"; printf "%s" "$NIX_CONFIG"' _ "$script" \
+              | grep -q 'access-tokens = github.com=secret'
+
             rm -f "$HOME/.zshrc.local"
             echo 'export TOKEN=hand-written-secret' > "$HOME/.zshrc"
             migrate_pre_nix_dotfiles

@@ -1,0 +1,1507 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Feature Implementation Plan – little-coder harness with local Gemma model</title>
+    <style>
+        :root{
+            --bg:#0B0D10; --panel:#131619; --tree:#0E1013; --field:#0E1114; --line:#23272C;
+            --ink:#E4E7EB; --muted:#7C848D; --ink-strong:#FFFFFF;
+            --cyan:#22D3EE; --amber:#F5A524; --green:#3DD68C; --red:#FF6B6B;
+            --mono:'JetBrains Mono','IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        *{ margin:0; padding:0; box-sizing:border-box; }
+        body{ font-family:var(--mono); background:var(--bg); color:var(--ink); font-size:13.5px; line-height:1.5; }
+
+        input, textarea, select{
+            width:100%; padding:.55rem .7rem; border:1px solid var(--line); border-radius:6px;
+            font-family:var(--mono); font-size:.85rem; background:var(--field); color:var(--ink);
+        }
+        input:focus, textarea:focus, select:focus{ outline:2px solid var(--cyan); outline-offset:1px; }
+        textarea{ resize:vertical; }
+        label{ font-weight:600; display:block; margin-bottom:.3rem; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+
+        .flex-row{ display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-start; }
+        .mt-1{ margin-top:.75rem; } .mt-2{ margin-top:1.5rem; }
+        .text-muted{ color:var(--muted); } .text-small{ font-size:.8rem; }
+
+        .btn{ background:#1A1E22; border:1px solid var(--line); padding:.45rem 1rem; border-radius:6px; font-size:.8rem; font-weight:600; cursor:pointer; color:var(--ink); font-family:var(--mono); display:inline-flex; align-items:center; gap:.35rem; transition:.15s; }
+        .btn:hover{ background:#20242A; }
+        .btn-primary{ background:var(--cyan); border-color:var(--cyan); color:#00272E; }
+        .btn-primary:hover{ opacity:.9; }
+        .btn-primary.copied{ background:var(--green); border-color:var(--green); }
+        .btn-danger{ background:#3A1414; border-color:#5A1E1E; color:var(--red); }
+        .btn-danger:hover{ background:#4A1A1A; }
+        .btn-outline{ background:transparent; border:1px dashed var(--cyan); color:var(--cyan); }
+        .btn-outline:hover{ background:rgba(34,211,238,.08); }
+        .btn-sm{ padding:.2rem .6rem; font-size:.72rem; }
+        .btn-block{ width:100%; justify-content:center; }
+
+        .item-block{ border:1px solid var(--line); border-radius:8px; padding:1rem; margin-bottom:.9rem; background:var(--field); }
+        .item-header{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; margin-bottom:.6rem; }
+        .item-header .item-title{ font-weight:700; font-size:.88rem; flex:1; color:var(--ink-strong); display:flex; align-items:center; gap:.4rem; }
+        .item-fields{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+        .item-fields .full-width{ grid-column:1 / -1; }
+        .item-fields label{ font-size:.68rem; margin-bottom:.2rem; }
+        @media (max-width:700px){
+            .item-fields{ grid-template-columns:1fr; }
+            .item-fields .full-width{ grid-column:1; }
+        }
+
+        .qa-table{ width:100%; border-collapse:collapse; font-size:.85rem; }
+        .qa-table th{ background:var(--field); text-align:left; padding:.5rem .7rem; font-weight:700; border-bottom:2px solid var(--line); color:var(--muted); font-size:.65rem; text-transform:uppercase; letter-spacing:.04em; }
+        .qa-table td{ padding:.55rem .7rem; border-bottom:1px solid var(--line); vertical-align:top; }
+        .qa-table .opts-cell{ white-space:pre-line; color:var(--muted); font-size:.8rem; max-width:340px; }
+        .decision-input{ width:100%; }
+
+        .approach-block{ margin-bottom:1.25rem; padding-bottom:1.25rem; border-bottom:1px solid var(--line); }
+        .approach-block:last-child{ border:none; margin:0; padding:0; }
+        .approach-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; gap:1rem; }
+        .approach-title{ margin:0; font-size:.9rem; font-weight:700; color:var(--ink-strong); }
+        .approach-rationale{ color:var(--ink); opacity:.85; line-height:1.7; margin:.4rem 0 0; white-space:pre-wrap; font-size:.86rem; }
+
+        .badge{ display:inline-block; padding:.1rem .5rem; border-radius:4px; font-size:.6rem; font-weight:700; text-transform:uppercase; }
+        .badge-create{ background:#0E2F2A; color:var(--green); }
+        .badge-update{ background:#3A2A0C; color:var(--amber); }
+        .badge-delete{ background:#3A1414; color:var(--red); }
+
+        /* ---- shell layout: left tree nav + scrollable main + pinned cmdbar ---- */
+        .shell{ display:grid; grid-template-columns:260px 1fr; height:100vh; overflow:hidden; }
+        .tree{ background:var(--tree); border-right:1px solid var(--line); overflow-y:auto; display:flex; flex-direction:column; }
+        .tree-brand{ padding:1rem 1rem .8rem; border-bottom:1px solid var(--line); }
+        .tree-brand .name{ color:var(--ink-strong); font-weight:700; font-size:.9rem; word-break:break-word; }
+        .tree-brand .meta{ color:var(--muted); font-size:.68rem; margin-top:.25rem; }
+        .tree-group{ padding:.9rem 1rem .3rem; font-size:.6rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:700; }
+        .tnode{ display:flex; align-items:center; gap:.5rem; padding:.4rem 1rem; font-size:.8rem; cursor:pointer; color:#C7CDD3; text-decoration:none; border:none; background:none; width:100%; text-align:left; font-family:var(--mono); }
+        .tnode:hover{ background:#171B1F; }
+        .tnode.active{ background:#181C21; box-shadow:inset 3px 0 0 var(--cyan); color:var(--ink-strong); }
+        .tnode .flag{ margin-left:auto; font-size:.6rem; font-weight:700; padding:.05rem .4rem; border-radius:8px; background:#3A2A0C; color:var(--amber); }
+        .fileleaf{ padding-left:1.7rem; font-size:.74rem; }
+        .fileleaf .badge{ padding:.05rem .3rem; }
+        .tree-foot{ margin-top:auto; padding:.75rem 1rem; border-top:1px solid var(--line); font-size:.66rem; color:var(--muted); display:flex; align-items:center; gap:.4rem; }
+        .tree-foot .dot{ width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
+        .tree-foot .dot.warn{ background:var(--amber); }
+
+        .main{ min-width:0; display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+        .scroll-area{ overflow-y:auto; flex:1; }
+        .wrap{ margin:0 auto; padding:1.75rem 2rem 3rem; width:100%; }
+        .topline{ display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:.72rem; margin-bottom:1.1rem; gap:.75rem; }
+        .topline b{ color:var(--ink-strong); }
+        #nav-toggle-btn{ display:none; }
+
+        h1{ font-size:1.3rem; margin:0 0 .35rem; color:var(--ink-strong); letter-spacing:-.01em; font-weight:700; }
+        .sub{ color:var(--muted); font-size:.82rem; margin-bottom:1.75rem; line-height:1.6; max-width:90ch; }
+
+        .stat-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:.7rem; margin-bottom:1.5rem; }
+        .stat{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.85rem .9rem; }
+        .stat .n{ font-size:1.4rem; font-weight:700; color:var(--ink-strong); }
+        .stat .n.amber{ color:var(--amber); }
+        .stat .l{ color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.04em; margin-top:.2rem; }
+
+        .alert{ background:#241A0C; border:1px solid #4A3413; color:var(--amber); border-radius:8px; padding:.7rem 1rem; font-size:.8rem; margin-bottom:1.5rem; display:flex; gap:.55rem; align-items:center; }
+
+        .pipeline{ margin-bottom:2rem; }
+        .pipeline h2{ font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700; margin-bottom:.8rem; }
+        .pipe-row{ display:flex; align-items:stretch; gap:0; overflow-x:auto; padding-bottom:.5rem; }
+        .pipe-node{ flex:0 0 170px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.7rem; margin-right:1.1rem; position:relative; cursor:pointer; transition:.15s; }
+        .pipe-node:hover{ border-color:var(--cyan); }
+        .pipe-node:not(:last-child)::after{ content:'→'; position:absolute; right:-1.35rem; top:50%; transform:translateY(-50%); color:var(--muted); }
+        .pipe-node .order{ color:var(--muted); font-size:.62rem; }
+        .pipe-node .path{ font-size:.72rem; color:var(--ink-strong); word-break:break-all; margin-top:.35rem; }
+        .pipe-node .badge{ margin-top:.3rem; display:inline-block; }
+
+        .section{ background:var(--panel); border:1px solid var(--line); border-radius:8px; margin-bottom:1rem; overflow:hidden; scroll-margin-top:1.25rem; }
+        .section-head{ display:flex; align-items:center; gap:.5rem; padding:.75rem 1rem; cursor:pointer; font-size:.86rem; margin:0; font-weight:700; color:var(--ink-strong); user-select:none; }
+        .section-head:hover{ background:#171B1F; }
+        .section-head .toggle-arrow{ display:inline-block; width:16px; transition:transform .2s; flex-shrink:0; color:var(--muted); font-size:.75rem; }
+        .section-head .toggle-arrow.collapsed{ transform:rotate(-90deg); }
+        .section.collapsed .section-body, .section.collapsed .section-desc{ display:none; }
+        .section.collapsed{ padding-bottom:0; }
+        .section-desc{ color:var(--muted); font-size:.78rem; padding:0 1rem 1rem; margin-top:-.4rem; line-height:1.55; }
+        .section-body{ padding:0 1rem 1.1rem; }
+        .section h3{ font-size:.82rem; font-weight:700; margin:1.2rem 0 .5rem; color:var(--ink-strong); }
+        .section-header-actions{ display:none; gap:.3rem; margin-left:auto; }
+        .section-head:hover .section-header-actions{ display:flex; }
+        .comment-btn{ padding:.2rem .5rem; background:rgba(34,211,238,.1); border:1px solid var(--cyan); color:var(--cyan); border-radius:4px; cursor:pointer; font-size:.66rem; font-weight:700; }
+        .comment-btn:hover{ background:rgba(34,211,238,.2); }
+
+        .cmdbar{ flex-shrink:0; background:var(--panel); border-top:1px solid var(--line); padding:.75rem 1.5rem; display:flex; gap:.75rem; align-items:center; }
+        .cmdbar .prompt{ color:var(--green); }
+        .cmdbar .spacer{ flex:1; }
+        .cmdbar .hint{ color:var(--muted); font-size:.72rem; }
+
+        @media (max-width:900px){
+            .shell{ grid-template-columns:1fr; }
+            .tree{ position:fixed; z-index:50; top:0; left:0; width:260px; height:100vh; transform:translateX(-100%); transition:transform .25s ease; box-shadow:2px 0 16px rgba(0,0,0,.5); }
+            .tree.open{ transform:translateX(0); }
+            #nav-toggle-btn{ display:inline-flex; }
+            .stat-row{ grid-template-columns:1fr 1fr; }
+        }
+
+        /* ---- side panel: comments / AI chat ---- */
+        .side-panel{
+            position:fixed; right:0; top:0; width:340px; height:100vh; background:var(--panel);
+            border-left:1px solid var(--line); box-shadow:-2px 0 12px rgba(0,0,0,.4); z-index:1000;
+            display:flex; flex-direction:column; transform:translateX(100%); transition:transform .3s ease;
+            font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:var(--ink);
+        }
+        .side-panel.open{ transform:translateX(0); }
+        .panel-header{ padding:1rem; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+        .panel-header h3{ margin:0; font-size:.95rem; color:var(--ink-strong); }
+        .close-btn{ background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--muted); padding:0; }
+        .close-btn:hover{ color:var(--ink-strong); }
+        .comments-list{ flex:1; overflow-y:auto; padding:1rem; }
+        .comment-item{ margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid var(--line); }
+        .comment-item:last-child{ border-bottom:none; }
+        .comment-author{ font-weight:700; font-size:.82rem; color:var(--ink-strong); }
+        .comment-time{ font-size:.7rem; color:var(--muted); margin-left:.5rem; }
+        .comment-text{ font-size:.85rem; color:var(--ink); opacity:.9; margin-top:.3rem; word-wrap:break-word; }
+        .comment-ai-response{ background:var(--field); border:1px solid var(--line); padding:.7rem; border-radius:6px; margin-top:.5rem; font-size:.8rem; color:var(--ink); }
+        .comment-input{ padding:1rem; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:.5rem; }
+        .comment-input textarea{ resize:none; font-family:inherit; font-size:.82rem; height:60px; padding:.5rem; border:1px solid var(--line); border-radius:5px; background:var(--field); color:var(--ink); }
+        .comment-input button{ padding:.4rem .8rem; background:var(--cyan); color:#00272E; border:none; border-radius:5px; cursor:pointer; font-size:.82rem; font-weight:700; }
+        .comment-input button:hover{ opacity:.9; }
+        .comment-input button:disabled{ background:#2A2D31; color:var(--muted); cursor:not-allowed; }
+        .offline-message{ background:#241A0C; border:1px solid #4A3413; color:var(--amber); padding:.7rem; border-radius:5px; font-size:.8rem; margin-bottom:1rem; }
+        .connection-status{ font-size:.7rem; padding:.5rem; text-align:center; border-bottom:1px solid var(--line); }
+        .connection-status.connected{ background:#0E2F2A; color:var(--green); }
+        .connection-status.disconnected{ background:#3A1414; color:var(--red); }
+    </style>
+</head>
+<body>
+
+    <div class="shell">
+        <nav class="tree" id="tree-nav">
+            <div class="tree-brand">
+                <div class="name" id="tree-brand-name">Untitled Feature</div>
+                <div class="meta" id="tree-brand-meta">featurePlan</div>
+            </div>
+
+            <div class="tree-group">Problem</div>
+            <button class="tnode" data-target="#overview-section">Feature Overview</button>
+            <button class="tnode" data-target="#questions-section">Open Questions<span class="flag" id="nav-questions-flag" style="display:none;"></span></button>
+
+            <div class="tree-group">Solution</div>
+            <button class="tnode" data-target="#architecture-section">Design &amp; Architecture</button>
+            <button class="tnode" data-target="#approach-section">Solution Approach</button>
+            <button class="tnode" data-target="#folder-section">Folder Structure</button>
+            <button class="tnode" data-target="#files-section">File Manifest</button>
+            <div id="tree-files"></div>
+            <button class="tnode" data-target="#acceptance-section">Acceptance &amp; Tests</button>
+            <button class="tnode" data-target="#edges-section">Edge Cases</button>
+
+            <div class="tree-group">Reference</div>
+            <button class="tnode" data-target="#logic-section">Logic Steps</button>
+            <button class="tnode" data-target="#contracts-section">Contracts</button>
+
+            <div class="tree-foot"><span class="dot" id="tree-foot-dot"></span><span id="tree-foot-text">No open questions</span></div>
+        </nav>
+
+        <div class="main">
+            <div class="scroll-area">
+                <div class="wrap">
+                    <div class="topline">
+                        <span><button id="nav-toggle-btn" class="btn btn-sm">☰</button> featurePlan · <b id="topline-file">plan.html</b></span>
+                    </div>
+
+                    <h1>⚙️ Feature Implementation Plan – little-coder harness with local Gemma model</h1>
+                    <p class="sub">File-by-file plan for building a feature inside an existing codebase — co-authored: the AI drafts, the human decides. Resolve open questions, edit any section, then copy the plan back; human edits are tagged in the export and override the AI draft.</p>
+
+                    <div class="alert" id="alert-banner" style="display:none;"></div>
+
+                    <div class="stat-row">
+                        <div class="stat"><div class="n amber" id="stat-unresolved">0</div><div class="l">Unresolved Qs</div></div>
+                        <div class="stat"><div class="n" id="stat-criteria">0</div><div class="l">Acceptance Criteria</div></div>
+                        <div class="stat"><div class="n" id="stat-files">0</div><div class="l" id="stat-files-label">Files</div></div>
+                        <div class="stat"><div class="n" id="stat-edges">0</div><div class="l">Edge Cases</div></div>
+                    </div>
+
+                    <div class="pipeline" id="files-pipeline-wrap">
+                        <h2>Build Pipeline — file manifest, in execution order</h2>
+                        <div class="pipe-row" id="pipeline-row"></div>
+                    </div>
+
+                    <!-- PROBLEM: FEATURE OVERVIEW -->
+                    <div class="section" id="overview-section">
+                        <h2 class="section-head">📌 Feature Overview</h2>
+                        <p class="section-desc">The AI's own words: what was asked, what it understood, and how this fits the existing codebase. Like the cover page of a renovation plan — one free-form narrative, not a form.</p>
+                        <div class="section-body">
+                            <div><label>Feature Title</label><input id="feature-title" placeholder="e.g. Add two-factor authentication" /></div>
+                            <div class="mt-1"><label>Overview (the ask, what the AI understood, and the existing code it touches)</label><textarea id="feature-overview" rows="6" placeholder="e.g. You asked to 'add 2FA to login'. I read AuthService.php and the users table; I understand this as a TOTP second factor verified at login, with enrollment from the profile page. The login flow currently..."></textarea></div>
+                        </div>
+                    </div>
+
+                    <!-- PROBLEM: OPEN QUESTIONS & DECISIONS -->
+                    <div class="section" id="questions-section">
+                        <h2 class="section-head">❓ Open Questions & Decisions</h2>
+                        <p class="section-desc">Choices only you can make. Like a contractor asking "tile or wood?" before starting work. <strong>The human decides here.</strong> An empty Decision exports as UNRESOLVED and blocks implementation.</p>
+                        <div class="section-body">
+                            <div id="questions-container"></div>
+                            <button id="add-question-btn" class="btn btn-outline btn-block mt-1">＋ Add open question</button>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION: DESIGN PATTERN & ARCHITECTURE -->
+                    <div class="section" id="architecture-section">
+                        <h2 class="section-head">🧩 Design Pattern &amp; Architecture</h2>
+                        <p class="section-desc">The AI explains the pattern choices and draws the architecture in its own words — prose, ASCII diagrams, whatever communicates the design best. Like agreeing every room follows the same wiring standard. <strong>Edit freely to redirect it</strong> (e.g., switch from Repository to Service Layer).</p>
+                        <div class="section-body">
+                            <textarea id="feature-architecture" rows="12" placeholder="e.g. Layered flow, one new service:&#10;&#10;  LoginController ──▶ AuthService ──▶ TotpService  [NEW]&#10;                          │&#10;                          └──▶ UserRepository&#10;&#10;Why: TOTP logic is isolated in TotpService so AuthService stays..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION: APPROACH & RATIONALE -->
+                    <div class="section" id="approach-section">
+                        <h2 class="section-head">💡 Solution Approach & Rationale</h2>
+                        <p class="section-desc">Why this design was chosen. Like an architect explaining why the kitchen moves next to the dining room. The "why" before the "what".</p>
+                        <div class="section-body">
+                            <div id="approach-container"></div>
+                            <button id="add-approach-btn" class="btn btn-outline btn-block mt-1">＋ Add design decision</button>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION: RESULTING FOLDER STRUCTURE -->
+                    <div class="section" id="folder-section">
+                        <h2 class="section-head">🌳 Resulting Folder Structure</h2>
+                        <p class="section-desc">Where files end up after the change. Like a floor plan showing which shelves get new boxes. Every touched file is marked <strong>[CREATE]</strong>, <strong>[UPDATE]</strong>, or <strong>[DELETE]</strong>, matching the manifest below.</p>
+                        <div class="section-body">
+                            <textarea id="folder-structure" rows="8" placeholder="src/&#10;├── Auth/&#10;│   └── AuthService.php    [UPDATE]&#10;└── Security/&#10;    └── TotpService.php    [CREATE]"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION: FILE MANIFEST -->
+                    <div class="section" id="files-section">
+                        <h2 class="section-head">📂 File Change Manifest (In Order of Execution)</h2>
+                        <p class="section-desc">Every file to create, update, or delete, in build order. Like a recipe: prep the ingredients before cooking. Pseudo-code per file.</p>
+                        <div class="section-body">
+                            <div id="files-container"></div>
+                            <button id="add-file-btn" class="btn btn-outline btn-block mt-1">＋ Add file to manifest</button>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION: ACCEPTANCE CRITERIA & TEST CASES -->
+                    <div class="section" id="acceptance-section">
+                        <h2 class="section-head">✅ Acceptance Criteria &amp; Test Cases</h2>
+                        <p class="section-desc">Testable conditions that define "done", each paired with the test case that proves it. Like the walkthrough checklist after a renovation: tap runs hot, door locks.</p>
+                        <div class="section-body">
+                            <div id="acceptance-container"></div>
+                            <button id="add-acceptance-btn" class="btn btn-outline btn-block mt-1">＋ Add criterion + test</button>
+                        </div>
+                    </div>
+
+                    <!-- SOLUTION: EDGE CASES -->
+                    <div class="section" id="edges-section">
+                        <h2 class="section-head">🚨 Edge Cases & Error Handling</h2>
+                        <p class="section-desc">What happens when things go wrong. Like a trip plan's "if the flight is delayed" backup. Validation rules, errors, and fallbacks.</p>
+                        <div class="section-body">
+                            <div id="edges-container"></div>
+                            <button id="add-edge-btn" class="btn btn-outline btn-block mt-1">＋ Add edge case</button>
+                        </div>
+                    </div>
+
+                    <!-- REFERENCE: CORE BUSINESS LOGIC -->
+                    <div class="section" id="logic-section">
+                        <h2 class="section-head">🧠 Core Business Logic (Detailed Pseudo-Code)</h2>
+                        <p class="section-desc">The main flow in plain English + pseudo-code. Like driving directions: start, turn, arrive. Only what the file manifest doesn't already show.</p>
+                        <div class="section-body">
+                            <div id="logic-container"></div>
+                            <button id="add-logic-btn" class="btn btn-outline btn-block mt-1">＋ Add logic step</button>
+                        </div>
+                    </div>
+
+                    <!-- REFERENCE: API / FUNCTION CONTRACTS -->
+                    <div class="section" id="contracts-section">
+                        <h2 class="section-head">📡 Function / API Contracts</h2>
+                        <p class="section-desc">What goes in and what comes out of each public entry point. Like a vending machine: coins and a button in, a drink out. Covers routes, handlers, CLI commands.</p>
+                        <div class="section-body">
+                            <div id="contracts-container"></div>
+                            <button id="add-contract-btn" class="btn btn-outline btn-block mt-1">＋ Add contract</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cmdbar">
+                <span class="prompt">$</span><span>plan --status</span>
+                <span class="spacer"></span>
+                <span class="hint">Copied text is a structured prompt for ChatGPT, Claude, or any coding AI.</span>
+                <button id="reset-btn" class="btn btn-danger">Reset all data</button>
+                <button id="copy-btn" class="btn btn-primary">📋 Copy AI-Ready Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Filled by featurePlan-inject.js from the AI's plan. Falls back to an
+        // empty plan when opened without injection (e.g. developing the template).
+        const INITIAL_DATA = {"title":"little-coder harness with local Gemma model","overview":"You asked to \"add a new harness called 'https://github.com/itayinbarr/little-coder' and a small model 'unsloth/gemma-4-E4B-it-qat-GGUF' from hugging face and setup them to work for lighter tasks such as generating commit message and MR intent etc\".\n\nWhat I understood: this repo already manages three harnesses (claude, copilot, pi) via home-manager modules in nix/ plus docker parity, and it already has a family of opt-in installers under customPackages (nix/optional-packages.nix: pipeline-worker, LocalScribe, Copilot). little-coder becomes a fourth, opt-in harness — but unlike the big three it is not a general coding agent here: it is wired to a local GGUF model (served by llama.cpp) and exposed through small zsh helpers (`gcm` for commit messages, `mri` for MR intent) that pipe git diffs into it. MR intent today is handled by pipeline-worker with PIPELINE_WORKER_INTENT_MODEL=haiku (nix/zsh.nix:228), which stays untouched unless you decide otherwise in the open questions.\n\nI could not inspect the little-coder repo itself (no web research in this step), so its install method and model-endpoint config are open questions below.","architecture":"Same layering the existing harnesses use: an opt-in home-manager module (customPackages pattern from nix/optional-packages.nix), guarded activation installers (like installLocalScribe), and a sourced zsh helper file (like zsh/agent-containers.zsh).\n\n  gcm / mri  (zsh/little-coder.zsh, sourced by nix/zsh.nix)\n     │  staged diff / branch-vs-main diff, truncated\n     ▼\n  little-coder CLI ──HTTP (OpenAI-compatible)──▶ llama-server (pkgs.llama-cpp)\n                                                    │ loads once\n                                                    ▼\n                                    ~/.cache/models/\u003cgemma-…>.gguf\n                                    (downloaded by a guarded nix activation,\n                                     resume-capable, like installLocalScribe)\n\nDeliberate deviations from the claude/copilot/pi pattern:\n- No Dockerfile stage, no compose service, no agent-box entry: commit-message and MR-intent generation are host-side git workflows, and re-downloading a multi-GB GGUF into a throwaway container volume defeats the point of a \"light\" harness. Docker parity can come later if little-coder ever grows into a full agent here.\n- No hooks/system-prompt wiring (no ~/.little-coder hooks tree): the lean-prompt + hook suite exists to govern interactive coding agents; a one-shot summarizer doesn't run tools.","folderStructure":"├── flake.nix    [UPDATE]\n├── nix/\n│   ├── default-packages-config.nix    [UPDATE]\n│   ├── home.nix    [UPDATE]\n│   ├── little-coder.nix    [CREATE]\n│   └── zsh.nix    [UPDATE]\n├── setup-packages.sh    [UPDATE]\n└── zsh/\n    └── little-coder.zsh    [CREATE]","openQuestions":[{"question":"How is little-coder installed? I can't inspect github.com/itayinbarr/little-coder from here, so the installer in nix/little-coder.nix depends on this.","options":"A) npm global install (if it's published to npm) — matches the Copilot/Pi installer pattern (recommended if available)\nB) git clone into ~/.local/share/little-coder + npm install + shim in ~/.local/bin — matches nothing exactly but LocalScribe is the closest precedent\nC) Nix-native package via fetchFromGitHub (most reproducible, most work, breaks self-updating)","decision":"","id":"q-1"},{"question":"What serves the GGUF model? A .gguf file needs a runtime, and little-coder most likely talks to an OpenAI-compatible endpoint (unconfirmed).","options":"A) llama.cpp from nixpkgs (pkgs.llama-cpp), llama-server started on demand by the zsh helpers on localhost:8012 (recommended — declarative, no daemon)\nB) Ollama (simpler model management, but adds a background service and its own model store format)\nC) little-coder bundles its own GGUF runtime (e.g. node-llama-cpp) — nothing extra to install, only valid if the repo confirms it","decision":"","id":"q-2"},{"question":"Exact HF repo and quant file? 'unsloth/gemma-4-E4B-it-qat-GGUF' does not look like a real HF repo id — unsloth's naming for the E4B QAT model is 'unsloth/gemma-3n-E4B-it-GGUF', and each repo ships many quant files.","options":"A) unsloth/gemma-3n-E4B-it-GGUF, Q4_K_M quant (~4GB, best speed/quality balance for light tasks) (recommended)\nB) Use the id you gave verbatim and fail loudly at download time if it 404s\nC) Same repo, different quant (Q8_0 for quality, Q2_K for size) — say which","decision":"","id":"q-3"},{"question":"How far should the light-task wiring go beyond the `gcm`/`mri` zsh helpers?","options":"A) Helpers only; PIPELINE_WORKER_INTENT_MODEL stays haiku (recommended — smallest surface, you invoke it when you want it)\nB) Also add a git prepare-commit-msg hook via nix/git.nix so every commit gets a drafted message automatically\nC) Also point pipeline-worker's MR-intent at little-coder — only possible if pipeline-worker accepts a custom agent/endpoint, which its env vars (PIPELINE_WORKER_AGENT/INTENT_MODEL) don't obviously support","decision":"","id":"q-4"}],"solutionApproach":[{"aspect":"Install pattern","rationale":"A self-contained nix/little-coder.nix module imported by home.nix, gated by a new customPackages.enableLittleCoder option, with warn-and-continue activation installers. This is exactly how installLocalScribe and installCopilot behave in nix/optional-packages.nix, and how pi.nix bootstraps only-when-missing.","id":"s-1"},{"aspect":"Model lifecycle","rationale":"The GGUF downloads once into ~/.cache/models via a guarded, resume-capable activation (skip when the file exists, curl -C - to a temp file then atomic mv). llama-server is started lazily by the helpers, not as a service — nothing runs when you aren't generating.","id":"s-2"},{"aspect":"Scope: host only","rationale":"No docker stage, compose service, entrypoint case, or agent-box alias. The light tasks are host git workflows, and the docker-hook-parity flake check plus entrypoint machinery would add four more touched files for a harness that never runs containerized.","id":"s-3"}],"acceptanceCriteria":[{"criterion":"With enableLittleCoder=true, ./setup.sh installs little-coder, llama.cpp, and the model; with the default false nothing is installed.","testCase":"Run setup-packages.sh answering yes, then ./setup.sh; verify `command -v little-coder` and the .gguf under ~/.cache/models. Re-run with default config on a clean profile: none present.","id":"ac-1"},{"criterion":"The model download is idempotent — a second activation with the file present downloads nothing.","testCase":"Run ./setup.sh twice; second run prints the skip path and finishes in seconds (no curl progress).","id":"ac-2"},{"criterion":"`gcm` prints a conventional-commit message for the staged diff using the local model, and fails cleanly with nothing staged.","testCase":"Stage a small change, run `gcm`, get a one-line message. `git reset`, run `gcm` again: non-zero exit, 'nothing staged' on stderr.","id":"ac-3"},{"criterion":"`mri` prints an MR intent summary of the current branch's diff against main.","testCase":"On a feature branch with commits, run `mri`; output describes the change intent, not a file list.","id":"ac-4"},{"criterion":"`nix flake check --impure` passes, including the new little-coder-helpers check.","testCase":"git add the new files (flakes only see tracked files, per CLAUDE.md), then `nix flake check --impure`.","id":"ac-5"}],"files":[{"order":1,"action":"create","path":"nix/little-coder.nix","description":"Opt-in module: enableLittleCoder option, llama.cpp package, little-coder installer, guarded model download","pseudoCode":"{ config, pkgs, lib, ... }:\nwith lib;\nlet cfg = config.customPackages; in {\n  options.customPackages.enableLittleCoder =\n    mkEnableOption \"little-coder harness + local Gemma GGUF\";\n  config.home.packages = optionals cfg.enableLittleCoder [ pkgs.llama-cpp ];  # per q-2\n  config.home.activation.installLittleCoder = mkIf cfg.enableLittleCoder\n    (hm.dag.entryAfter [ \"installPackages\" ] ''…install per q-1, warn-and-continue…'');\n  config.home.activation.downloadGemmaModel = mkIf cfg.enableLittleCoder\n    (hm.dag.entryAfter [ \"installPackages\" ] ''…skip if exists; curl -C - to tmp, mv…'');\n}","id":"f-1"},{"order":2,"action":"update","path":"nix/home.nix","description":"Import the new module","pseudoCode":"imports = [\n  …\n  ./pi.nix\n  ./little-coder.nix   # NEW\n  …\n];","id":"f-2"},{"order":3,"action":"update","path":"nix/default-packages-config.nix","description":"Default the new toggle off","pseudoCode":"customPackages = {\n  …\n  enableLittleCoder = false;\n};","id":"f-3"},{"order":4,"action":"update","path":"setup-packages.sh","description":"Ask for the new toggle and emit it into the generated config","pseudoCode":"LITTLE_CODER=$(ask_yes_no \"7. Install little-coder + local Gemma model (~4GB download)?\" \"n\")\n# in the heredoc:\n    enableLittleCoder = ${LITTLE_CODER};\n# in the summary:\n[ \"$LITTLE_CODER\" = \"true\" ] && echo \"  ✓ little-coder + Gemma (local)\"","id":"f-4"},{"order":5,"action":"create","path":"zsh/little-coder.zsh","description":"gcm/mri helpers: lazy llama-server start, diff truncation, pipe into little-coder","pseudoCode":"_lc_model=\"$HOME/.cache/models/\u003cfile per q-3>\"\n_lc_ensure_server() {  # no-op if q-2 = C\n  pgrep -f llama-server >/dev/null || { llama-server -m \"$_lc_model\" --port 8012 & }\n  # poll /health, error after 30s\n}\ngcm() { git diff --cached --quiet && { echo 'nothing staged' >&2; return 1 }\n  _lc_ensure_server || return 1\n  git diff --cached | head -c 12000 | little-coder \u003ccommit-msg prompt> }\nmri() { git diff \"$(git merge-base main HEAD)\"..HEAD | head -c 12000 |\n  little-coder \u003cMR-intent prompt> }","id":"f-5"},{"order":6,"action":"update","path":"nix/zsh.nix","description":"Source the helper file, next to the existing agent-containers.zsh source line","pseudoCode":"# `gcm`/`mri`: local-model commit-message and MR-intent helpers (see\n# nix/little-coder.nix for the install; functions error helpfully when\n# enableLittleCoder is off).\nsource ${../zsh/little-coder.zsh}","id":"f-6"},{"order":7,"action":"update","path":"flake.nix","description":"little-coder-helpers check: lint the zsh helpers and drive gcm/mri against stub binaries","pseudoCode":"little-coder-helpers = pkgs.runCommand \"little-coder-helpers\"\n  { nativeBuildInputs = [ pkgs.zsh pkgs.shellcheck pkgs.git ]; } ''\n  zsh -n ${./zsh/little-coder.zsh}\n  # stub little-coder + llama-server + pgrep on PATH, throwaway git repo:\n  #  - gcm with nothing staged -> exit 1, message on stderr\n  #  - gcm with staged change  -> stub receives truncated diff on stdin\n  #  - mri on a branch         -> stub invoked with branch diff\n  echo ok > $out\n'';","id":"f-7"}],"logicSteps":[],"contracts":[{"name":"gcm (zsh function)","inputs":"No args. Reads the staged diff (git diff --cached), truncated to ~12KB.","outputs":"Conventional-commit message on stdout, exit 0. Exit 1 + stderr message when nothing is staged, little-coder/model missing, or the server never becomes healthy.","id":"c-1"},{"name":"mri (zsh function)","inputs":"No args. Reads the diff from merge-base with main to HEAD, truncated to ~12KB.","outputs":"Short MR-intent paragraph on stdout, exit 0. Exit 1 + stderr message on main itself (empty diff) or when the toolchain is missing.","id":"c-2"}],"edgeCases":[{"condition":"enableLittleCoder is off (or install failed) but gcm/mri is invoked","handling":"Helper checks `command -v little-coder` and the model file first; exits 1 with 'run ./setup-packages.sh and enable little-coder'","id":"e-1"},{"condition":"Model download interrupted mid-way (multi-GB file)","handling":"curl -fsSL -C - into \u003cfile>.part, atomic mv on success — next activation resumes instead of restarting; activation warns-and-continues like installLocalScribe","id":"e-2"},{"condition":"llama-server starts but never becomes healthy (bad quant, OOM on small machines)","handling":"Health poll with 30s timeout, then kill the spawned server and exit 1 with the server's last stderr lines","id":"e-3"},{"condition":"Huge staged diff blows the small model's context window","handling":"head -c 12000 truncation before piping, with a '[diff truncated]' marker appended so the model knows","id":"e-4"},{"condition":"HF repo id from the ask 404s (see q-3)","handling":"Download activation fails that step with the attempted URL printed, warns-and-continues so the rest of the switch still lands","id":"e-5"}]};
+    </script>
+    <script>
+        // ------------------------------------------------------------------
+        // Data Layer
+        // ------------------------------------------------------------------
+        const STORAGE_KEY = 'feature-impl-plan:' + document.title;
+
+        // One-time migration from the previous single-key localStorage layout
+        // used by the original pasted template ('feature-impl-plan-data'). If
+        // the per-document key is empty but the old global key has data, copy
+        // it across and clear it so the user's edits survive the upgrade.
+        function migrateLegacyStorage() {
+            try {
+                if (localStorage.getItem(STORAGE_KEY)) return;
+                const legacy = localStorage.getItem('feature-impl-plan-data');
+                if (!legacy) return;
+                localStorage.setItem(STORAGE_KEY, legacy);
+                localStorage.removeItem('feature-impl-plan-data');
+            } catch (e) { /* ignore */ }
+        }
+        migrateLegacyStorage();
+
+        let data = loadData();
+
+        function emptyData() {
+            return {
+                title: '',
+                overview: '',
+                architecture: '',
+                folderStructure: '',
+                openQuestions: [],
+                solutionApproach: [],
+                acceptanceCriteria: [],
+                files: [],
+                logicSteps: [],
+                contracts: [],
+                edgeCases: []
+            };
+        }
+
+        function loadData() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    return reconcileSeed(normalize(parsed));
+                }
+            } catch (e) { /* ignore */ }
+            return normalize(INITIAL_DATA || emptyData());
+        }
+
+        // Update-in-place reconciliation: after a re-injection, INITIAL_DATA
+        // may carry items this document has never seen. Append those to the
+        // stored data so they become visible; stored (human) values always win
+        // for items that already exist, and items the human deleted are not
+        // resurrected (the seen-seed-ids key remembers which seed ids were
+        // already offered to this document). The key is computed inside each
+        // function because loadData() runs before top-level consts down here
+        // would be initialised.
+        function seenSeedKey() { return STORAGE_KEY + ':seen-seed-ids'; }
+
+        function reconcileSeed(stored) {
+            let seed;
+            try {
+                seed = normalize(JSON.parse(JSON.stringify(INITIAL_DATA || {})));
+            } catch (e) { return stored; }
+            let seen = {};
+            try {
+                seen = JSON.parse(localStorage.getItem(seenSeedKey())) || {};
+            } catch (e) { /* ignore */ }
+            const base = emptyData();
+            for (const key in base) {
+                if (!Array.isArray(base[key])) continue;
+                const storedIds = new Set((stored[key] || [])
+                    .map(it => it && it.id).filter(id => id !== undefined));
+                const seenIds = new Set(seen[key] || []);
+                for (const item of seed[key] || []) {
+                    if (item.id === undefined) continue;
+                    if (!storedIds.has(item.id) && !seenIds.has(item.id)) {
+                        stored[key].push(item);
+                    }
+                }
+            }
+            return stored;
+        }
+
+        // Remember every seed id this document has offered, so a later load
+        // can distinguish "new item from a re-injection" (append it) from
+        // "item the human deleted" (leave it deleted).
+        function recordSeenSeedIds() {
+            try {
+                let prior = {};
+                try {
+                    prior = JSON.parse(localStorage.getItem(seenSeedKey())) || {};
+                } catch (e) { /* ignore */ }
+                const seen = {};
+                const base = emptyData();
+                for (const key in base) {
+                    if (!Array.isArray(base[key])) continue;
+                    const ids = ((INITIAL_DATA || {})[key] || [])
+                        .map(it => it && it.id).filter(id => id !== undefined);
+                    // Union with previously seen ids so a regenerated (smaller)
+                    // seed never forgets what this document already offered.
+                    seen[key] = [...new Set([...(prior[key] || []), ...ids])];
+                }
+                localStorage.setItem(seenSeedKey(), JSON.stringify(seen));
+            } catch (e) { /* ignore */ }
+        }
+        recordSeenSeedIds();
+
+        // Fills in any missing top-level keys so a sparse persisted or seeded
+        // payload still renders a valid page.
+        function normalize(parsed) {
+            const base = emptyData();
+            if (!parsed || typeof parsed !== 'object') parsed = {};
+            for (let key in base) {
+                if (parsed[key] === undefined) parsed[key] = base[key];
+            }
+            return parsed;
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) { /* ignore */ }
+            updateGate();
+        }
+
+        // ------------------------------------------------------------------
+        // Provenance: SEED is the AI's original draft (INITIAL_DATA). The
+        // export compares current data against it and tags human changes so
+        // the implementing AI treats them as authoritative.
+        // ------------------------------------------------------------------
+        const SEED = normalize(JSON.parse(JSON.stringify(INITIAL_DATA || {})));
+
+        const SCALAR_KEYS = ['title', 'overview', 'architecture', 'folderStructure'];
+        const SECTION_FIELDS = {
+            openQuestions: ['question', 'options', 'decision'],
+            solutionApproach: ['aspect', 'rationale'],
+            acceptanceCriteria: ['criterion', 'testCase'],
+            files: ['order', 'action', 'path', 'description', 'pseudoCode'],
+            logicSteps: ['step', 'pseudo'],
+            contracts: ['name', 'inputs', 'outputs'],
+            edgeCases: ['condition', 'handling']
+        };
+
+        function scalarTag(key) {
+            return String(data[key] || '') !== String(SEED[key] || '') ? ' [HUMAN-EDITED]' : '';
+        }
+
+        function itemTag(section, item) {
+            const seed = (SEED[section] || []).find(s => s.id !== undefined && s.id === item.id);
+            if (!seed) return ' [HUMAN-ADDED]';
+            const changed = SECTION_FIELDS[section].some(k => String(item[k] || '') !== String(seed[k] || ''));
+            return changed ? ' [HUMAN-EDITED]' : '';
+        }
+
+        function unresolvedQuestions() {
+            return data.openQuestions.filter(q => !(q.decision || '').trim());
+        }
+
+        // Drives every "is the plan ready" surface: the top alert banner, the
+        // stat tiles, and the tree nav's unresolved flag + footer status.
+        function updateGate() {
+            const alertEl = document.getElementById('alert-banner');
+            if (!alertEl) return;
+            const n = unresolvedQuestions().length;
+            if (data.openQuestions.length === 0 || n === 0) {
+                alertEl.style.display = 'none';
+            } else {
+                alertEl.style.display = '';
+                alertEl.textContent = `⚠ ${n} open question(s) unresolved — implementation is blocked until they're decided.`;
+            }
+            renderStats();
+            updateTreeStatus();
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        }
+
+        // ------------------------------------------------------------------
+        // Rendering Helpers
+        // ------------------------------------------------------------------
+        function renderAll() {
+            renderQuestions();
+            renderApproach();
+            renderAcceptance();
+            renderFiles();
+            renderLogic();
+            renderContracts();
+            renderEdges();
+
+            renderFeatureOverview();
+            renderArchitecture();
+            renderPipeline();
+            renderTreeFiles();
+            addCollapseTogglesToCards();
+            updateGate();
+        }
+
+        function addCollapseTogglesToCards() {
+            document.querySelectorAll('.section .section-head').forEach((head) => {
+                const existing = head.querySelector('.toggle-arrow');
+                if (existing) existing.remove();
+
+                const arrow = document.createElement('span');
+                arrow.className = 'toggle-arrow';
+                arrow.innerHTML = '▼';
+                head.insertBefore(arrow, head.firstChild);
+
+                const oldHandler = head._collapseHandler;
+                if (oldHandler) head.removeEventListener('click', oldHandler);
+
+                const handler = (e) => {
+                    e.preventDefault();
+                    const section = head.closest('.section');
+                    section.classList.toggle('collapsed');
+                    arrow.classList.toggle('collapsed');
+                };
+                head._collapseHandler = handler;
+                head.addEventListener('click', handler);
+            });
+        }
+
+        function renderFeatureOverview() {
+            document.getElementById('feature-title').value = data.title || '';
+            document.getElementById('feature-overview').value = data.overview || '';
+
+            document.getElementById('topline-file').textContent = data.title || 'Untitled';
+            document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature';
+        }
+
+        function renderArchitecture() {
+            document.getElementById('feature-architecture').value = data.architecture || '';
+            document.getElementById('folder-structure').value = data.folderStructure || '';
+        }
+
+        // Dashboard stat tiles: unresolved questions, acceptance criteria,
+        // file count (with a create/update/delete breakdown), edge cases.
+        function renderStats() {
+            document.getElementById('stat-unresolved').textContent = unresolvedQuestions().length;
+            document.getElementById('stat-criteria').textContent = data.acceptanceCriteria.length;
+            document.getElementById('stat-edges').textContent = data.edgeCases.length;
+
+            document.getElementById('stat-files').textContent = data.files.length;
+            const counts = { create: 0, update: 0, delete: 0 };
+            data.files.forEach(f => { counts[f.action || 'update'] = (counts[f.action || 'update'] || 0) + 1; });
+            const parts = [];
+            if (counts.create) parts.push(counts.create + ' create');
+            if (counts.update) parts.push(counts.update + ' update');
+            if (counts.delete) parts.push(counts.delete + ' delete');
+            document.getElementById('stat-files-label').textContent = 'Files' + (parts.length ? ' (' + parts.join(' · ') + ')' : '');
+        }
+
+        // Horizontal build-pipeline strip above the sections: a read-only,
+        // click-to-jump summary of the file manifest in execution order.
+        function renderPipeline() {
+            const wrap = document.getElementById('files-pipeline-wrap');
+            const row = document.getElementById('pipeline-row');
+            row.innerHTML = '';
+            const sorted = [...data.files].sort((a, b) => (a.order || 999) - (b.order || 999));
+            if (sorted.length === 0) {
+                wrap.style.display = 'none';
+                return;
+            }
+            wrap.style.display = '';
+            sorted.forEach((f, idx) => {
+                const node = document.createElement('div');
+                node.className = 'pipe-node';
+
+                const order = document.createElement('div');
+                order.className = 'order';
+                order.textContent = `STEP ${idx + 1}`;
+                node.appendChild(order);
+
+                const badge = document.createElement('span');
+                const action = f.action || 'update';
+                badge.className = `badge badge-${action}`;
+                badge.textContent = action;
+                node.appendChild(badge);
+
+                const path = document.createElement('div');
+                path.className = 'path';
+                path.textContent = f.path || 'Untitled file';
+                node.appendChild(path);
+
+                node.addEventListener('click', () => navigateTo('#files-section', null));
+                row.appendChild(node);
+            });
+        }
+
+        // Dynamic leaf nodes in the tree nav's "Build pipeline" group — one
+        // per manifest file, in build order, all jumping to the manifest.
+        function renderTreeFiles() {
+            const container = document.getElementById('tree-files');
+            container.innerHTML = '';
+            const sorted = [...data.files].sort((a, b) => (a.order || 999) - (b.order || 999));
+            sorted.forEach(f => {
+                const item = document.createElement('button');
+                item.className = 'tnode fileleaf';
+                item.dataset.target = '#files-section';
+
+                const badge = document.createElement('span');
+                const action = f.action || 'update';
+                badge.className = `badge badge-${action}`;
+                badge.textContent = action.charAt(0).toUpperCase();
+                item.appendChild(badge);
+                item.appendChild(document.createTextNode(f.path || 'Untitled file'));
+
+                item.addEventListener('click', () => navigateTo('#files-section', item));
+                container.appendChild(item);
+            });
+        }
+
+        // Unresolved-question flag on the nav item + the footer status line.
+        function updateTreeStatus() {
+            const n = unresolvedQuestions().length;
+            const flag = document.getElementById('nav-questions-flag');
+            if (n > 0) {
+                flag.textContent = n;
+                flag.style.display = '';
+            } else {
+                flag.style.display = 'none';
+            }
+
+            const foot = document.getElementById('tree-foot-text');
+            const dot = document.getElementById('tree-foot-dot');
+            if (data.openQuestions.length === 0) {
+                foot.textContent = 'No open questions';
+                dot.className = 'dot';
+            } else if (n > 0) {
+                foot.textContent = `${n} unresolved — blocks build`;
+                dot.className = 'dot warn';
+            } else {
+                foot.textContent = 'All open questions decided';
+                dot.className = 'dot';
+            }
+        }
+
+        // Scrolls a section into view and marks the clicked nav item active.
+        function navigateTo(target, node) {
+            document.querySelectorAll('.tnode').forEach(x => x.classList.remove('active'));
+            if (node) node.classList.add('active');
+            const el = document.querySelector(target);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (window.innerWidth <= 900) document.getElementById('tree-nav').classList.remove('open');
+        }
+
+        // Generic render for simple item lists (acceptance, logic, contracts, edges, tests)
+        function renderSimpleList(containerId, items, fields, labelSingular, btnId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            items.forEach((item, index) => {
+                const block = document.createElement('div');
+                block.className = 'item-block';
+
+                const header = document.createElement('div');
+                header.className = 'item-header';
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'item-title';
+                titleSpan.textContent = `${labelSingular} #${index+1}`;
+                header.appendChild(titleSpan);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕ Remove';
+                removeBtn.addEventListener('click', () => {
+                    items.splice(index, 1);
+                    saveData();
+                    renderAll();
+                });
+                header.appendChild(removeBtn);
+                block.appendChild(header);
+
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'item-fields';
+
+                fields.forEach(f => {
+                    const wrapper = document.createElement('div');
+                    if (f.fullWidth) wrapper.className = 'full-width';
+
+                    const label = document.createElement('label');
+                    label.textContent = f.label;
+                    wrapper.appendChild(label);
+
+                    let input;
+                    if (f.type === 'textarea') {
+                        input = document.createElement('textarea');
+                        input.rows = f.rows || 3;
+                        input.placeholder = f.placeholder || '';
+                        input.value = item[f.key] || '';
+                        input.addEventListener('input', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    } else if (f.type === 'select') {
+                        input = document.createElement('select');
+                        f.options.forEach(opt => {
+                            const option = document.createElement('option');
+                            option.value = opt.value;
+                            option.textContent = opt.label;
+                            if (item[f.key] === opt.value) option.selected = true;
+                            input.appendChild(option);
+                        });
+                        input.addEventListener('change', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    } else {
+                        input = document.createElement('input');
+                        input.type = f.type || 'text';
+                        input.placeholder = f.placeholder || '';
+                        input.value = item[f.key] || '';
+                        input.addEventListener('input', () => {
+                            item[f.key] = input.value;
+                            saveData();
+                        });
+                    }
+                    wrapper.appendChild(input);
+                    fieldDiv.appendChild(wrapper);
+                });
+
+                block.appendChild(fieldDiv);
+                container.appendChild(block);
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Render Files (with sorting by order)
+        // ------------------------------------------------------------------
+        function renderFiles() {
+            const container = document.getElementById('files-container');
+            container.innerHTML = '';
+            // Sort by order
+            const sorted = [...data.files].sort((a, b) => (a.order || 999) - (b.order || 999));
+
+            sorted.forEach((item, idx) => {
+                // find original index for removal
+                const origIndex = data.files.indexOf(item);
+                const block = document.createElement('div');
+                block.className = 'item-block';
+
+                const header = document.createElement('div');
+                header.className = 'item-header';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'item-title';
+                const badge = document.createElement('span');
+                const action = item.action || 'update';
+                badge.className = `badge badge-${action}`;
+                badge.textContent = action.toUpperCase();
+                titleSpan.appendChild(badge);
+                titleSpan.appendChild(document.createTextNode(` ${item.path || 'Untitled file'}`));
+                header.appendChild(titleSpan);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕ Remove';
+                removeBtn.addEventListener('click', () => {
+                    data.files.splice(origIndex, 1);
+                    saveData();
+                    renderAll();
+                });
+                header.appendChild(removeBtn);
+                block.appendChild(header);
+
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'item-fields';
+
+                // Order
+                const orderWrap = document.createElement('div');
+                const orderLabel = document.createElement('label');
+                orderLabel.textContent = 'Order';
+                orderWrap.appendChild(orderLabel);
+                const orderInput = document.createElement('input');
+                orderInput.type = 'number';
+                orderInput.min = 1;
+                orderInput.value = item.order || idx + 1;
+                orderInput.addEventListener('input', () => {
+                    item.order = parseInt(orderInput.value) || 999;
+                    saveData();
+                    renderFiles(); // re-sort
+                    renderPipeline();
+                    renderTreeFiles();
+                });
+                orderWrap.appendChild(orderInput);
+                fieldDiv.appendChild(orderWrap);
+
+                // Action
+                const actionWrap = document.createElement('div');
+                const actionLabel = document.createElement('label');
+                actionLabel.textContent = 'Action';
+                actionWrap.appendChild(actionLabel);
+                const actionSelect = document.createElement('select');
+                ['create', 'update', 'delete'].forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a;
+                    opt.textContent = a.charAt(0).toUpperCase() + a.slice(1);
+                    if (item.action === a) opt.selected = true;
+                    actionSelect.appendChild(opt);
+                });
+                actionSelect.addEventListener('change', () => {
+                    item.action = actionSelect.value;
+                    saveData();
+                    renderFiles();
+                    renderPipeline();
+                    renderTreeFiles();
+                });
+                actionWrap.appendChild(actionSelect);
+                fieldDiv.appendChild(actionWrap);
+
+                // Path
+                const pathWrap = document.createElement('div');
+                const pathLabel = document.createElement('label');
+                pathLabel.textContent = 'File Path';
+                pathWrap.appendChild(pathLabel);
+                const pathInput = document.createElement('input');
+                pathInput.type = 'text';
+                pathInput.placeholder = 'src/Service/NewService.php';
+                pathInput.value = item.path || '';
+                pathInput.addEventListener('input', () => {
+                    item.path = pathInput.value;
+                    saveData();
+                    renderFiles();
+                    renderPipeline();
+                    renderTreeFiles();
+                });
+                pathWrap.appendChild(pathInput);
+                fieldDiv.appendChild(pathWrap);
+
+                // Description
+                const descWrap = document.createElement('div');
+                descWrap.className = 'full-width';
+                const descLabel = document.createElement('label');
+                descLabel.textContent = 'Purpose / Description';
+                descWrap.appendChild(descLabel);
+                const descInput = document.createElement('textarea');
+                descInput.rows = 1;
+                descInput.placeholder = 'What does this file do?';
+                descInput.value = item.description || '';
+                descInput.addEventListener('input', () => {
+                    item.description = descInput.value;
+                    saveData();
+                });
+                descWrap.appendChild(descInput);
+                fieldDiv.appendChild(descWrap);
+
+                // Pseudo-code
+                const codeWrap = document.createElement('div');
+                codeWrap.className = 'full-width';
+                const codeLabel = document.createElement('label');
+                codeLabel.textContent = 'Pseudo-code / Expected Signature (write code stubs here)';
+                codeWrap.appendChild(codeLabel);
+                const codeInput = document.createElement('textarea');
+                codeInput.rows = 4;
+                codeInput.placeholder = "e.g.\nclass NewService {\n  public function execute($input) {\n    // 1. Validate input\n    // 2. Call repository\n  }\n}";
+                codeInput.value = item.pseudoCode || '';
+                codeInput.addEventListener('input', () => {
+                    item.pseudoCode = codeInput.value;
+                    saveData();
+                });
+                codeWrap.appendChild(codeInput);
+                fieldDiv.appendChild(codeWrap);
+
+                block.appendChild(fieldDiv);
+                container.appendChild(block);
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Render specific sections
+        // ------------------------------------------------------------------
+        function renderQuestions() {
+            const container = document.getElementById('questions-container');
+            container.innerHTML = '';
+
+            if (data.openQuestions.length === 0) {
+                container.innerHTML = '<p class="text-muted">No open questions — the ask was unambiguous.</p>';
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.className = 'qa-table';
+
+            const thead = table.createTHead();
+            const headerRow = thead.insertRow();
+            ['Question', 'Options', 'Decision', 'Action'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+
+            const tbody = table.createTBody();
+            data.openQuestions.forEach((item, idx) => {
+                const row = tbody.insertRow();
+
+                const qCell = row.insertCell();
+                qCell.textContent = item.question || '';
+
+                const oCell = row.insertCell();
+                oCell.className = 'opts-cell';
+                oCell.textContent = item.options || '';
+
+                const dCell = row.insertCell();
+                const decisionTA = document.createElement('textarea');
+                decisionTA.rows = 2;
+                decisionTA.className = 'decision-input';
+                decisionTA.placeholder = 'Decision here (empty = UNRESOLVED)';
+                decisionTA.value = item.decision || '';
+                decisionTA.addEventListener('input', () => {
+                    item.decision = decisionTA.value;
+                    saveData();
+                });
+                dCell.appendChild(decisionTA);
+
+                const aCell = row.insertCell();
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕';
+                removeBtn.addEventListener('click', () => {
+                    data.openQuestions.splice(idx, 1);
+                    saveData();
+                    renderAll();
+                });
+                aCell.appendChild(removeBtn);
+            });
+
+            container.appendChild(table);
+        }
+
+        function renderApproach() {
+            const container = document.getElementById('approach-container');
+            container.innerHTML = '';
+
+            if (data.solutionApproach.length === 0) {
+                const p = document.createElement('p');
+                p.className = 'text-muted';
+                p.textContent = 'No approach decisions documented.';
+                container.appendChild(p);
+                return;
+            }
+
+            data.solutionApproach.forEach((item, idx) => {
+                const block = document.createElement('div');
+                block.className = 'approach-block';
+
+                const header = document.createElement('div');
+                header.className = 'approach-head';
+
+                const title = document.createElement('h4');
+                title.className = 'approach-title';
+                title.textContent = item.aspect || 'Untitled';
+                header.appendChild(title);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger btn-sm';
+                removeBtn.textContent = '✕ Remove';
+                removeBtn.addEventListener('click', () => {
+                    data.solutionApproach.splice(idx, 1);
+                    saveData();
+                    renderAll();
+                });
+                header.appendChild(removeBtn);
+                block.appendChild(header);
+
+                const rationale = document.createElement('p');
+                rationale.className = 'approach-rationale';
+                rationale.textContent = item.rationale || '';
+                block.appendChild(rationale);
+
+                container.appendChild(block);
+            });
+        }
+
+        function renderAcceptance() {
+            const fields = [
+                { key: 'criterion', label: 'Criterion (Given / When / Then, or a testable statement)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Given a user with 2FA enabled, when they log in without a code, then the login is rejected with 2fa_required.' },
+                { key: 'testCase', label: 'Test Case (the test that proves it)', type: 'textarea', rows: 2, fullWidth: true, placeholder: 'e.g. Integration test on POST /login: valid password, no OTP code, expect 401 with 2fa_required.' }
+            ];
+            renderSimpleList('acceptance-container', data.acceptanceCriteria, fields, 'Criterion', 'add-acceptance-btn');
+        }
+
+        function renderLogic() {
+            const fields = [
+                { key: 'step', label: 'Step Title', type: 'text', placeholder: 'e.g. Validate user input' },
+                { key: 'pseudo', label: 'Detailed Pseudo-code / Logic', type: 'textarea', rows: 4, fullWidth: true }
+            ];
+            renderSimpleList('logic-container', data.logicSteps, fields, 'Logic Step', 'add-logic-btn');
+        }
+
+        function renderContracts() {
+            const fields = [
+                { key: 'name', label: 'Function / Endpoint Name', type: 'text', placeholder: 'POST /api/v2/verify-2fa' },
+                { key: 'inputs', label: 'Inputs / Parameters', type: 'textarea', rows: 2, fullWidth: true },
+                { key: 'outputs', label: 'Outputs / Returns', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('contracts-container', data.contracts, fields, 'Contract', 'add-contract-btn');
+        }
+
+        function renderEdges() {
+            const fields = [
+                { key: 'condition', label: 'Condition / Scenario', type: 'text', placeholder: 'e.g. User enters wrong OTP' },
+                { key: 'handling', label: 'Expected Handling', type: 'textarea', rows: 2, fullWidth: true }
+            ];
+            renderSimpleList('edges-container', data.edgeCases, fields, 'Edge Case', 'add-edge-btn');
+        }
+
+        // ------------------------------------------------------------------
+        // Event Bindings for Add Buttons
+        //
+        // NOTE: The inline default items below MUST stay in sync with the
+        // ITEM_FIELD_DEFAULTS table in agents/skills/feature-plan/featurePlan-inject.js
+        // — both describe the same per-section field schema, and adding or
+        // renaming a field requires changes in both places.
+        // ------------------------------------------------------------------
+        function bindAdd(btnId, arrayKey, defaultItem) {
+            document.getElementById(btnId).addEventListener('click', () => {
+                data[arrayKey].push({ ...defaultItem, id: generateId() });
+                saveData();
+                renderAll();
+            });
+        }
+
+        bindAdd('add-question-btn', 'openQuestions', { question: '', options: '', decision: '' });
+        bindAdd('add-approach-btn', 'solutionApproach', { aspect: '', rationale: '' });
+        bindAdd('add-acceptance-btn', 'acceptanceCriteria', { criterion: '', testCase: '' });
+        bindAdd('add-file-btn', 'files', { order: data.files.length + 1, action: 'create', path: '', description: '',
+            pseudoCode: '' });
+        bindAdd('add-logic-btn', 'logicSteps', { step: '', pseudo: '' });
+        bindAdd('add-contract-btn', 'contracts', { name: '', inputs: '', outputs: '' });
+        bindAdd('add-edge-btn', 'edgeCases', { condition: '', handling: '' });
+
+        // Input bindings for top-level fields
+        document.getElementById('feature-title').addEventListener('input', (e) => { data.title = e.target.value;
+            saveData();
+            document.getElementById('topline-file').textContent = data.title || 'Untitled';
+            document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature'; });
+        document.getElementById('feature-overview').addEventListener('input', (e) => { data.overview = e.target.value;
+            saveData(); });
+        document.getElementById('feature-architecture').addEventListener('input', (e) => { data.architecture = e.target.value;
+            saveData(); });
+        document.getElementById('folder-structure').addEventListener('input', (e) => { data.folderStructure = e.target.value;
+            saveData(); });
+
+        // Static nav items (the dynamic file leaves bind their own click handler)
+        document.querySelectorAll('.tnode[data-target]:not(.fileleaf)').forEach(n => {
+            n.addEventListener('click', () => navigateTo(n.dataset.target, n));
+        });
+        document.getElementById('nav-toggle-btn').addEventListener('click', () => {
+            document.getElementById('tree-nav').classList.toggle('open');
+        });
+
+        // ------------------------------------------------------------------
+        // Export
+        // ------------------------------------------------------------------
+        function buildExportText() {
+            const lines = [];
+            lines.push('FEATURE IMPLEMENTATION PLAN (AI-READY PROMPT)');
+            lines.push('==============================================');
+            lines.push('Provenance: [HUMAN-EDITED] / [HUMAN-ADDED] tags mark human changes to the AI draft.');
+            lines.push('Treat tagged content as authoritative over anything untagged.');
+            const unresolved = unresolvedQuestions().length;
+            if (unresolved) {
+                lines.push(`⚠ ${unresolved} OPEN QUESTION(S) UNRESOLVED — do not implement; ask the human to decide first.`);
+            }
+            lines.push('');
+            lines.push(`FEATURE TITLE: ${data.title || 'Not set'}${scalarTag('title')}`);
+            lines.push('');
+            lines.push(`--- FEATURE OVERVIEW ---${scalarTag('overview')}`);
+            if (!data.overview) {
+                lines.push('(No overview written)');
+            } else {
+                data.overview.split('\n').forEach(line => lines.push(line));
+            }
+            lines.push('');
+
+            // Open Questions & Decisions
+            lines.push('--- OPEN QUESTIONS & DECISIONS ---');
+            if (data.openQuestions.length === 0) {
+                lines.push('(No open questions — the ask was unambiguous)');
+            } else {
+                data.openQuestions.forEach((q, idx) => {
+                    lines.push(`Question ${idx+1}: ${q.question || 'Untitled'}${itemTag('openQuestions', q)}`);
+                    if (q.options) {
+                        lines.push('  Options:');
+                        q.options.split('\n').forEach(line => lines.push(`    ${line}`));
+                    }
+                    lines.push(`  Decision: ${(q.decision || '').trim() || '(UNRESOLVED — human must decide before implementation)'}`);
+                    lines.push('');
+                });
+            }
+            lines.push('');
+
+            // Design Pattern & Architecture
+            lines.push(`--- DESIGN PATTERN & ARCHITECTURE ---${scalarTag('architecture')}`);
+            if (!data.architecture) {
+                lines.push('(No architecture described)');
+            } else {
+                data.architecture.split('\n').forEach(line => lines.push(line));
+            }
+            lines.push('');
+
+            // Solution Approach
+            lines.push('--- SOLUTION APPROACH & RATIONALE ---');
+            if (data.solutionApproach.length === 0) {
+                lines.push('(No approach decisions documented)');
+            } else {
+                data.solutionApproach.forEach((s, idx) => {
+                    lines.push(`Decision ${idx+1}: ${s.aspect || 'Untitled'}${itemTag('solutionApproach', s)}`);
+                    if (s.rationale) {
+                        s.rationale.split('\n').forEach(line => {
+                            lines.push(`  ${line}`);
+                        });
+                    }
+                    lines.push('');
+                });
+            }
+
+            // Folder structure
+            lines.push(`--- RESULTING FOLDER STRUCTURE ---${scalarTag('folderStructure')}`);
+            if (!data.folderStructure) {
+                lines.push('(No folder structure defined)');
+            } else {
+                data.folderStructure.split('\n').forEach(line => {
+                    lines.push(`  ${line}`);
+                });
+            }
+            lines.push('');
+
+            // Files
+            lines.push('--- FILE CHANGE MANIFEST (IN ORDER) ---');
+            const sortedFiles = [...data.files].sort((a, b) => (a.order || 999) - (b.order || 999));
+            if (sortedFiles.length === 0) {
+                lines.push('(No files defined)');
+            } else {
+                sortedFiles.forEach((f, idx) => {
+                    lines.push(`[${idx+1}] ${f.action.toUpperCase()} | ${f.path || 'Untitled'}${itemTag('files', f)}`);
+                    if (f.description) lines.push(`    Description: ${f.description}`);
+                    if (f.pseudoCode) {
+                        lines.push(`    Pseudo-code:`);
+                        f.pseudoCode.split('\n').forEach(line => {
+                            lines.push(`      ${line}`);
+                        });
+                    }
+                    lines.push('');
+                });
+            }
+
+            // Acceptance Criteria & Test Cases
+            lines.push('--- ACCEPTANCE CRITERIA & TEST CASES ---');
+            if (data.acceptanceCriteria.length === 0) {
+                lines.push('(No acceptance criteria defined)');
+            } else {
+                data.acceptanceCriteria.forEach((a, idx) => {
+                    lines.push(`Criterion ${idx+1}: ${a.criterion || 'Untitled'}${itemTag('acceptanceCriteria', a)}`);
+                    if (a.testCase) lines.push(`  Test Case: ${a.testCase}`);
+                    lines.push('');
+                });
+            }
+
+            // Edge Cases
+            lines.push('--- EDGE CASES & ERROR HANDLING ---');
+            if (data.edgeCases.length === 0) {
+                lines.push('(No edge cases defined)');
+            } else {
+                data.edgeCases.forEach(e => {
+                    lines.push(`Condition: ${e.condition || 'Untitled'}${itemTag('edgeCases', e)}`);
+                    if (e.handling) lines.push(`  Handling: ${e.handling}`);
+                    lines.push('');
+                });
+            }
+
+            // Logic
+            lines.push('--- CORE BUSINESS LOGIC (PSEUDO-CODE) ---');
+            if (data.logicSteps.length === 0) {
+                lines.push('(No logic steps defined)');
+            } else {
+                data.logicSteps.forEach((l, idx) => {
+                    lines.push(`Step ${idx+1}: ${l.step || 'Untitled'}${itemTag('logicSteps', l)}`);
+                    if (l.pseudo) {
+                        l.pseudo.split('\n').forEach(line => {
+                            lines.push(`  ${line}`);
+                        });
+                    }
+                    lines.push('');
+                });
+            }
+
+            // Contracts
+            lines.push('--- FUNCTION / API CONTRACTS ---');
+            if (data.contracts.length === 0) {
+                lines.push('(No contracts defined)');
+            } else {
+                data.contracts.forEach(c => {
+                    lines.push(`Signature: ${c.name || 'Unnamed'}${itemTag('contracts', c)}`);
+                    if (c.inputs) lines.push(`  Inputs: ${c.inputs}`);
+                    if (c.outputs) lines.push(`  Outputs: ${c.outputs}`);
+                    lines.push('');
+                });
+            }
+
+            lines.push('--- END OF PLAN ---');
+            lines.push('Generate the actual code based strictly on the above plan.');
+            return lines.join('\n');
+        }
+
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            const text = buildExportText();
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copy-btn');
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy AI-Ready Plan';
+                    btn.classList.remove('copied');
+                }, 2500);
+            }).catch(() => {
+                alert('Could not copy. Please select and copy manually.');
+            });
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if (confirm('Reset all data? This cannot be undone.')) {
+                data = emptyData();
+                saveData();
+                renderAll();
+            }
+        });
+
+        // ------------------------------------------------------------------
+        // Initial Render
+        // ------------------------------------------------------------------
+        renderAll();
+    </script>
+
+    <!-- Side panel for comments and AI chat -->
+    <div class="side-panel" id="side-panel">
+        <div class="panel-header">
+            <h3>💬 Questions & Clarifications</h3>
+            <button class="close-btn" id="close-panel-btn">✕</button>
+        </div>
+        <div class="connection-status disconnected" id="connection-status">
+            Offline — open via harness for AI responses
+        </div>
+        <div class="comments-list" id="comments-list"></div>
+        <div class="comment-input">
+            <textarea id="comment-text" placeholder="Ask a question about this section..." maxlength="500"></textarea>
+            <button id="send-comment-btn" disabled>Send</button>
+        </div>
+    </div>
+
+    <!-- Script for socket client and comment handling -->
+    <script src="featurePlan-socket-client.js"></script>
+    <script>
+        // ------------------------------------------------------------------
+        // WebSocket & Comment Integration
+        // ------------------------------------------------------------------
+        let socket = null;
+        let currentSection = null;
+        let comments = {};
+
+        function loadComments() {
+            try {
+                const stored = localStorage.getItem('feature-comments:' + document.title);
+                comments = stored ? JSON.parse(stored) : {};
+            } catch (e) {
+                comments = {};
+            }
+        }
+
+        function saveComments() {
+            try {
+                localStorage.setItem('feature-comments:' + document.title, JSON.stringify(comments));
+            } catch (e) { /* ignore */ }
+        }
+
+        function initSocket() {
+            const params = new URLSearchParams(window.location.search);
+            const port = params.get('socket-port');
+
+            if (!port) {
+                console.log('No socket-port provided. Comments will work locally only.');
+                document.getElementById('send-comment-btn').disabled = true;
+                return;
+            }
+
+            socket = new FeaturePlanSocket(port);
+
+            socket.on('connect', () => {
+                document.getElementById('connection-status').className = 'connection-status connected';
+                document.getElementById('connection-status').textContent = '✓ Connected to AI';
+                document.getElementById('send-comment-btn').disabled = false;
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').className = 'connection-status disconnected';
+                document.getElementById('connection-status').textContent = '✗ Disconnected from AI';
+                document.getElementById('send-comment-btn').disabled = true;
+            });
+
+            socket.on('response', (msg) => {
+                if (currentSection && comments[currentSection]) {
+                    const lastComment = comments[currentSection][comments[currentSection].length - 1];
+                    lastComment.aiResponse = msg.text;
+                    saveComments();
+                    renderComments();
+                }
+            });
+
+            socket.on('patch', (msg) => {
+                applyPatch(msg);
+            });
+
+            socket.on('error', (err) => {
+                console.error('Socket error:', err);
+            });
+        }
+
+        function openCommentPanel(sectionId) {
+            currentSection = sectionId;
+            if (!comments[sectionId]) {
+                comments[sectionId] = [];
+            }
+            document.getElementById('side-panel').classList.add('open');
+            document.getElementById('comment-text').focus();
+            renderComments();
+        }
+
+        function closeCommentPanel() {
+            document.getElementById('side-panel').classList.remove('open');
+            currentSection = null;
+        }
+
+        function renderComments() {
+            const list = document.getElementById('comments-list');
+            list.innerHTML = '';
+
+            if (!currentSection || !comments[currentSection]) {
+                list.innerHTML = '<div class="offline-message">No questions for this section yet.</div>';
+                return;
+            }
+
+            const sectionComments = comments[currentSection];
+            sectionComments.forEach((comment) => {
+                const div = document.createElement('div');
+                div.className = 'comment-item';
+
+                const header = document.createElement('div');
+                header.innerHTML = `<span class="comment-author">You</span><span class="comment-time">${new Date(comment.time).toLocaleTimeString()}</span>`;
+                div.appendChild(header);
+
+                const text = document.createElement('div');
+                text.className = 'comment-text';
+                text.textContent = comment.text;
+                div.appendChild(text);
+
+                if (comment.aiResponse) {
+                    const response = document.createElement('div');
+                    response.className = 'comment-ai-response';
+                    response.innerHTML = `<strong>AI:</strong> ${comment.aiResponse}`;
+                    div.appendChild(response);
+                }
+
+                list.appendChild(div);
+            });
+
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function sendComment() {
+            const text = document.getElementById('comment-text').value.trim();
+            if (!text) return;
+
+            if (!comments[currentSection]) {
+                comments[currentSection] = [];
+            }
+
+            const comment = {
+                time: Date.now(),
+                text: text,
+                aiResponse: null
+            };
+
+            comments[currentSection].push(comment);
+            saveComments();
+            document.getElementById('comment-text').value = '';
+            renderComments();
+
+            // Send to AI if socket is connected
+            if (socket && socket.isConnected()) {
+                socket.sendQuestion(currentSection, text, data);
+            } else if (socket) {
+                console.warn('Socket not connected. Queueing message.');
+            }
+        }
+
+        function applyPatch(patch) {
+            const { section, itemId, field, value, action } = patch;
+
+            if (!data[section]) {
+                console.warn(`Unknown section: ${section}`);
+                return;
+            }
+
+            if (action === 'update' && itemId) {
+                const item = data[section].find(i => i.id === itemId);
+                if (item) {
+                    item[field] = value;
+                }
+            } else if (action === 'add') {
+                data[section].push({ id: generateId(), ...patch.item });
+            } else if (action === 'delete' && itemId) {
+                const idx = data[section].findIndex(i => i.id === itemId);
+                if (idx >= 0) data[section].splice(idx, 1);
+            }
+
+            saveData();
+            renderAll();
+        }
+
+        // Expose currentPlan for harness to read
+        Object.defineProperty(window, 'currentPlan', {
+            get: function() {
+                return data;
+            }
+        });
+
+        // Event listeners
+        document.getElementById('close-panel-btn').addEventListener('click', closeCommentPanel);
+        document.getElementById('send-comment-btn').addEventListener('click', sendComment);
+        document.getElementById('comment-text').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                sendComment();
+            }
+        });
+
+        // Add +Comment buttons to section headers
+        function addCommentButtons() {
+            document.querySelectorAll('.section .section-head').forEach((head) => {
+                if (head.querySelector('.section-header-actions')) return; // already added
+
+                const actions = document.createElement('span');
+                actions.className = 'section-header-actions';
+
+                const btn = document.createElement('button');
+                btn.className = 'comment-btn';
+                btn.textContent = '💬 Comment';
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const section = head.closest('.section');
+                    const sectionId = section.id || head.textContent.trim().toLowerCase().replace(/\s+/g, '-').substring(0, 20);
+                    openCommentPanel(sectionId);
+                });
+
+                actions.appendChild(btn);
+                head.appendChild(actions);
+            });
+        }
+
+        // Initialize
+        loadComments();
+        initSocket();
+        addCommentButtons();
+    </script>
+
+</body>
+</html>

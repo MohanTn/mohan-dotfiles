@@ -36,7 +36,7 @@ Then **open a new terminal** — the login shell changes to zsh, and the current
 
 ### What each step actually does
 
-**Step 2 — `setup-packages.sh`** asks six yes/no questions (Docker, Python dev tools, pipeline-worker, GitHub Copilot CLI, LocalScribe, git identity) and saves your answers to `~/.config/mohan-dotfiles/packages-config.nix`. That file lives outside the repo and is never committed, so your choices are yours alone. Skip this step and every optional package stays off (`nix/default-packages-config.nix` applies instead). Re-run it any time to change your mind, then re-run `setup.sh`.
+**Step 2 — `setup-packages.sh`** asks eight yes/no questions (Docker, Python dev tools, pipeline-worker, GitHub Copilot CLI, LocalScribe, git identity, little-coder, Homebrew — the Homebrew answer also asks which formulae to install) and saves your answers to `~/.config/mohan-dotfiles/packages-config.nix`. That file lives outside the repo and is never committed, so your choices are yours alone. Skip this step and every optional package stays off (`nix/default-packages-config.nix` applies instead). Re-run it any time to change your mind, then re-run `setup.sh`.
 
 **Step 3 — `setup.sh`** does the real work, in order:
 
@@ -61,9 +61,11 @@ Exit code 0 and "all checks passed" means you're done. Open a new terminal and y
 | --- | --- |
 | `error: ... does not exist` right after you added or renamed a file | Nix only sees git-tracked files. Run `git add` on the new file (staging is enough, no commit needed) and retry. This is the single most common confusion — check it before anything else. |
 | Shell still isn't zsh | Open a *new* terminal. If it persists, log out and back in; the login shell change needs a fresh session. |
+| `No space left on device` while building | `/nix` is full. `nix-collect-garbage --delete-older-than 7d` (and the same with `sudo`), delete stale `result` symlinks — they are GC roots — then `nix store optimise`. The daily `tools-maintenance` timer does the first part for you once a switch has succeeded. |
+| little-coder ignores the GPU | `littleCoderGpu` must be on (prompt 7a), and the wrapper needs an NVIDIA Vulkan ICD in `/usr/share/vulkan/icd.d`. Check `~/.cache/little-coder/llama-server.log` for `-ngl` and a Vulkan device line; `rm -rf ~/.cache/little-coder/gpu-libs` forces the driver-library farm to rebuild after a driver upgrade. |
 | `setup.sh doctor` reports drift | Something edited a managed file by hand. Re-run `./setup.sh` to restore it; your edited copy is kept as `*.hm-backup`. |
 | Command not found after install | `~/.local/bin` and `~/.npm-global/bin` are added to `PATH` by the managed zshrc — open a new terminal. |
-| Nix commands fail with "experimental feature" | Use `./setup.sh` rather than calling `nix` yourself; it passes the flags this flake needs. |
+| Nix commands fail with "experimental feature" | Run `./setup.sh` once. It exports the flags for its own run and installs a managed `~/.config/nix/nix.conf` that enables `nix-command` + `flakes` for every shell afterward. Machine-local Nix settings (substituters, access-tokens) go in `~/.config/nix/nix.conf.local`, which that file includes. |
 
 ---
 
@@ -98,6 +100,8 @@ Because the live files under `$HOME` are store symlinks, editing them directly d
 | Non-secret env vars | `home.sessionVariables` in `nix/zsh.nix` | Yes |
 | **Secrets** | `~/.zshrc.local` | **No — never commit these** |
 | Git identity | Answer yes to prompt 6 in `setup-packages.sh`, or edit `nix/optional-packages.nix` | Config yes, your answer no |
+| Homebrew formulae | `brewPackages` in `~/.config/mohan-dotfiles/packages-config.nix` (prompt 8 of `setup-packages.sh`) | No — machine-local |
+| Nix's own settings | `nix/nix-conf.nix` (managed) + `~/.config/nix/nix.conf.local` (machine-local) | Config yes, local file no |
 
 ### Secrets
 

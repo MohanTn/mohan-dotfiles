@@ -25,6 +25,18 @@
 # ~/.config/nvim straight at this checkout).
 set -euo pipefail
 
+# Every nix call below (and the home-manager CLI they invoke) needs the
+# nix-command and flakes experimental features. A Nix from a distro package or
+# an older installer has neither, and fails with "experimental Nix feature
+# 'nix-command' is disabled" — the one error that makes a fresh machine look
+# broken. Force them on for this process tree; `extra-` appends instead of
+# replacing whatever /etc/nix/nix.conf already enables. nix/nix-conf.nix makes
+# the same setting permanent for interactive shells once the first switch
+# lands, so this only covers the bootstrap window.
+NIX_CONFIG="extra-experimental-features = nix-command flakes
+${NIX_CONFIG:-}"
+export NIX_CONFIG
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXPECTED_DIR="$HOME/REPO/mohan-dotfiles"
 # Only used before the first switch; afterwards the home-manager CLI from the
@@ -220,6 +232,9 @@ Done. Reminders:
   * On first adoption, any pre-existing ~/.zshrc or ~/.zshenv content is
     folded into ~/.zshrc.local automatically; review it there and prune
     what's now redundant with nix/zsh.nix.
+  * ~/.config/nix/nix.conf is managed (it enables nix-command + flakes for
+    every shell). Machine-local Nix settings - substituters, access-tokens -
+    go in ~/.config/nix/nix.conf.local, which it includes when present.
   * Docker (the daemon) is a system service and stays a manual install:
       https://docs.docker.com/engine/install/
   * Open a new terminal (or run 'exec zsh') to pick up the new environment.
