@@ -5,9 +5,12 @@
   "private": true,
   "main": "scaffold.js",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "mcp": "node mcp-server.js"
   },
   "dependencies": {
-    "handlebars": "^4.7.9"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "handlebars": "^4.7.9",
+    "zod": "^3.25.76"
   }
 }

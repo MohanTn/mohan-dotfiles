@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-// node_modules/ is gitignored, so the Nix-store copy of this directory ships
-// without deps; nix/agents.nix populates this cache via npm ci at switch time.
-let Handlebars;
-try {
-  Handlebars = require('handlebars');
-} catch {
-  Handlebars = require(path.join(process.env.HOME || '', '.cache', 'boilerplats', 'node_modules', 'handlebars'));
-}
-const pkg = require('./package.json');
+// Thin CLI over lib/core.js — the MCP server (mcp-server.js) is the other
+// front over the same core, so both behave identically. --json prints the
+// structured result (full numbered content + fillable lines) so callers
+// never need to re-read the file they just scaffolded.
 
-const DEFAULT_MARKER = '// scaffold:inject';
+const fs = require('fs');
+const core = require('./lib/core');
+const meta = require('./lib/template-meta');
+const pkg = require('./package.json');
 
 function printHelp() {
   console.log(`scaffold - render a Handlebars boilerplate and write or inject it
@@ -30,17 +26,28 @@ Options:
   --data '<json>'       inline JSON passed to the template (default: {})
   --data-file <path>    JSON file passed to the template
   --inject               insert into an existing file instead of creating one
-  --marker '<string>'    injection anchor (default: "${DEFAULT_MARKER}")
+  --adopt                only add the scaffold:inject marker to an existing
+                         file (brownfield adoption), no template rendered
+  --anchor '<line|text>' where to put the marker when adopting: a 1-based line
+                         number, or a unique snippet it should precede
+  --no-adopt             with --inject, fail instead of adopting an unmarked file
+  --marker '<string>'    injection anchor (default per language:
+                         "# scaffold:inject" for python/sh, else "// scaffold:inject")
   --force                overwrite --out if it already exists (create mode only)
+  --json                 print the structured result (path, fileType, marker,
+                         numbered content, fillable lines) instead of a message
   -v, --version
   -h, --help
 
 Notes:
   - Templates are plain Handlebars files under boilerplats/<lang>/<template>.hbs.
+  - Missing required data fields are a hard error, nothing is written.
   - In --inject mode, rendered content is inserted directly above the marker
     line, and the marker is left in place so the file can be injected again.
-  - If the marker isn't found, content is inserted before the file's last
-    "}" as a generic fallback for brace-delimited languages.
+  - An existing file with no marker is ADOPTED automatically on --inject: the
+    marker is placed at the end of the enclosing top-level block, then the
+    member is injected. Brownfield adoption is per-file and on-demand.
+  - If no safe anchor can be found, nothing is written — pass --anchor.
 `);
 }
 
@@ -60,8 +67,20 @@ function parseArgs(argv) {
       case '--inject':
         args.inject = true;
         break;
+      case '--adopt':
+        args.adopt = true;
+        break;
+      case '--no-adopt':
+        args.noAdopt = true;
+        break;
+      case '--anchor':
+        args.anchor = argv[++i];
+        break;
       case '--force':
         args.force = true;
+        break;
+      case '--json':
+        args.json = true;
         break;
       case '--lang':
         args.lang = argv[++i];
@@ -95,56 +114,6 @@ function loadData(args) {
   return JSON.parse(args.data);
 }
 
-function render(lang, template, data) {
-  const templatePath = path.join(__dirname, lang, `${template}.hbs`);
-  if (!fs.existsSync(templatePath)) {
-    const langDir = path.join(__dirname, lang);
-    const available = fs.existsSync(langDir)
-      ? fs.readdirSync(langDir).filter((f) => f.endsWith('.hbs')).map((f) => f.replace(/\.hbs$/, ''))
-      : [];
-    throw new Error(
-      `Template not found: ${templatePath}\nAvailable templates for "${lang}": ${available.join(', ') || '(none)'}`
-    );
-  }
-  const source = fs.readFileSync(templatePath, 'utf8');
-  return Handlebars.compile(source)(data);
-}
-
-function writeNewFile(outPath, content, force) {
-  if (fs.existsSync(outPath) && !force) {
-    throw new Error(`File already exists: ${outPath} (use --inject or --force)`);
-  }
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, content);
-}
-
-function injectIntoFile(outPath, content, marker) {
-  if (!fs.existsSync(outPath)) {
-    throw new Error(`Cannot inject, file does not exist: ${outPath}`);
-  }
-  const original = fs.readFileSync(outPath, 'utf8');
-  const trimmedContent = content.trim();
-
-  const markerIndex = original.indexOf(marker);
-  if (markerIndex !== -1) {
-    const updated =
-      original.slice(0, markerIndex) + trimmedContent + '\n\n' + original.slice(markerIndex);
-    fs.writeFileSync(outPath, updated);
-    return { fallback: false };
-  }
-
-  const lastBraceIndex = original.lastIndexOf('}');
-  if (lastBraceIndex === -1) {
-    throw new Error(
-      `Marker "${marker}" not found and no "}" fallback point available in: ${outPath}`
-    );
-  }
-  const updated =
-    original.slice(0, lastBraceIndex) + trimmedContent + '\n\n' + original.slice(lastBraceIndex);
-  fs.writeFileSync(outPath, updated);
-  return { fallback: true };
-}
-
 function main(argv) {
   const args = parseArgs(argv);
 
@@ -157,24 +126,60 @@ function main(argv) {
     return;
   }
 
+  if (args.adopt) {
+    if (!args.lang || !args.out) {
+      printHelp();
+      throw new Error('Missing required arguments for --adopt: --lang, --out');
+    }
+    const result = core.scaffoldAdopt({ lang: args.lang, out: args.out, anchor: args.anchor });
+    if (args.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else if (result.alreadyAdopted) {
+      console.log(`Already adopted: ${args.out} (marker on line ${result.markerLine})`);
+    } else {
+      console.log(`Adopted ${args.out} (marker on line ${result.markerLine})`);
+    }
+    return;
+  }
+
   if (!args.lang || !args.template || !args.out) {
     printHelp();
     throw new Error('Missing required arguments: --lang, --template, --out');
   }
 
   const data = loadData(args);
-  const content = render(args.lang, args.template, data);
 
   if (args.inject) {
-    const marker = args.marker || DEFAULT_MARKER;
-    const result = injectIntoFile(args.out, content, marker);
-    if (result.fallback) {
-      console.warn(`Marker "${marker}" not found, inserted before final "}" in ${args.out}`);
+    const result = core.scaffoldInject({
+      lang: args.lang,
+      template: args.template,
+      out: args.out,
+      data,
+      marker: args.marker,
+      anchor: args.anchor,
+      adopt: !args.noAdopt,
+    });
+    if (args.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      if (result.adopted) {
+        console.log(`Adopted ${args.out} (marker on line ${result.markerLine})`);
+      }
+      console.log(`Injected into ${args.out}`);
     }
-    console.log(`Injected into ${args.out}`);
   } else {
-    writeNewFile(args.out, content, args.force);
-    console.log(`Created ${args.out}`);
+    const result = core.scaffoldCreate({
+      lang: args.lang,
+      template: args.template,
+      out: args.out,
+      data,
+      force: args.force,
+    });
+    if (args.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`Created ${args.out}`);
+    }
   }
 }
 
@@ -187,4 +192,13 @@ if (require.main === module) {
   }
 }
 
-module.exports = { parseArgs, loadData, render, writeNewFile, injectIntoFile };
+module.exports = {
+  parseArgs,
+  loadData,
+  main,
+  // re-exported from lib/core for backward compatibility (tests, direct requires)
+  render: core.render,
+  writeNewFile: core.writeNewFile,
+  injectIntoFile: core.injectIntoFile,
+  meta,
+};

@@ -59,6 +59,18 @@ cmd_selftest() {
     "$(payload_tool $sid edit '{"path":"/tmp/x.txt","old_str":"a","new_str":"b"}')" \
     '. == {}'
 
+  # Rename-proof + shell-workaround coverage: both come from the shared Claude
+  # guards, so these assert Copilot actually routes its own tool names into them.
+  expect_out "pre-tool-use denies renamed boilerplate by content signature" pre-tool-use.sh \
+    "$(payload_tool "$sid-sig" create '{"path":"/tmp/does-not-exist/orders-api.ts","content":"import { Router } from \"express\";\nconst r = Router();\n"}')" \
+    '.permissionDecision == "deny"'
+  rm -rf "${STATE_HOME:?}/$sid-sig"
+
+  expect_out "pre-tool-use denies a shell write into a code file" pre-tool-use.sh \
+    "$(payload_tool "$sid-bash" bash '{"command":"cat > src/OrdersRequest.ts <<EOF\nexport interface OrdersRequest {}\nEOF"}')" \
+    '.permissionDecision == "deny"'
+  rm -rf "${STATE_HOME:?}/$sid-bash"
+
   local loop_payload
   loop_payload=$(payload_tool "$sid-loop" bash '{"command":"echo hi"}')
   run_hook pre-tool-use.sh "$loop_payload" >/dev/null 2>&1

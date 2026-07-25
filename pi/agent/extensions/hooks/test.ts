@@ -189,6 +189,31 @@ async function main() {
     }
   }
 
+  // Same reasoning as the no-op case above: asserting on bash-write-guard.sh's
+  // own wording proves Pi actually shells out to the shared guard rather than
+  // leaving the shell write-around of the boilerplate mandate open on Pi.
+  {
+    const desc = "tool_call blocks a shell write into a code file via the shared bash guard";
+    const result = (await handlers.get("tool_call")!(
+      { toolName: "bash", input: { command: "cat > src/OrdersRequest.ts <<EOF\nexport interface OrdersRequest {}\nEOF" } },
+      ctx,
+    )) as { block?: boolean; reason?: string } | undefined;
+    if (result?.block && result.reason?.includes("shell redirection")) {
+      ok(desc);
+    } else {
+      no(desc, `got ${JSON.stringify(result)}`);
+    }
+  }
+
+  {
+    const desc = "tool_call allows an ordinary bash command";
+    const result = await handlers.get("tool_call")!(
+      { toolName: "bash", input: { command: "rg foo src/ | tee /tmp/results.txt" } },
+      ctx,
+    );
+    result === undefined ? ok(desc) : no(desc, `expected no block, got ${JSON.stringify(result)}`);
+  }
+
   {
     const desc = "tool_call allows an ordinary edit";
     const result = await handlers.get("tool_call")!(
