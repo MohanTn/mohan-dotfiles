@@ -34,12 +34,12 @@ in
 
   config.home.activation = {
     installPipelineWorker = mkIf cfg.enablePipelineWorker (hm.dag.entryAfter [ "installPackages" ] ''
-      PATH="${pkgs.nodejs_22}/bin:$PATH"
-      NPM_CONFIG_PREFIX="$HOME/.npm-global"
+      export PATH="${pkgs.nodejs_22}/bin:$PATH"
+      export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 
       $DRY_RUN_CMD mkdir -p "$NPM_CONFIG_PREFIX"
       echo "Installing pipeline-worker..."
-      $DRY_RUN_CMD npm install --global --no-save pipeline-worker
+      ($DRY_RUN_CMD npm install --global --no-save pipeline-worker) || echo "Warning: pipeline-worker installation failed, continuing" >&2
     '');
 
     installCopilot = mkIf cfg.enableGitHubCopilot (hm.dag.entryAfter [ "installPackages" ] ''
