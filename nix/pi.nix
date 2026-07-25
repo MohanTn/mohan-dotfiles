@@ -1,11 +1,24 @@
 { pkgs, lib, ... }:
 
 {
+  # No permissions/settings.json porting needed here: Pi has no default
+  # tool-confirmation prompt at all (docs/security.md - built-in tools run
+  # with the pi process's full permissions unless an extension adds a gate),
+  # so claude/settings.json's permissions.allow (Bash(rg *), Bash(git diff *))
+  # has nothing to mirror. See nix/zsh.nix's `copilot` alias for the Copilot
+  # CLI counterpart, which does need one.
+
   # Global instructions: same content as claude/CLAUDE.md's `@~/.agents/AGENTS.md`
   # import and copilot.nix's copilot-instructions.md, rendered at build time
   # since Pi's own instructions path (~/.pi/agent/AGENTS.md) has no confirmed
   # @import directive the way Claude Code does.
   home.file.".pi/agent/AGENTS.md".text = builtins.readFile ../agents/AGENTS.md;
+
+  # System prompt: SYSTEM.md replaces Pi's default coding-assistant prompt
+  # (docs/usage.md, "System Prompt Files"), the same lean prompt the `cc` alias
+  # feeds Claude Code via --system-prompt-file (nix/zsh.nix). It is written
+  # harness-neutral, so it names no tool only one of them has.
+  home.file.".pi/agent/SYSTEM.md".text = builtins.readFile ../agents/lean-system-prompt.md;
 
   # Boilerplate-generator hint (see agents/boilerplats/AGENT-HINT.md): on
   # Claude Code it's a keyword-gated UserPromptSubmit hook

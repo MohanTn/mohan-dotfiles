@@ -18,7 +18,11 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: claude
-    command: ["claude", "--dangerously-skip-permissions"]
+    # --system-prompt-file: literal /root path, not $HOME — this is an exec-form
+    # array (no shell), so env vars don't expand; ENV HOME=/root in the claude
+    # stage makes it safe to hardcode. entrypoint.sh syncs the file there on
+    # every start (sync_agents_layer -> ~/.agents/lean-system-prompt.md).
+    command: ["claude", "--dangerously-skip-permissions", "--system-prompt-file", "/root/.agents/lean-system-prompt.md"]
     # Passes a host-side corporate/proxy CA bundle (CURL_CA_BUNDLE, if set)
     # into the container so entrypoint.sh's self-heal `curl` can verify TLS
     # on networks that SSL-inspect. The volume line falls back to a
@@ -59,6 +63,12 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: pi
+    # --no-sandbox: the sandbox extension's bwrap-based OS sandboxing (see
+    # pi/agent/extensions/sandbox) needs bubblewrap/socat, which this image
+    # never installs — the container itself is already the sandbox, matching
+    # claude's --dangerously-skip-permissions and copilot's --yolo above.
+    # Without this flag, pi silently fails to initialize it on every start.
+    command: ["pi", "--no-sandbox"]
     volumes:
       - ${REPO_PATH:-.}:/workspace
       - pi-agent-home:/root/.pi
