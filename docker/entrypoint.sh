@@ -26,6 +26,7 @@ cp -r /opt/agent-config/claude/hooks "$HOME/.claude/hooks"
 sync_agents_layer() {
   mkdir -p "$HOME/.agents"
   cp -f /opt/agent-config/agents/AGENTS.md "$HOME/.agents/AGENTS.md"
+  cp -f /opt/agent-config/agents/lean-system-prompt.md "$HOME/.agents/lean-system-prompt.md"
   rm -rf "$HOME/.agents/skills"
   cp -r /opt/agent-config/agents/skills "$HOME/.agents/skills"
   # includes node_modules/, baked by the Dockerfile's npm ci
@@ -60,7 +61,11 @@ case "${AGENT_TOOL:-}" in
     # this stage runs as root — it used to be created as a side effect of an
     # (unused) `mkdir -p $HOME/.copilot/skills`, so create it outright.
     mkdir -p "$HOME/.copilot"
-    cp -f /opt/agent-config/agents/AGENTS.md "$HOME/.copilot/copilot-instructions.md"
+    # Docker-only divergence from nix/copilot.nix (which loads the full
+    # agents/AGENTS.md as copilot-instructions.md): copilot-instructions.md is
+    # the closest thing Copilot CLI has to a system-prompt override, so it
+    # gets the lean prompt here instead, matching claude/pi in this image.
+    cp -f /opt/agent-config/agents/lean-system-prompt.md "$HOME/.copilot/copilot-instructions.md"
     rm -rf "$HOME/.copilot/hooks"
     cp -r /opt/agent-config/copilot/hooks "$HOME/.copilot/hooks"
     ;;
@@ -68,6 +73,9 @@ case "${AGENT_TOOL:-}" in
     sync_agents_layer
     mkdir -p "$HOME/.pi/agent/extensions"
     cp -f /opt/agent-config/agents/AGENTS.md "$HOME/.pi/agent/AGENTS.md"
+    # System Prompt Files (docs/usage.md): SYSTEM.md replaces Pi's default
+    # coding-assistant prompt outright, same mechanism nix/pi.nix uses on the host.
+    cp -f /opt/agent-config/agents/lean-system-prompt.md "$HOME/.pi/agent/SYSTEM.md"
     rm -rf "$HOME/.pi/agent/extensions/hooks"
     cp -r /opt/agent-config/pi/extensions/hooks "$HOME/.pi/agent/extensions/hooks"
     rm -rf "$HOME/.pi/agent/extensions/sandbox"

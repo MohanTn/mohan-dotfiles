@@ -30,6 +30,10 @@ ENV HOME=/home/agent
 WORKDIR /workspace
 
 COPY --chown=agent:agent agents/AGENTS.md /opt/agent-config/agents/AGENTS.md
+# Harness-neutral system prompt (nix/zsh.nix's `cc` alias and nix/pi.nix's
+# SYSTEM.md use the same file on the host). entrypoint.sh syncs it into each
+# AGENT_TOOL's config dir and wires it in as that tool's actual system prompt.
+COPY --chown=agent:agent agents/lean-system-prompt.md /opt/agent-config/agents/lean-system-prompt.md
 COPY --chown=agent:agent agents/skills /opt/agent-config/agents/skills
 # boilerplats ships to every stage: all three tools run boilerplate-guard.sh
 # (Claude via settings.json, Copilot via pre-tool-use.sh, Pi via index.ts),
