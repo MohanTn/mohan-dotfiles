@@ -1,5 +1,5 @@
-{{!-- Data: { Signature, Body } — generic member for --inject into a scaffold:inject-marked type. Signature is everything after the access modifier, e.g. "async Task<IActionResult> List(CancellationToken ct)". Body is optional; default is a TODO throw for the agent to replace. --}}
+{{!-- Data: { Signature, Body } — generic member for --inject into a scaffold:inject-marked type. Signature is everything after the access modifier, e.g. "async Task<IActionResult> List(CancellationToken ct)". Body is optional; default is a TODO throw for the agent to replace. Indentation is relative to the member's own first line; the injector re-indents the block to the marker's depth. --}}
 public {{{Signature}}}
-    {
-        {{#if Body}}{{{Body}}}{{else}}throw new NotImplementedException(); // TODO: fill in{{/if}}
-    }
+{
+    {{#if Body}}{{{Body}}}{{else}}throw new NotImplementedException(); // TODO: fill in{{/if}}
+}

@@ -164,6 +164,20 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
+    if (event.toolName === "bash") {
+      // Closes the shell write-around of the boilerplate mandate, same
+      // authored copy as Claude/Copilot (see bash-write-guard.sh header).
+      const bashGuard = runClaudeHook("bash-write-guard.sh", {
+        session_id: sessionId,
+        cwd: ctx.cwd,
+        tool_name: "Bash",
+        tool_input: event.input,
+      });
+      if (bashGuard.exitCode === 2) {
+        return { block: true, reason: bashGuard.stderr.trim() };
+      }
+    }
+
     const loop = runClaudeHook("pre-tool-use-loop-breaker.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,

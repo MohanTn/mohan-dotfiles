@@ -1,4 +1,4 @@
-{{!-- Data: { Package, EntityName, ServiceType, ServiceField } --}}
+{{!-- Data: { Package, EntityName, ServiceType, ServiceField }. The marker sits at FILE scope, not inside RegisterRoutes: Go has no nested method declarations, so an injected handler method must land outside it. Route registrations go inside RegisterRoutes as ordinary edits. --}}
 package {{{Package}}}
 
 import "net/http"
@@ -14,5 +14,7 @@ func New{{{EntityName}}}Controller({{{ServiceField}}} {{{ServiceType}}}) *{{{Ent
 }
 
 func (c *{{{EntityName}}}Controller) RegisterRoutes(mux *http.ServeMux) {
-	// scaffold:inject
+	// TODO: register handlers, e.g. mux.HandleFunc("/", c.list)
 }
+
+// scaffold:inject

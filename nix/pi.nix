@@ -38,6 +38,15 @@
   # plain read-only store symlink is enough — same role as .claude/hooks.
   home.file.".pi/agent/extensions/hooks".source = ../pi/agent/extensions/hooks;
 
+  # Scaffold MCP server: none here by design. Pi ships no MCP client at all —
+  # docs/usage.md states it "intentionally does not include built-in MCP,
+  # sub-agents, permission popups, plan mode, to-dos, or background bash", so
+  # on Pi the scaffold path stays the CLI (`scaffold.js --json`, same
+  # engine and structured output as the MCP tools) via the APPEND_SYSTEM.md
+  # hint above, and the write-around guards run through hooks/index.ts's
+  # bash-write-guard.sh + boilerplate-guard.sh calls — policy parity with
+  # Claude/Copilot even without the MCP transport.
+
   # Skills: agents/skills/ is already linked to ~/.agents by agents.nix, and
   # Pi natively auto-discovers ~/.agents/skills/*/SKILL.md (confirmed against
   # docs/skills.md) — no separate wiring needed here, unlike claude.nix and

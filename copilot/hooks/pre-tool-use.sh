@@ -25,6 +25,12 @@ case "$tool_name" in
     err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/boilerplate-guard.sh" 2>&1 >/dev/null)
     [ $? -eq 2 ] && deny "$err"
     ;;
+  bash | shell)
+    # bash-write-guard.sh only reads tool_input.command, which claude_payload
+    # passes through from toolArgs untouched.
+    err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/bash-write-guard.sh" 2>&1 >/dev/null)
+    [ $? -eq 2 ] && deny "$err"
+    ;;
 esac
 
 err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/pre-tool-use-loop-breaker.sh" 2>&1 >/dev/null)

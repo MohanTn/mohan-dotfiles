@@ -51,6 +51,15 @@ case "${AGENT_TOOL:-}" in
     cp -f /opt/agent-config/claude/statusline-usage.py "$HOME/.claude/statusline-usage.py"
     rm -rf "$HOME/.claude/skills"
     cp -r /opt/agent-config/agents/skills "$HOME/.claude/skills"
+    # Scaffold MCP server, the container counterpart of nix/claude.nix's
+    # scaffoldMcp activation. Registered here rather than baked into
+    # settings.json because Claude Code keeps user-scope MCP servers in
+    # ~/.claude.json (a file it rewrites at runtime, and one this script
+    # deliberately never overwrites — it holds session state too).
+    if ! claude mcp get scaffold >/dev/null 2>&1; then
+      claude mcp add --scope user scaffold -- node "$HOME/.agents/boilerplats/mcp-server.js" || \
+        echo "entrypoint.sh: could not register the scaffold MCP server, falling back to scaffold.js" >&2
+    fi
     ;;
   copilot)
     # Copilot reads its instructions from copilot-instructions.md rather than
@@ -68,6 +77,24 @@ case "${AGENT_TOOL:-}" in
     cp -f /opt/agent-config/agents/lean-system-prompt.md "$HOME/.copilot/copilot-instructions.md"
     rm -rf "$HOME/.copilot/hooks"
     cp -r /opt/agent-config/copilot/hooks "$HOME/.copilot/hooks"
+    # Scaffold MCP server, mirroring nix/copilot.nix: merged in only when
+    # absent so a user-edited mcp-config.json survives.
+    node -e '
+      const fs = require("fs");
+      const p = process.env.HOME + "/.copilot/mcp-config.json";
+      let cfg = {};
+      try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
+      cfg.mcpServers = cfg.mcpServers || {};
+      if (!cfg.mcpServers.scaffold) {
+        cfg.mcpServers.scaffold = {
+          type: "local",
+          command: "node",
+          args: [process.env.HOME + "/.agents/boilerplats/mcp-server.js"],
+          tools: ["*"],
+        };
+        fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
+      }
+    ' || echo "entrypoint.sh: could not register the scaffold MCP server for Copilot" >&2
     ;;
   pi)
     sync_agents_layer
