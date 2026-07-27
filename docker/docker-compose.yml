@@ -22,7 +22,7 @@ services:
     # array (no shell), so env vars don't expand; ENV HOME=/root in the claude
     # stage makes it safe to hardcode. entrypoint.sh syncs the file there on
     # every start (sync_agents_layer -> ~/.agents/lean-system-prompt.md).
-    command: ["claude", "--dangerously-skip-permissions", "--system-prompt-file", "/root/.agents/lean-system-prompt.md"]
+    command: ["claude", "--dangerously-skip-permissions", "--system-prompt-file", "/root/.agents/lean-system-prompt.md", "--model", "sonnet"]
     # Passes a host-side corporate/proxy CA bundle (CURL_CA_BUNDLE, if set)
     # into the container so entrypoint.sh's self-heal `curl` can verify TLS
     # on networks that SSL-inspect. The volume line falls back to a

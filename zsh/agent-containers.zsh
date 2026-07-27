@@ -12,7 +12,13 @@ agent-box() {
   fi
   local tool="$1"
   shift
-  REPO_PATH="$PWD" docker compose -f "$_agent_box_compose" run --rm --build "$tool" "$@"
+  local repo_path="$PWD"
+  # Containers run as root (see docker-compose.yml), so anything the agent
+  # writes into the bind-mounted repo lands back on the host owned by root,
+  # locking your regular user out (including `git`). Reclaim ownership on
+  # every exit, even if the run fails or is interrupted.
+  REPO_PATH="$repo_path" docker compose -f "$_agent_box_compose" run --rm --build "$tool" "$@"
+  sudo chown -R "$(id -u):$(id -g)" "$repo_path"
 }
 
 alias claude-box='agent-box claude'
