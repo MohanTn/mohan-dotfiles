@@ -12,7 +12,7 @@ The on-page sections in order:
 
 - **Feature Overview** — title plus one free-form paragraph in the AI's own words: the user's ask (near-verbatim), what the AI understood, and the existing code it touches.
 - **Open Questions & Decisions** — ambiguities the AI couldn't resolve, each with drafted options and a human-owned `decision` field. Empty decision = `UNRESOLVED` in the export; the approval gate shows the unresolved count live.
-- **Design Pattern & Architecture** — free-form: the AI explains its pattern choices and draws the architecture (prose + ASCII diagrams) as it sees it; the human edits to redirect.
+- **Design Pattern & Architecture** — a fenced ```mermaid flowchart/sequence diagram the AI drafts and the page renders live as an SVG (fully offline, vendored bundle), plus a couple of plain-language sentences for what the diagram can't show; the human edits the fenced block to redirect the design and the rendered diagram updates as they type.
 - **Solution Approach & Rationale** — settled design decisions and trade-offs; anything still open lives in Open Questions instead.
 - **Resulting Folder Structure** — ASCII tree derived by the inject script from the file manifest (`[CREATE]` / `[UPDATE]` / `[DELETE]` markers); the AI no longer authors it, the human can still edit it.
 - **File Change Manifest (In Order of Execution)** — ordered list of files with `action` (create/update/delete), `path`, `description`, and `pseudoCode` per file. Sorted by a numeric `order` field; reorderable in the UI. The single source of truth for touched paths.
@@ -92,7 +92,7 @@ Top-level keys: 3 scalar fields (`title`, `overview`, `architecture`) plus 7 sec
 {
   "title": "Add two-factor authentication",
   "overview": "You asked to \"add 2FA to login\". I read AuthService.php and the users table (id, email, password_hash); I understand this as a TOTP second factor verified at login, with enrollment managed from the profile page.",
-  "architecture": "Layered flow, one new service:\n\n  LoginController ──▶ AuthService ──▶ TotpService  [NEW]\n                          │\n                          └──▶ UserRepository\n\nTOTP logic is isolated in TotpService so AuthService stays thin. No separate Repository for OTP — reuse UserRepository.",
+  "architecture": "```mermaid\ngraph LR\n  LoginController --> AuthService --> TotpService[TotpService NEW]\n  AuthService --> UserRepository\n```\nTOTP logic stays in its own service so AuthService stays thin. No separate Repository for OTP — reuse UserRepository.",
   "openQuestions": [
     { "id": "q1", "question": "Is TOTP enrollment mandatory at next login, or opt-in from the profile page?", "options": "A) Mandatory at next login (recommended)\nB) Opt-in from profile settings", "decision": "" }
   ],
@@ -125,7 +125,7 @@ Allowed select values: `files.action` ∈ { create, update, delete }. The script
 
 ## Files
 
-- **featurePlan-template.html** — the template with `{{FEATURE_TITLE}}` (for `<title>` and `<h1>`) and `{{INITIAL_DATA_JSON}}` markers. Renders every section entirely client-side from the injected data object. Uses `localStorage` key `'feature-impl-plan:' + document.title` so each `featurePlan-<slug>.html` keeps its own state. Migrates the legacy `'feature-impl-plan-data'` (used by the original pasted template's single-key layout) to the per-doc key on first load, then deletes the legacy entry. Keeps a `SEED` snapshot of `INITIAL_DATA` at load; the export compares against it to emit `[HUMAN-EDITED]` / `[HUMAN-ADDED]` provenance tags. **NEW:** Includes a side panel for inline comments/questions and real-time AI chat when launched via harness with `?socket-port=PORT`.
+- **featurePlan-template.html** — the template with `{{FEATURE_TITLE}}` (for `<title>` and `<h1>`), `{{INITIAL_DATA_JSON}}`, and `{{MERMAID_BUNDLE_JS}}` markers. Renders every section entirely client-side from the injected data object; the Design & Architecture textarea is scanned for a fenced ```mermaid block and rendered live into an SVG below it via the vendored `mermaid.js`. Uses `localStorage` key `'feature-impl-plan:' + document.title` so each `featurePlan-<slug>.html` keeps its own state. Migrates the legacy `'feature-impl-plan-data'` (used by the original pasted template's single-key layout) to the per-doc key on first load, then deletes the legacy entry. Keeps a `SEED` snapshot of `INITIAL_DATA` at load; the export compares against it to emit `[HUMAN-EDITED]` / `[HUMAN-ADDED]` provenance tags. **NEW:** Includes a side panel for inline comments/questions and real-time AI chat when launched via harness with `?socket-port=PORT`.
 - **featurePlan-inject.js** — reads JSON, escapes the title, and embeds the rest of the plan as a JSON literal (`INITIAL_DATA`) inside a `<script>` tag, escaping `</script>` breakout and the U+2028/U+2029 line-terminator characters that `JSON.stringify` leaves raw. `normalizePlan` applies per-section defaults via a single `ITEM_FIELD_DEFAULTS` table and derives `folderStructure` from `files[]` when absent (`deriveFolderStructure`). Template path is optional. When the output HTML already exists, `extractInitialData` + `mergePlans` update it in place instead of replacing it. Exports `createPatch` and `createAddPatch` utilities for harness patch operations.
 - **featurePlan-serve.js** — one-command interactive launcher: starts the harness listener (walking ports on `EADDRINUSE`), opens the browser (WSL-aware: `wslview` → `powershell.exe`, `wslpath -w` translation; `xdg-open` on Linux, `open` on macOS), and bridges questions/answers through the JSONL files described above.
 - **featurePlan-socket-client.js** — WebSocket client for browser page. Manages connection to harness listener, sends user questions over socket, receives AI responses and patch operations, auto-reconnects on disconnect, queues messages when offline. Exports `FeaturePlanSocket` class for use in the template.
@@ -134,6 +134,7 @@ Allowed select values: `files.action` ∈ { create, update, delete }. The script
 - **featurePlan-harness-listener.test.js** — unit tests for the WebSocket listener. Covers instantiation, server start/stop, AI agent integration.
 - **featurePlan-serve.test.js** — unit tests for the launcher: platform detection, opener fallback, JSONL bridge round-trip (including malformed lines and timeouts), port walking, and a full socket round-trip through `serve()`.
 - **package.json** — dependencies (ws for WebSocket). Run `npm install` before using the harness listener.
+- **vendor/mermaid.min.js** — vendored mermaid.js UMD bundle (see `vendor/README.md` for version/update instructions), inlined by `featurePlan-inject.js` into every generated plan so the architecture diagram renders with no network call.
 
 The instruction file that drives generation is this folder's `SKILL.md`; it points at the script and template by the fixed `~/.agents/skills/feature-plan/` path.
 

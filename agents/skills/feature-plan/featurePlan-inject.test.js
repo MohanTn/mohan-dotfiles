@@ -13,6 +13,7 @@ const {
   normalizePlan,
   injectContent,
   loadTemplate,
+  loadMermaidBundle,
   createPatch,
   createAddPatch,
   SECTIONS,
@@ -201,6 +202,19 @@ test('injectContent defaults the feature title to "Untitled" when omitted', () =
   assert.ok(html.includes('Feature Implementation Plan – Untitled'));
   const leftover = html.match(/{{[A-Z0-9_]+}}/g);
   assert.strictEqual(leftover, null, `unreplaced placeholders: ${leftover}`);
+});
+
+test('loadMermaidBundle reads the vendored mermaid.js and defines window.mermaid', () => {
+  const bundle = loadMermaidBundle();
+  assert.ok(bundle.length > 100000, `expected a real bundle, got ${bundle.length} bytes`);
+  assert.ok(bundle.includes('globalThis["mermaid"]'), 'vendored bundle should set globalThis.mermaid');
+  assert.ok(!/<\/script/i.test(bundle), 'bundle must not contain an unescaped </script sequence');
+});
+
+test('injectContent inlines the mermaid bundle so the architecture diagram renders offline', () => {
+  const html = injectContent(loadTemplate(TEMPLATE_PATH), sampleConfig());
+  assert.ok(html.includes('globalThis["mermaid"]'), 'expected the mermaid bundle to be inlined');
+  assert.ok(!html.includes('{{MERMAID_BUNDLE_JS}}'), 'the mermaid marker should be replaced');
 });
 
 test('injectContent embeds the plan as valid, parseable JSON', () => {

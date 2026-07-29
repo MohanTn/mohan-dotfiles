@@ -45,6 +45,21 @@ function loadTemplate(templatePath) {
   return fs.readFileSync(templatePath, 'utf-8');
 }
 
+// Vendored mermaid.js (see vendor/README.md), inlined into every generated
+// plan so the "Design & Architecture" diagram renders fully offline. Read
+// once and cached; '</script' is escaped defensively (none present today,
+// but a future mermaid version could add one inside a string literal).
+const MERMAID_BUNDLE_PATH = path.join(__dirname, 'vendor', 'mermaid.min.js');
+let mermaidBundleCache = null;
+function loadMermaidBundle() {
+  if (mermaidBundleCache === null) {
+    mermaidBundleCache = fs.existsSync(MERMAID_BUNDLE_PATH)
+      ? fs.readFileSync(MERMAID_BUNDLE_PATH, 'utf-8').replace(/<\/script/gi, '<\\/script')
+      : '';
+  }
+  return mermaidBundleCache;
+}
+
 // String fields a section item accepts. Each entry maps a JSON key to its
 // default value (empty for free text, the first option for selects).
 //
@@ -205,6 +220,7 @@ function injectContent(template, config) {
 
   put(/{{FEATURE_TITLE}}/g, escapeHtml(config.title || 'Untitled'));
   put(/{{INITIAL_DATA_JSON}}/, toScriptJson(normalizePlan(config)));
+  put(/{{MERMAID_BUNDLE_JS}}/, loadMermaidBundle());
 
   return html;
 }
@@ -287,6 +303,7 @@ module.exports = {
   normalizePlan,
   injectContent,
   loadTemplate,
+  loadMermaidBundle,
   createPatch,
   createAddPatch,
   SECTIONS,
