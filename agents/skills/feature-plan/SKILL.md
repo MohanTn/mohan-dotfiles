@@ -20,6 +20,11 @@ Turn the user's feature into a **code-level implementation plan**: you generate 
 - `solutionApproach` — max 3 aspects, ≤3 sentences of rationale each.
 - Prefer fewer, denser items per section; apply the skip rules aggressively rather than padding sections.
 
+**Diagram over prose, plain language over jargon.** Write for a mid-level engineer who is smart but hasn't seen this codebase, while keeping enough real names (files, classes, tables) that a senior architect could build from it unassisted.
+- `architecture` is rendered live in the page: fence one ```mermaid block (`graph TD`/`graph LR` for component/data flow, `sequenceDiagram` for a multi-step interaction) and let it carry the design. Use the repo's real class/file/service names as node labels, not generic boxes ("AuthService", not "Service A"). Add at most 2-3 short sentences around it for anything the diagram can't show (a deliberate deviation, a one-line "why").
+- Everywhere else (`overview`, `solutionApproach.rationale`, `edgeCases.handling`), write short, plain sentences: common words, one idea per sentence, active voice. No stacked subordinate clauses, no restating the diagram in words.
+- If a `logicSteps` sequence has branching or loops, prefer numbering the steps tersely (`pseudo` stays ≤10 lines) over narrating the control flow in prose.
+
 ---
 
 ## Operating modes
@@ -46,7 +51,7 @@ Derive `<slug>` from the feature name: a few words, lowercased, spaces→hyphens
 **Scalars:**
 - `title` — short, slug-friendly feature name (no slashes/colons); becomes `<title>`/`<h1>`.
 - `overview` — **free-form paragraph(s), your own words**: quote the user's ask (near-)verbatim, then explain what you understood — the goal, who it's for, and the existing code it plugs into (files, classes/services, DB tables). Be creative in how you tell it; be honest and specific about the repo. Ambiguities go to `openQuestions`, not here.
-- `architecture` — **free-form, your own words**: the design pattern choices and the architecture as you see it. Prose plus an ASCII component/flow diagram is encouraged — show how the pieces connect, name the pattern(s) this repo actually uses, and call out any deliberate deviations ("no separate Repository for OTP — reuse UserRepository"). Grounded in one exemplifying file you actually read.
+- `architecture` — a fenced ```mermaid flowchart or sequence diagram showing how the pieces connect (real class/file/service names as labels), plus 2-3 plain-language sentences: the pattern(s) this repo actually uses and any deliberate deviations ("no separate Repository for OTP — reuse UserRepository"). Grounded in one exemplifying file you actually read. The page renders the fenced block live; text outside the fence is shown as-is below it.
 - `folderStructure` — **omit**; the inject script derives the tree from `files[]` (supply only to override).
 
 **Sections** (arrays of items; each `id` is any unique string). *No redundancy:* each fact lives in exactly one section — an empty array is a statement, not a gap.
@@ -65,7 +70,7 @@ Derive `<slug>` from the feature name: a few words, lowercased, spaces→hyphens
 {
   "title": "Add two-factor authentication",
   "overview": "You asked to \"add 2FA to login\". I read AuthService.php and the users table; I understand this as a TOTP second factor verified at login, with enrollment from the profile page. Login currently goes password-only through AuthService::login().",
-  "architecture": "Layered flow, one new service:\n\n  LoginController ──▶ AuthService ──▶ TotpService  [NEW]\n                          │\n                          └──▶ UserRepository\n\nTOTP logic is isolated in TotpService so AuthService stays thin. No separate Repository for OTP — reuse UserRepository.",
+  "architecture": "```mermaid\ngraph LR\n  LoginController --> AuthService --> TotpService[TotpService NEW]\n  AuthService --> UserRepository\n```\nTOTP logic stays in its own service so AuthService stays thin. No separate Repository for OTP — reuse UserRepository.",
   "openQuestions": [
     { "id": "q-1", "question": "Enrollment mandatory at next login, or opt-in?", "options": "A) Mandatory (recommended)\nB) Opt-in from profile", "decision": "" }
   ],
@@ -97,7 +102,8 @@ Print to chat:
 - Every `files[].path` is an existing repo path (update/delete) or the conventional new location (create); paths and descriptions come from this repo, not invented.
 - `files[].pseudoCode` is a real signature/stub, not "// TODO"; `files[].order` reflects build sequence.
 - `overview` quotes the user's actual ask before your own explanation of what you understood.
-- `architecture` names patterns this repo actually uses (read one exemplifying file first) and shows the design — a diagram beats a list of pattern names.
+- `architecture` has a fenced ```mermaid block with real repo names as labels (not a prose description of the flow); names patterns this repo actually uses (read one exemplifying file first). If it's only prose, add the diagram before saving.
+- `overview`, `solutionApproach.rationale`, `edgeCases.handling` read in plain, short sentences — no jargon-stuffed paragraphs a mid-level engineer would have to reread.
 - `acceptanceCriteria` are checkable after implementation, not vague qualities; each has its proving `testCase`.
 - Every unresolved ambiguity is an `openQuestions` item with options and an empty `decision`.
 - `edgeCases` covers the scenarios typical for this feature type (auth: missing creds, bad creds, rate-limit).

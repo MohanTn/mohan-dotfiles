@@ -61,6 +61,9 @@
         .approach-title{ margin:0; font-size:.9rem; font-weight:700; color:var(--ink-strong); }
         .approach-rationale{ color:var(--ink); opacity:.85; line-height:1.7; margin:.4rem 0 0; white-space:pre-wrap; font-size:.86rem; }
 
+        .diagram-preview{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:1rem; margin-top:.5rem; overflow-x:auto; min-height:2.5rem; display:flex; align-items:center; justify-content:center; }
+        .diagram-preview svg{ max-width:100%; height:auto; }
+
         .badge{ display:inline-block; padding:.1rem .5rem; border-radius:4px; font-size:.6rem; font-weight:700; text-transform:uppercase; }
         .badge-create{ background:#0E2F2A; color:var(--green); }
         .badge-update{ background:#3A2A0C; color:var(--amber); }
@@ -245,9 +248,13 @@
                     <!-- SOLUTION: DESIGN PATTERN & ARCHITECTURE -->
                     <div class="section" id="architecture-section">
                         <h2 class="section-head">🧩 Design Pattern &amp; Architecture</h2>
-                        <p class="section-desc">The AI explains the pattern choices and draws the architecture in its own words — prose, ASCII diagrams, whatever communicates the design best. Like agreeing every room follows the same wiring standard. <strong>Edit freely to redirect it</strong> (e.g., switch from Repository to Service Layer).</p>
+                        <p class="section-desc">A fenced <code>```mermaid</code> flowchart of the components and data flow, plus a couple of plain-language sentences for anything the diagram can't show (a deliberate deviation, a "why"). The diagram is the main event, not the prose. <strong>Edit freely to redirect it</strong> (e.g., switch from Repository to Service Layer) — the rendered diagram below updates as you type.</p>
                         <div class="section-body">
-                            <textarea id="feature-architecture" rows="12" placeholder="e.g. Layered flow, one new service:&#10;&#10;  LoginController ──▶ AuthService ──▶ TotpService  [NEW]&#10;                          │&#10;                          └──▶ UserRepository&#10;&#10;Why: TOTP logic is isolated in TotpService so AuthService stays..."></textarea>
+                            <textarea id="feature-architecture" rows="12" placeholder="e.g. Login gains one new service, TOTP logic kept out of AuthService:&#10;&#10;```mermaid&#10;graph LR&#10;  LoginController --> AuthService --> TotpService[TotpService NEW]&#10;  AuthService --> UserRepository&#10;```&#10;&#10;No separate Repository for OTP — reuse UserRepository."></textarea>
+                            <div class="mt-1">
+                                <label>Rendered diagram</label>
+                                <div id="architecture-diagram" class="diagram-preview"><span class="text-muted text-small">Add a fenced <code>```mermaid</code> block above (e.g. starting with <code>graph TD</code>) to see it rendered here.</span></div>
+                            </div>
                         </div>
                     </div>
 
@@ -333,6 +340,12 @@
     </div>
 
     <script>
+        // Vendored mermaid.js (agents/skills/feature-plan/vendor/, see its
+        // README), inlined so the Design & Architecture diagram renders fully
+        // offline. Defines window.mermaid; harmless no-op if ever stripped.
+        {{MERMAID_BUNDLE_JS}}
+    </script>
+    <script>
         // Filled by featurePlan-inject.js from the AI's plan. Falls back to an
         // empty plan when opened without injection (e.g. developing the template).
         const INITIAL_DATA = {{INITIAL_DATA_JSON}};
@@ -342,6 +355,43 @@
         // Data Layer
         // ------------------------------------------------------------------
         const STORAGE_KEY = 'feature-impl-plan:' + document.title;
+
+        // Diagram rendering (Design & Architecture section): the AI is asked
+        // to fence one ```mermaid block inside the free-form architecture
+        // text; this draws it as an SVG so the reader gets the flow at a
+        // glance instead of parsing ASCII art. Degrades to a hint/error line
+        // if mermaid didn't load or the fenced source doesn't parse.
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+        }
+        function extractMermaidBlock(text) {
+            if (!text) return null;
+            const match = text.match(/```mermaid\s*\n([\s\S]*?)```/);
+            return match ? match[1].trim() : null;
+        }
+        let diagramRenderToken = 0;
+        function renderArchitectureDiagram() {
+            const el = document.getElementById('architecture-diagram');
+            if (!el) return;
+            const source = extractMermaidBlock(document.getElementById('feature-architecture').value);
+            if (!source) {
+                el.innerHTML = '<span class="text-muted text-small">Add a fenced <code>```mermaid</code> block above (e.g. starting with <code>graph TD</code>) to see it rendered here.</span>';
+                return;
+            }
+            if (typeof mermaid === 'undefined') {
+                el.innerHTML = '<span class="text-muted text-small">Diagram renderer unavailable (mermaid failed to load).</span>';
+                return;
+            }
+            const token = ++diagramRenderToken;
+            mermaid.render('mmd-' + Date.now(), source).then(({ svg }) => {
+                if (token !== diagramRenderToken) return; // superseded by a newer edit
+                el.innerHTML = svg;
+            }).catch((err) => {
+                if (token !== diagramRenderToken) return;
+                const msg = (err && err.message ? err.message.split('\n')[0] : 'invalid mermaid syntax');
+                el.innerHTML = '<span class="text-muted text-small">Diagram syntax error: ' + msg.replace(/</g, '&lt;') + '</span>';
+            });
+        }
 
         // One-time migration from the previous single-key localStorage layout
         // used by the original pasted template ('feature-impl-plan-data'). If
@@ -572,6 +622,7 @@
         function renderArchitecture() {
             document.getElementById('feature-architecture').value = data.architecture || '';
             document.getElementById('folder-structure').value = data.folderStructure || '';
+            renderArchitectureDiagram();
         }
 
         // Dashboard stat tiles: unresolved questions, acceptance criteria,
@@ -1076,8 +1127,11 @@
             document.getElementById('tree-brand-name').textContent = data.title || 'Untitled Feature'; });
         document.getElementById('feature-overview').addEventListener('input', (e) => { data.overview = e.target.value;
             saveData(); });
+        let architectureDiagramTimer = null;
         document.getElementById('feature-architecture').addEventListener('input', (e) => { data.architecture = e.target.value;
-            saveData(); });
+            saveData();
+            clearTimeout(architectureDiagramTimer);
+            architectureDiagramTimer = setTimeout(renderArchitectureDiagram, 400); });
         document.getElementById('folder-structure').addEventListener('input', (e) => { data.folderStructure = e.target.value;
             saveData(); });
 
