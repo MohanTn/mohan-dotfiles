@@ -57,7 +57,7 @@ in
           # or unreachable connection from hanging activation indefinitely.
           $DRY_RUN_CMD ${pkgs.curl}/bin/curl -fsSL --connect-timeout 10 --max-time 300 -o "$installer" \
             https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
-          $DRY_RUN_CMD NONINTERACTIVE=1 ${pkgs.bash}/bin/bash "$installer"
+          NONINTERACTIVE=1 $DRY_RUN_CMD ${pkgs.bash}/bin/bash "$installer"
           $DRY_RUN_CMD rm -f "$installer"
           trap - EXIT
           for c in ${escapeShellArgs brewCandidates}; do
