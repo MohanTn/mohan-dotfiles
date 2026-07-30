@@ -2,7 +2,7 @@
 // out to the existing claude/hooks/*.sh (and *.py) scripts via lib.ts's
 // runClaudeHook — the same reuse pattern copilot/hooks uses — so there is one
 // authored copy of each gate's logic and policy (edit no-op guard, boilerplate
-// mandate, loop breaker, digest generation, context augmentation, the
+// mandate, secret/credential guardrail, loop breaker, digest generation, context augmentation, the
 // import/type-check/build + lint/test chain, the goal-check policy, session
 // audit) shared across all three tools. Pi must not reimplement its own
 // policy on top of these.
@@ -112,6 +112,18 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_call", async (event, ctx) => {
+    // Invoke-time guardrail: applies to every tool, independent of toolName,
+    // same authored copy as Claude/Copilot (see secret-guard.sh header).
+    const secretGuard = runClaudeHook("secret-guard.sh", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      tool_name: toClaudeToolName(event.toolName),
+      tool_input: event.input,
+    });
+    if (secretGuard.exitCode === 2) {
+      return { block: true, reason: secretGuard.stderr.trim() };
+    }
+
     if (event.toolName === "edit") {
       const input = event.input as EditInput;
       // Pi's edit tool takes `{path, edits: [{oldText, newText}]}` (an array,

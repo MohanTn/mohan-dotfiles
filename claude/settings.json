@@ -84,6 +84,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/secret-guard.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/pre-tool-use-goal-capture.sh\"",
             "timeout": 5
           },

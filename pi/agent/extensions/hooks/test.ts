@@ -205,6 +205,21 @@ async function main() {
     }
   }
 
+  // Invoke-time guardrail: proves the shell-out to secret-guard.sh happens
+  // for every tool, not just bash/edit (unlike the bake-time guards above).
+  {
+    const desc = "tool_call blocks a live-looking secret via the shared secret guard";
+    const result = (await handlers.get("tool_call")!(
+      { toolName: "bash", input: { command: "export AWS_KEY=AKIAABCDEFGHIJKLMNOP" } },
+      ctx,
+    )) as { block?: boolean; reason?: string } | undefined;
+    if (result?.block && result.reason?.includes("secret or credential")) {
+      ok(desc);
+    } else {
+      no(desc, `got ${JSON.stringify(result)}`);
+    }
+  }
+
   {
     const desc = "tool_call allows an ordinary bash command";
     const result = await handlers.get("tool_call")!(

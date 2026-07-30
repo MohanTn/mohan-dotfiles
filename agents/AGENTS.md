@@ -10,5 +10,12 @@ For every substantial request, begin the reply with `GOAL: <one-sentence objecti
 - Never auto-commit. Only commit when asked.
 - Verify behavior; never claim from tests alone. Done means acceptance criteria pass.
 - Lead with outcome. Omit details that don't change what the user does next.
+# Memory Tiers
+When writing a new auto-memory entry, tag its one-line index summary with the
+tier it belongs to: `[Fact]` for a durable personal preference or config
+choice, `[Episode]` for a specific incident or debugging session tied to a
+point in time, `[Shelf]` for reusable reference knowledge about how something
+works. This keeps retrieval precise: a stale Episode is safe to ignore, a Fact
+is not.
 # Search Tools
 Use `rg` (ripgrep) and `fd` for quick codebase searches. For dependency analysis and architecture understanding, use graphify to build a knowledge graph that shows relationships between files and modules more richly than simple text search.
