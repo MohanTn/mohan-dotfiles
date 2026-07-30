@@ -255,6 +255,14 @@ def cwd_folder(payload: dict) -> str:
     return os.path.basename(cwd.rstrip(os.sep)) or cwd
 
 
+def effort_label(payload: dict) -> str:
+    """Reasoning effort level (low/medium/high/xhigh/max); "" if the model has none."""
+    effort = payload.get("effort")
+    if not isinstance(effort, dict) or not effort.get("level"):
+        return ""
+    return str(effort["level"])
+
+
 def build_status(payload: dict) -> str:
     model = (payload.get("model") or {}).get("display_name") or "claude"
 
@@ -266,6 +274,9 @@ def build_status(payload: dict) -> str:
     h5_seg = _window_segment("5h", usage.get("five_hour"))
 
     dir_seg = f"{C_MUTED}dir {C_RESET}{C_CORAL}{cwd_folder(payload)}{C_RESET}"
+    effort = effort_label(payload)
+    if effort:
+        dir_seg += f" {C_MUTED}·{C_RESET}{C_CORAL}{effort}{C_RESET}"
 
     return f" {C_CORAL}{model}{C_RESET} {SEP} {ctx_seg} {SEP} {h5_seg} {SEP} {dir_seg}"
 
