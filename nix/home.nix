@@ -15,6 +15,7 @@ in
     ./maintenance.nix
     ./zsh.nix
     ./alacritty.nix
+    ./ptyxis.nix
     ./git.nix
     ./agents.nix
     ./claude.nix
