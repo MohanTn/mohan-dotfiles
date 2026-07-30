@@ -3,7 +3,8 @@
     "allow": [
       "Bash(rg *)",
       "Bash(git diff *)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
   "hooks": {
     "SessionStart": [
