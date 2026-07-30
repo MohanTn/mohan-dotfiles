@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# preToolUse — no-op edit guard + consecutive-call loop breaker, reusing the
-# Claude Code hook scripts via payload translation. Copilot treats a crash or
+# preToolUse — no-op edit guard, secret/credential guardrail, and
+# consecutive-call loop breaker, reusing the Claude Code hook scripts via
+# payload translation. Copilot treats a crash or
 # non-zero exit as deny (fail-closed), so every path below ends in exit 0
 # with a JSON decision on stdout: {} for the default permission flow, or an
 # explicit deny carrying the reused script's stderr as the reason.
@@ -15,6 +16,10 @@ deny() {
 
 payload=$(claude_payload)
 [ -z "$payload" ] && { printf '{}'; exit 0; }
+
+# Invoke-time guardrail: applies to every tool, independent of tool_name.
+err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/secret-guard.sh" 2>&1 >/dev/null)
+[ $? -eq 2 ] && deny "$err"
 
 case "$tool_name" in
   create | edit | str_replace_editor | apply_patch)

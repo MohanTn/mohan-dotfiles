@@ -71,6 +71,11 @@ cmd_selftest() {
     '.permissionDecision == "deny"'
   rm -rf "${STATE_HOME:?}/$sid-bash"
 
+  expect_out "pre-tool-use denies a live-looking secret regardless of tool" pre-tool-use.sh \
+    "$(payload_tool "$sid-secret" bash '{"command":"export AWS_KEY=AKIAABCDEFGHIJKLMNOP"}')" \
+    '.permissionDecision == "deny"'
+  rm -rf "${STATE_HOME:?}/$sid-secret"
+
   local loop_payload
   loop_payload=$(payload_tool "$sid-loop" bash '{"command":"echo hi"}')
   run_hook pre-tool-use.sh "$loop_payload" >/dev/null 2>&1

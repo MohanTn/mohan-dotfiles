@@ -26,6 +26,7 @@ declare -A HOOK_INFO=(
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
   [boilerplate-guard.sh]="PreToolUse (Edit/Write)::mandate the scaffold generator for new boilerplate files (by name AND by content signature), protect scaffold:inject markers"
   [bash-write-guard.sh]="PreToolUse (Bash)::block shell redirection/heredoc/tee writes into code files (the write-around of boilerplate-guard)"
+  [secret-guard.sh]="PreToolUse (*)::block tool calls whose input looks like a live secret/credential (invoke-time guardrail)"
   [pre-tool-use-goal-capture.sh]="PreToolUse (*)::capture the stated GOAL: line from the transcript"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
@@ -64,6 +65,11 @@ default_payload() {
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Bash",
           tool_input:{command:"cat > src/OrdersRequest.ts <<EOF\nexport interface OrdersRequest {}\nEOF"}}'
+      ;;
+    secret-guard.sh)
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Bash",
+          tool_input:{command:"export AWS_KEY=AKIAABCDEFGHIJKLMNOP"}}'
       ;;
     pre-tool-use-goal-capture.sh | pre-tool-use-loop-breaker.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -415,6 +421,27 @@ cmd_selftest() {
   expect_exit "bash-write-guard allows ordinary commands and non-code redirects" \
     bash-write-guard.sh \
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"rg foo src/ | tee /tmp/results.txt"}}')" \
+    0
+
+  # secret-guard: invoke-time guardrail, independent of tool name
+  expect_exit "secret-guard blocks a live-looking AWS access key" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"export AWS_KEY=AKIAABCDEFGHIJKLMNOP"}}')" \
+    2
+
+  expect_exit "secret-guard blocks a private key block in a Write" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/id_rsa", content:"-----BEGIN RSA PRIVATE KEY-----\nMIIB...\n-----END RSA PRIVATE KEY-----"}}')" \
+    2
+
+  expect_exit "secret-guard allows an ordinary command" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"echo hi"}}')" \
+    0
+
+  expect_exit "secret-guard does not self-match its own pattern source" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" --rawfile c "$HOOKS_DIR/secret-guard.sh" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/secret-guard.sh", content:$c}}')" \
     0
 
   # overwrite rules need a real file: marked file loses marker -> block, keeps marker -> allow
