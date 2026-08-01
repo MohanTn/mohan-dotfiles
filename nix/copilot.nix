@@ -44,4 +44,32 @@
       }
     '
   '';
+
+  # sketch-learn MCP server for Copilot CLI, mirroring copilotScaffoldMcp
+  # above and nix/claude.nix's sketchLearnMcp: merged in only when absent, and
+  # only when that (host-specific, not part of this dotfiles checkout) repo is
+  # actually present. tsx is resolved from the repo's own node_modules via a
+  # cd wrapper, since mcp-config.json entries have no cwd field.
+  home.activation.copilotSketchLearnMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run ${pkgs.nodejs}/bin/node -e '
+      const fs = require("fs");
+      const dir = process.env.HOME + "/.copilot";
+      const p = dir + "/mcp-config.json";
+      const sketchLearnDir = process.env.HOME + "/REPO/sketch-learn/mcp-server";
+      if (!fs.existsSync(sketchLearnDir)) process.exit(0);
+      let cfg = {};
+      try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
+      cfg.mcpServers = cfg.mcpServers || {};
+      if (!cfg.mcpServers["sketch-learn"]) {
+        cfg.mcpServers["sketch-learn"] = {
+          type: "local",
+          command: "${pkgs.bash}/bin/bash",
+          args: ["-lc", "cd \"" + sketchLearnDir + "\" && exec ${pkgs.nodejs}/bin/npx tsx src/index.ts"],
+          tools: ["*"],
+        };
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
+      }
+    '
+  '';
 }

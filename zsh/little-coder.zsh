@@ -12,7 +12,10 @@
 #                           on, and left unset for CPU builds
 #   LITTLE_CODER_ARGS       extra llama-server flags, word-split
 #   LITTLE_CODER_TIMEOUT    seconds to wait for server health (default 30)
-#   LITTLE_CODER_NO_SERVER  =1 skips server management (LAN server, tests)
+#   LITTLE_CODER_NO_SERVER  =1 skips server management (Ollama backend, LAN
+#                           server, tests); set by nix/little-coder.nix when
+#                           littleCoderOllama is on, since the Ollama daemon
+#                           loads models on demand by itself
 
 _lc_diff_limit=12000
 _lc_health_url="http://127.0.0.1:8888/health"
