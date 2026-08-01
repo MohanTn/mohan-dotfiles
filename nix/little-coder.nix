@@ -110,6 +110,35 @@ in
       default = "gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf";
       description = "GGUF file within the repo (change to pick another quant).";
     };
+    littleCoderOllama = mkEnableOption ''
+      an already-running Ollama daemon as the backend instead of llama.cpp:
+      little-coder talks to Ollama's OpenAI-compatible endpoint, so no GGUF is
+      downloaded, no llama.cpp is installed, and no server is started by the
+      gcm/mri helpers (Ollama manages model load/unload itself)
+    '';
+    littleCoderOllamaModel = mkOption {
+      type = types.str;
+      default = "llama3.2";
+      description = ''
+        Ollama model name sent as the OpenAI `model` field (`ollama list`
+        without the `:latest` tag works). Used only with littleCoderOllama.
+      '';
+    };
+    littleCoderOllamaUrl = mkOption {
+      type = types.str;
+      default = "http://127.0.0.1:11434/v1";
+      description = "Ollama OpenAI-compatible base URL.";
+    };
+    littleCoderOllamaContext = mkOption {
+      type = types.int;
+      # Ollama's own default num_ctx is 4096 regardless of what the model
+      # supports, and the OpenAI-compatible endpoint has no way to raise it
+      # per request: to go higher, set OLLAMA_CONTEXT_LENGTH on the daemon
+      # and bump this to match. Advertising more than the daemon serves just
+      # gets the prompt silently truncated server-side.
+      default = 4096;
+      description = "Context window advertised for the Ollama model.";
+    };
     littleCoderGpu = mkEnableOption ''
       GPU offload for llama-server: a Vulkan llama.cpp plus a wrapper that
       wires in the host NVIDIA driver. Needs a driver with Vulkan support and
@@ -126,6 +155,15 @@ in
   };
 
   config = mkIf cfg.enableLittleCoder {
+    # littleCoderGpu configures llama.cpp's Vulkan build, which the Ollama
+    # backend never runs: Ollama does its own GPU offload, so the two together
+    # can only mean the config was not what its author thought it was.
+    assertions = [{
+      assertion = !(cfg.littleCoderOllama && cfg.littleCoderGpu);
+      message = "customPackages.littleCoderGpu applies to the llama.cpp "
+        + "backend only; Ollama handles GPU offload itself, so turn one off.";
+    }];
+
     # llama-cpp provides llama-server: little-coder does not bundle a GGUF
     # runtime — it talks OpenAI-compatible HTTP to 127.0.0.1:8888 (its
     # llamacpp provider default), which zsh/little-coder.zsh starts lazily.
@@ -136,14 +174,22 @@ in
     # With GPU on, the wrapper takes priority for `llama-server` (hiPrio
     # settles the profile collision) while llamaCpp still provides llama-cli
     # and friends, unwrapped.
-    home.packages = [ littleCoder llamaCpp ]
+    home.packages = [ littleCoder ]
+      ++ optional (!cfg.littleCoderOllama) llamaCpp
       ++ optional cfg.littleCoderGpu (hiPrio llamaServerGpuWrapper);
 
     # Read by zsh/little-coder.zsh; swap models via the options above (or by
     # overriding these vars in ~/.zshrc.local) without touching the helpers.
-    home.sessionVariables = {
+    home.sessionVariables = if cfg.littleCoderOllama then {
+      LITTLE_CODER_MODEL = "ollama/${cfg.littleCoderOllamaModel}";
+      # The Ollama daemon is started by the host (service or `ollama serve`)
+      # and loads models on demand, so the helpers must not try to run a
+      # server of their own.
+      LITTLE_CODER_NO_SERVER = "1";
+      # pi requires *some* value for local providers; Ollama ignores it.
+      OLLAMA_API_KEY = "noop";
+    } else {
       LITTLE_CODER_GGUF = modelPath;
-      # pi requires *some* value for local providers; the server ignores it.
       LLAMACPP_API_KEY = "noop";
     } // optionalAttrs cfg.littleCoderGpu {
       # Unset on CPU machines: the helper then passes no -ngl at all, which is
@@ -152,45 +198,70 @@ in
     };
 
     # little-coder's user override file (resolved at
-    # ~/.config/little-coder/models.json): registers the served Gemma under
-    # the stable handle llamacpp/gemma and makes it the first-run default.
-    # llama.cpp serves whichever GGUF is loaded, so the id is just a handle.
-    home.file.".config/little-coder/models.json".text = builtins.toJSON {
-      default = "llamacpp/gemma";
-      providers.llamacpp = {
-        api = "openai-completions";
-        baseUrl = "http://127.0.0.1:8888/v1";
-        apiKey = "LLAMACPP_API_KEY";
-        models = [
-          {
-            id = "gemma";
-            name = "Gemma 4 E4B QAT (local llama.cpp)";
-            reasoning = false;
-            input = [ "text" ];
-            contextWindow = 32768;
-            maxTokens = 4096;
-            cost = { input = 0; output = 0; cacheRead = 0; cacheWrite = 0; };
-          }
-        ];
-      };
-    };
+    # ~/.config/little-coder/models.json): registers the backend's model and
+    # makes it the first-run default. On the llama.cpp side the id is just a
+    # handle, since llama.cpp serves whichever GGUF is loaded.
+    home.file.".config/little-coder/models.json".text = builtins.toJSON (
+      if cfg.littleCoderOllama then {
+        default = "ollama/${cfg.littleCoderOllamaModel}";
+        providers.ollama = {
+          api = "openai-completions";
+          baseUrl = cfg.littleCoderOllamaUrl;
+          apiKey = "OLLAMA_API_KEY";
+          models = [
+            {
+              # Unlike the llama.cpp handle below, this id is sent verbatim as
+              # the OpenAI `model` field, so it must name a pulled Ollama model.
+              id = cfg.littleCoderOllamaModel;
+              name = "${cfg.littleCoderOllamaModel} (local Ollama)";
+              reasoning = false;
+              input = [ "text" ];
+              contextWindow = cfg.littleCoderOllamaContext;
+              maxTokens = 1024;
+              cost = { input = 0; output = 0; cacheRead = 0; cacheWrite = 0; };
+            }
+          ];
+        };
+      } else {
+        default = "llamacpp/gemma";
+        providers.llamacpp = {
+          api = "openai-completions";
+          baseUrl = "http://127.0.0.1:8888/v1";
+          apiKey = "LLAMACPP_API_KEY";
+          models = [
+            {
+              id = "gemma";
+              name = "Gemma 4 E4B QAT (local llama.cpp)";
+              reasoning = false;
+              input = [ "text" ];
+              contextWindow = 32768;
+              maxTokens = 4096;
+              cost = { input = 0; output = 0; cacheRead = 0; cacheWrite = 0; };
+            }
+          ];
+        };
+      }
+    );
 
     # Resume-capable, idempotent model download (multi-GB): skip when
     # present, curl -C - into a .part file, atomic mv on success,
     # warn-and-continue on failure like installLocalScribe.
-    home.activation.downloadLittleCoderModel = hm.dag.entryAfter [ "writeBoundary" ] ''
-      (
-        f="${modelPath}"
-        if [ -f "$f" ]; then
-          echo "little-coder model already present: $f"
-        else
-          url="https://huggingface.co/${cfg.littleCoderModelRepo}/resolve/main/${cfg.littleCoderModelFile}"
-          echo "Downloading little-coder model (multi-GB, resumable): $url"
-          run mkdir -p "${modelDir}"
-          $DRY_RUN_CMD ${pkgs.curl}/bin/curl -fL -C - -o "$f.part" "$url"
-          $DRY_RUN_CMD mv "$f.part" "$f"
-        fi
-      ) || echo "Warning: little-coder model download failed (URL above), continuing" >&2
-    '';
+    # Nothing to download for the Ollama backend: `ollama pull` owns the model.
+    home.activation = optionalAttrs (!cfg.littleCoderOllama) {
+      downloadLittleCoderModel = hm.dag.entryAfter [ "writeBoundary" ] ''
+        (
+          f="${modelPath}"
+          if [ -f "$f" ]; then
+            echo "little-coder model already present: $f"
+          else
+            url="https://huggingface.co/${cfg.littleCoderModelRepo}/resolve/main/${cfg.littleCoderModelFile}"
+            echo "Downloading little-coder model (multi-GB, resumable): $url"
+            run mkdir -p "${modelDir}"
+            $DRY_RUN_CMD ${pkgs.curl}/bin/curl -fL -C - -o "$f.part" "$url"
+            $DRY_RUN_CMD mv "$f.part" "$f"
+          fi
+        ) || echo "Warning: little-coder model download failed (URL above), continuing" >&2
+      '';
+    };
   };
 }
