@@ -45,6 +45,7 @@
     wget
     unzip
     wslu # wslview and friends; harmless on plain Linux
+    tealdeer # `tldr`: community example-driven cheatsheets over man pages
     eza # `ls` alias below: adds a headered table layout to -la (nix/zsh.nix)
     tidy-viewer # renders delimited text as a bordered table, used by the
                 # docker ps/ollama ps wrappers in zsh/table-view.zsh
