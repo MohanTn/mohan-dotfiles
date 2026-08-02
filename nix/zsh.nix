@@ -21,7 +21,9 @@
       # so rg/git diff already run unprompted there.
       copilot = "copilot --allow-tool 'shell(rg:*)' --allow-tool 'shell(git diff:*)'";
       repo = "cd $HOME/REPO";
-      ls = "ls --color=auto";
+      # eza (nix/packages.nix): -la renders as a headered table instead of
+      # GNU ls's bare column list; plain `ls`/other flags behave the same.
+      ls = "eza --color=auto --header";
     };
 
     history = {
@@ -208,6 +210,11 @@
       # enableHomebrew); no-op otherwise. Sourced after the Nix paths are set
       # so brew's bin lands behind them, never shadowing the base toolchain.
       source ${../zsh/homebrew.zsh}
+
+      # `docker ps`/`ollama ps` render as bordered tables via tidy-viewer
+      # (nix/packages.nix); every other docker/ollama subcommand passes
+      # through untouched.
+      source ${../zsh/table-view.zsh}
 
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
