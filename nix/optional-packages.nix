@@ -13,6 +13,7 @@ in
     enablePipelineWorker = mkEnableOption "Pipeline Worker npm package";
     enableLocalScribe = mkEnableOption "LocalScribe (from GitHub releases)";
     enableGitConfig = mkEnableOption "Git configuration (userName and userEmail)";
+    enableGcloud = mkEnableOption "Google Cloud SDK (gcloud)";
   };
 
   config.home.packages = with pkgs;
@@ -24,6 +25,9 @@ in
     ++ (optionals cfg.enableDocker [
       docker
       docker-compose
+    ])
+    ++ (optionals cfg.enableGcloud [
+      google-cloud-sdk
     ]);
 
   config.programs.git = mkIf cfg.enableGitConfig {

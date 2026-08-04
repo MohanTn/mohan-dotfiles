@@ -11,6 +11,7 @@
     enableGitHubCopilot = false;
     enableLocalScribe = false;
     enableGitConfig = false;
+    enableGcloud = false;
     enableLittleCoder = false;
     littleCoderGpu = false;
     enableHomebrew = false;
