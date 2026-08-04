@@ -64,4 +64,10 @@
       $DRY_RUN_CMD npm install --global hunkdiff
     fi
   '';
+
+  # hunkdiff defaults: side-by-side split view with long diff lines wrapped
+  home.file.".config/hunk/config.toml".text = ''
+    mode = "split"
+    wrap_lines = true
+  '';
 }

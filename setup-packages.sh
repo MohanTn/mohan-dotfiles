@@ -45,24 +45,25 @@ PIPELINE_WORKER=$(ask_yes_no "3. Install pipeline-worker (npm)?" "n")
 COPILOT=$(ask_yes_no "4. Install GitHub Copilot CLI?" "n")
 LOCAL_SCRIBE=$(ask_yes_no "5. Install LocalScribe (from GitHub releases)?" "n")
 GIT_CONFIG=$(ask_yes_no "6. Configure Git (set userName and userEmail)?" "n")
-LITTLE_CODER=$(ask_yes_no "7. Install little-coder (gcm/mri helpers)?" "n")
+GCLOUD=$(ask_yes_no "7. Install Google Cloud SDK (gcloud)?" "n")
+LITTLE_CODER=$(ask_yes_no "8. Install little-coder (gcm/mri helpers)?" "n")
 LITTLE_CODER_GPU=false
 LITTLE_CODER_OLLAMA=false
 if [ "$LITTLE_CODER" = "true" ]; then
   # Ollama route: no GGUF download and no llama.cpp at all, but it needs a
   # running Ollama daemon with the model already pulled.
-  LITTLE_CODER_OLLAMA=$(ask_yes_no "   7a. Use an existing Ollama daemon instead of a local Gemma GGUF (~4GB download)?" "n")
+  LITTLE_CODER_OLLAMA=$(ask_yes_no "   8a. Use an existing Ollama daemon instead of a local Gemma GGUF (~4GB download)?" "n")
   if [ "$LITTLE_CODER_OLLAMA" = "true" ]; then
-    read -p "   7b. Ollama model name (blank for llama3.2): " OLLAMA_MODEL_INPUT
+    read -p "   8b. Ollama model name (blank for llama3.2): " OLLAMA_MODEL_INPUT
   else
     # CPU inference is the safe default: the Vulkan build compiles llama.cpp
     # locally (an override never hits the binary cache) and needs a host driver
     # with Vulkan support.
-    LITTLE_CODER_GPU=$(ask_yes_no "   7b. Run its model on the GPU (Vulkan build)?" "n")
+    LITTLE_CODER_GPU=$(ask_yes_no "   8b. Run its model on the GPU (Vulkan build)?" "n")
   fi
 fi
 LITTLE_CODER_OLLAMA_MODEL="${OLLAMA_MODEL_INPUT:-llama3.2}"
-HOMEBREW=$(ask_yes_no "8. Install the Homebrew package manager (brew)?" "n")
+HOMEBREW=$(ask_yes_no "9. Install the Homebrew package manager (brew)?" "n")
 
 # Formulae are installed on every ./setup.sh run (already-installed ones are
 # skipped). Nix stays the source of truth for the base toolchain; this is for
@@ -93,6 +94,7 @@ cat > "$CONFIG_FILE" << EOF
     enableGitHubCopilot = ${COPILOT};
     enableLocalScribe = ${LOCAL_SCRIBE};
     enableGitConfig = ${GIT_CONFIG};
+    enableGcloud = ${GCLOUD};
     enableLittleCoder = ${LITTLE_CODER};
     littleCoderGpu = ${LITTLE_CODER_GPU};
     littleCoderOllama = ${LITTLE_CODER_OLLAMA};
@@ -112,6 +114,7 @@ echo "Selected packages:"
 [ "$COPILOT" = "true" ] && echo "  ✓ GitHub Copilot CLI"
 [ "$LOCAL_SCRIBE" = "true" ] && echo "  ✓ LocalScribe (from GitHub)"
 [ "$GIT_CONFIG" = "true" ] && echo "  ✓ Git configuration (MohanTn / mohan.tn100@gmail.com)"
+[ "$GCLOUD" = "true" ] && echo "  ✓ Google Cloud SDK (gcloud)"
 [ "$LITTLE_CODER" = "true" ] && echo "  ✓ little-coder (gcm/mri helpers)"
 [ "$LITTLE_CODER" = "true" ] && [ "$LITTLE_CODER_OLLAMA" = "true" ] \
   && echo "    ↳ backend: Ollama (${LITTLE_CODER_OLLAMA_MODEL}), must be pulled and served already"
