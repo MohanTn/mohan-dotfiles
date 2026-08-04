@@ -27,7 +27,14 @@ in
       docker-compose
     ])
     ++ (optionals cfg.enableGcloud [
-      google-cloud-sdk
+      # `gcloud components install` can't write into the read-only Nix
+      # store, so extra components (e.g. gke-gcloud-auth-plugin for
+      # kubectl<->GKE auth) must be added here instead and rebuilt via
+      # ./setup.sh when a new one is needed.
+      (google-cloud-sdk.withExtraComponents [
+        google-cloud-sdk.components.gke-gcloud-auth-plugin
+        google-cloud-sdk.components.kubectl
+      ])
     ]);
 
   config.programs.git = mkIf cfg.enableGitConfig {
