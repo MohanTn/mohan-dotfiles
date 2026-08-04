@@ -71,7 +71,7 @@ const DEFAULT_CONFIG: SandboxConfig = {
 	},
 	filesystem: {
 		denyRead: ["~/.ssh", "~/.aws", "~/.gnupg"],
-		allowWrite: [".", "/tmp", "~/.agents", "~/.claude"],
+		allowWrite: [".", "/tmp", "~/.agents", "~/.claude", "~/REPO"],
 		denyWrite: [".env", ".env.*", "*.pem", "*.key"],
 	},
 };
