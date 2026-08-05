@@ -1,7 +1,7 @@
 # Containerized workspace for the three agent CLIs (Claude Code, GitHub
 # Copilot CLI, Pi), each its own final stage so `docker compose run <tool>`
 # only ships what that tool needs. All three share the `base` stage's
-# toolchain (mirrors nix/packages.nix: node, git, ripgrep, jq, python3, a
+# toolchain (mirrors nix/packages.nix: node, git, ripgrep, fd, jq, python3, a
 # build toolchain for native npm modules and dotnet-less C# gates).
 #
 # Config (hooks, skills, AGENTS.md, the pi sandbox extension) is baked into
@@ -15,8 +15,12 @@
 FROM node:22-bookworm-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash git ripgrep jq curl ca-certificates python3 build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    bash git ripgrep fd-find jq curl ca-certificates python3 build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    # Debian ships fd-find's binary as `fdfind` (name clash with an existing
+    # package), unlike nixpkgs' `fd` on the host — symlink so agent shell
+    # habits (`fd ...`) work the same in-container as on the host.
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd
 
 RUN useradd --create-home --shell /bin/bash agent
 # A named volume mounted at a path with nothing there yet is created

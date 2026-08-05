@@ -47,6 +47,7 @@ import { join } from "node:path";
 import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type BashOperations, CONFIG_DIR_NAME, createBashTool, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isTrustedCommand } from "./trusted-commands.js";
 
 interface SandboxConfig extends SandboxRuntimeConfig {
   enabled?: boolean;
@@ -156,7 +157,7 @@ function createSandboxedBashOps(): BashOperations {
 				throw new Error(`Working directory does not exist: ${cwd}`);
 			}
 
-			const wrappedCommand = await SandboxManager.wrapWithSandbox(command);
+			const wrappedCommand = isTrustedCommand(command) ? command : await SandboxManager.wrapWithSandbox(command);
 
 			return new Promise((resolve, reject) => {
 				const child = spawn("bash", ["-c", wrappedCommand], {
