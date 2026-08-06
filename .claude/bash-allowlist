@@ -1,0 +1,6 @@
+# Extra Bash binaries allowed in this repo, on top of the default allowlist in
+# claude/hooks/bash-allowlist-guard.sh. One bare binary name per line.
+# `bash` itself is deliberately absent: it would re-open the whole shell.
+nix
+setup.sh
+test-hook.sh
