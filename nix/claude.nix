@@ -50,21 +50,4 @@
       run "$claudeBin" mcp add --scope user scaffold -- ${pkgs.nodejs}/bin/node "$HOME/.agents/boilerplats/mcp-server.js" || true
     fi
   '';
-
-  # sketch-learn MCP server (project repo, not part of this dotfiles checkout):
-  # registered at user scope so its list_pages/get_page/save_page_review tools
-  # are available even outside that repo's own working directory (the repo
-  # already self-registers via its .mcp.json when Claude is launched from
-  # inside it; this just extends that to everywhere else). Guarded on the repo
-  # actually being checked out, since the path is host-specific and this file
-  # is shared across machines. tsx is resolved from the repo's own
-  # node_modules, so the wrapper cds there before running it.
-  home.activation.sketchLearnMcp = lib.hm.dag.entryAfter [ "installClaude" ] ''
-    claudeBin="$HOME/.local/bin/claude"
-    command -v claude >/dev/null 2>&1 && claudeBin="$(command -v claude)"
-    sketchLearnDir="$HOME/REPO/sketch-learn/mcp-server"
-    if [ -x "$claudeBin" ] && [ -d "$sketchLearnDir" ] && ! "$claudeBin" mcp get sketch-learn >/dev/null 2>&1; then
-      run "$claudeBin" mcp add --scope user sketch-learn -- ${pkgs.bash}/bin/bash -lc "cd \"$sketchLearnDir\" && exec ${pkgs.nodejs}/bin/npx tsx src/index.ts" || true
-    fi
-  '';
 }
