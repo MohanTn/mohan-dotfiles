@@ -17,5 +17,7 @@ choice, `[Episode]` for a specific incident or debugging session tied to a
 point in time, `[Shelf]` for reusable reference knowledge about how something
 works. This keeps retrieval precise: a stale Episode is safe to ignore, a Fact
 is not.
+# Coding Style
+Language-specific style rules live in `~/.agents/style/`. Before writing or editing code, read the file that matches the stack: `react.md` for React and TypeScript UI, `dotnet.md` for C# and .NET. These rules override your defaults and the surrounding file only when the file clearly predates them.
 # Search Tools
 Use `rg` (ripgrep) and `fd` for quick codebase searches. For dependency analysis and architecture understanding, use graphify to build a knowledge graph that shows relationships between files and modules more richly than simple text search.
