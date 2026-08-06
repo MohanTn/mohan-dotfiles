@@ -31,8 +31,11 @@ case "$tool_name" in
     [ $? -eq 2 ] && deny "$err"
     ;;
   bash | shell)
-    # bash-write-guard.sh only reads tool_input.command, which claude_payload
-    # passes through from toolArgs untouched.
+    # Both guards only read tool_input.command, which claude_payload passes
+    # through from toolArgs untouched. Allowlist first: a command that is not
+    # allowed to run at all needs no further inspection.
+    err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/bash-allowlist-guard.sh" 2>&1 >/dev/null)
+    [ $? -eq 2 ] && deny "$err"
     err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/bash-write-guard.sh" 2>&1 >/dev/null)
     [ $? -eq 2 ] && deny "$err"
     ;;

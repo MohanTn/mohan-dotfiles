@@ -177,6 +177,19 @@ export default function (pi: ExtensionAPI) {
     }
 
     if (event.toolName === "bash") {
+      // Allowlist-only shell policy, same authored copy as Claude/Copilot (see
+      // bash-allowlist-guard.sh header). First: a command that may not run at
+      // all needs no further inspection.
+      const allowlist = runClaudeHook("bash-allowlist-guard.sh", {
+        session_id: sessionId,
+        cwd: ctx.cwd,
+        tool_name: "Bash",
+        tool_input: event.input,
+      });
+      if (allowlist.exitCode === 2) {
+        return { block: true, reason: allowlist.stderr.trim() };
+      }
+
       // Closes the shell write-around of the boilerplate mandate, same
       // authored copy as Claude/Copilot (see bash-write-guard.sh header).
       const bashGuard = runClaudeHook("bash-write-guard.sh", {
