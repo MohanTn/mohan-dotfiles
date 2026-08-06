@@ -62,6 +62,7 @@
     run mkdir -p "$dst"
     run install -m 0644 ${../pi/agent/extensions/sandbox/index.ts} "$dst/index.ts"
     run install -m 0644 ${../pi/agent/extensions/sandbox/package.json} "$dst/package.json"
+    run install -m 0644 ${../pi/agent/extensions/sandbox/trusted-commands.ts} "$dst/trusted-commands.ts"
   '';
 
   # Pi stays on its native npm-based installer so it keeps self-updating via
