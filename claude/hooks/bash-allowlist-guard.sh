@@ -16,7 +16,7 @@ source "$HOME/.claude/hooks/lib/common.sh"
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$cmd" ] || exit 0
 
-DEFAULT_ALLOWED="rg fd fdfind git npm npx node python3 python jq pytest go cargo make"
+DEFAULT_ALLOWED="rg fd fdfind git npm npx yarn node python3 python pipx jq pytest go cargo make"
 
 declare -A ALLOWED=()
 for b in $DEFAULT_ALLOWED; do ALLOWED["$b"]=1; done
