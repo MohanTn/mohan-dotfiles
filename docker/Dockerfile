@@ -101,7 +101,8 @@ COPY --chown=root:root copilot/hooks/mohan-hooks.json /opt/agent-config/copilot/
 # Every script mohan-hooks.json registers must be listed here, or Copilot fails
 # that hook on each fire. Enforced by the docker-hook-parity flake check.
 COPY --chown=root:root copilot/hooks/session-start.sh copilot/hooks/user-prompt-submit.sh \
-     copilot/hooks/user-prompt-submit-context.sh copilot/hooks/pre-tool-use.sh \
+     copilot/hooks/user-prompt-submit-context.sh copilot/hooks/user-prompt-submit-memory.sh \
+     copilot/hooks/pre-tool-use.sh \
      copilot/hooks/post-tool-use.sh copilot/hooks/agent-stop.sh \
      copilot/hooks/pre-compact.sh \
      copilot/hooks/session-end-cleanup.sh copilot/hooks/session-end-audit.sh \

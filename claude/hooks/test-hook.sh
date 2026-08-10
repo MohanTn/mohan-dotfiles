@@ -32,6 +32,8 @@ declare -A HOOK_INFO=(
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
   [pre-compact.sh]="PreCompact::replay goal + files edited + diffstat across a compaction"
+  [inject-memory.sh]="UserPromptSubmit::flush any stashed .ai-memory nudge, inject the diagram matching .ai-memory/manifest.json"
+  [remember-memory.sh]="Stop::advisory-only; stash a .ai-memory nudge when GOAL_CHECK: ACHIEVED routes to a tracked diagram"
   [stop-goal-check.sh]="Stop::advisory-only; log if GOAL_CHECK: was never stated (never blocks)"
   [session-end-cleanup.sh]="SessionEnd::prune stale hook state"
   [session-end-audit.sh]="SessionEnd::auto-generate the session audit file (system layer + hook inventory + trace)"
@@ -87,9 +89,13 @@ default_payload() {
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PostToolUse", tool_name:"Edit",
           tool_input:{file_path:"/tmp/example.md"}}'
       ;;
-    stop-goal-check.sh)
+    stop-goal-check.sh | remember-memory.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"Stop", transcript_path:"/nonexistent/transcript.jsonl", stop_hook_active:false}'
+      ;;
+    inject-memory.sh)
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"UserPromptSubmit", prompt:"debug this segfault"}'
       ;;
     pre-compact.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -307,6 +313,75 @@ cmd_selftest() {
     "$(jq -n '{session_id:"selftest-precompact", cwd:"/tmp/nonexistent", hook_event_name:"PreCompact"}')" \
     "/tmp/two.ts"
   rm -rf "$pc_dir"
+
+  # .ai-memory: inject-memory / remember-memory (see llm-memory repo for the
+  # reference .ai-memory/ layout these read).
+  expect_empty "inject-memory stays silent without .ai-memory/manifest.json" \
+    inject-memory.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest-mem-none", cwd:$cwd, prompt:"debug this segfault please"}')"
+  rm -rf "${STATE_HOME:?}/selftest-mem-none"
+
+  local mem_repo mem_sid
+  mem_sid="selftest-mem"
+  mem_repo=$(mktemp -d)
+  git -C "$mem_repo" init -q 2>/dev/null
+  mkdir -p "$mem_repo/.ai-memory/diagrams/debug"
+  printf '{"routes":[{"keywords":["segfault"],"file":"diagrams/debug/playbook.mmd","priority":9}]}' \
+    > "$mem_repo/.ai-memory/manifest.json"
+  printf 'flowchart TD\n  A[Segfault] --> B[Check Docker]\n' \
+    > "$mem_repo/.ai-memory/diagrams/debug/playbook.mmd"
+
+  expect_contains "inject-memory injects the diagram a prompt routes to" inject-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"debugging a segfault in prod"}')" \
+    "Check Docker"
+
+  expect_empty "inject-memory stays silent when no route matches" inject-memory.sh \
+    "$(jq -n --arg sid "$mem_sid-nomatch" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"please format this markdown file"}')"
+  rm -rf "${STATE_HOME:?}/$mem_sid-nomatch"
+
+  expect_empty "remember-memory stays silent with no captured goal" remember-memory.sh \
+    "$(jq -n --arg sid "$mem_sid-nogoal" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, transcript_path:"/nonexistent"}')"
+  rm -rf "${STATE_HOME:?}/$mem_sid-nogoal"
+
+  # goal routes to a tracked diagram + GOAL_CHECK: ACHIEVED -> a nudge is
+  # stashed, then flushed by inject-memory.sh on the very next prompt.
+  mkdir -p "$STATE_HOME/$mem_sid"
+  printf 'fix the segfault in the worker' > "$STATE_HOME/$mem_sid/goal.txt"
+  local mem_transcript
+  mem_transcript=$(mktemp)
+  {
+    printf '%s\n' '{"type":"user","message":{"role":"user","content":"fix it"}}'
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"GOAL_CHECK: ACHIEVED"}]}}'
+  } > "$mem_transcript"
+
+  run_hook remember-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" --arg t "$mem_transcript" '{session_id:$sid, cwd:$cwd, transcript_path:$t}')" \
+    >/dev/null 2>&1
+
+  expect_cond "remember-memory stashes a memory_nudge on GOAL_CHECK: ACHIEVED" \
+    test -f "$STATE_HOME/$mem_sid/memory_nudge"
+
+  # Same session, different repo: the nudge is bound to the repo it was
+  # stashed in and must not leak into another repo's context.
+  local mem_repo2
+  mem_repo2=$(mktemp -d)
+  git -C "$mem_repo2" init -q 2>/dev/null
+  mkdir -p "$mem_repo2/.ai-memory"
+  printf '{"routes":[]}' > "$mem_repo2/.ai-memory/manifest.json"
+  expect_empty "a stashed nudge is not flushed into a different repo" inject-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo2" '{session_id:$sid, cwd:$cwd, prompt:"anything at all here"}')"
+  expect_cond "the nudge survives for a later prompt back in its own repo" \
+    test -f "$STATE_HOME/$mem_sid/memory_nudge"
+  rm -rf "$mem_repo2"
+
+  expect_contains "inject-memory flushes the stashed nudge on the next prompt" inject-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"anything at all here"}')" \
+    "ai_memory_reminder"
+
+  expect_cond "the nudge is consumed, not left behind for a later turn" \
+    bash -c "[ ! -f '$STATE_HOME/$mem_sid/memory_nudge' ]"
+
+  rm -rf "$mem_repo" "$mem_transcript" "${STATE_HOME:?}/$mem_sid"
 
   expect_exit "boilerplate-guard blocks a hand-written new controller" \
     boilerplate-guard.sh \

@@ -46,6 +46,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/inject-memory.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -131,6 +140,11 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/remember-memory.sh\"",
+            "timeout": 5
+          },
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/stop-goal-check.sh\"",

@@ -5,6 +5,7 @@
     ".claude/CLAUDE.md".source = ../claude/CLAUDE.md;
     ".claude/statusline-usage.py".source = ../claude/statusline-usage.py;
     ".claude/session-analytics.py".source = ../claude/session-analytics.py;
+    ".claude/bash-allowlist".source = ../claude/bash-allowlist;
     ".claude/hooks".source = ../claude/hooks;
     ".claude/skills".source = ../agents/skills;
   };

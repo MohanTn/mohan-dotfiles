@@ -1,0 +1,46 @@
+# Machine-wide additions to bash-allowlist-guard.sh's DEFAULT_ALLOWED.
+# One bare binary name per line; '#' comments and blank lines are ignored.
+# A project can add more in <repo>/.claude/bash-allowlist (additive).
+#
+# Admission rule for this file: the binary must be incapable of writing,
+# deleting, or executing something else. That last clause is the important
+# one — anything that takes another command as an argument (timeout, xargs,
+# env, sudo, nice, watch, sh/bash/zsh -c) turns default-deny into
+# default-allow, because the guard only checks the FIRST word of each
+# command position. Those are deliberately absent and should stay absent.
+#
+# Chosen from measurement, not guesswork: these cleared 20 of the 27 blocks
+# recorded across five sessions (head 6, echo 5, cd 4, tail 3, wc 1,
+# printenv 1). The remaining 7 were pip (correctly denied — use uv), zsh
+# (runs arbitrary scripts), and five parser artifacts that no allowlist can
+# fix: fd's `--exec ... \;` terminator, heredoc bodies, and `python -c`
+# strings containing a nested double quote.
+
+# --- read-only text and output shaping -----------------------------------
+head
+tail
+wc
+cat
+cut
+tr
+comm
+diff
+
+# --- read-only path and file inspection ----------------------------------
+basename
+dirname
+stat
+file
+ls
+
+# --- read-only environment and scalars -----------------------------------
+echo
+printenv
+date
+seq
+
+# --- shell builtin ---------------------------------------------------------
+# Harmless alone: it changes the working directory and nothing else. What
+# follows it is still parsed as its own command position, so
+# `cd /x && rm -rf y` still blocks on rm.
+cd

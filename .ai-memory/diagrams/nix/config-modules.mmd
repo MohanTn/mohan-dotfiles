@@ -1,0 +1,30 @@
+mindmap
+  root((flake.nix))
+    setup.sh
+      switch: home-manager switch --impure
+      doctor
+      migrate_pre_nix_dotfiles
+      ensure_google_chrome
+      ensure_login_shell
+    nix/home.nix
+      nix/packages.nix
+      nix/optional-packages.nix
+      nix/default-packages-config.nix
+      nix/nix-conf.nix
+      nix/maintenance.nix
+    agent harnesses
+      nix/claude.nix
+      nix/copilot.nix
+      nix/pi.nix
+      nix/agents.nix
+      nix/little-coder.nix
+    terminal and shell
+      nix/zsh.nix
+      nix/alacritty.nix
+      nix/ptyxis.nix
+      nix/tmux.nix
+    editor
+      nix/nvim.nix
+    misc
+      nix/git.nix
+      nix/homebrew.nix

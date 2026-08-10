@@ -1,0 +1,29 @@
+{
+  "routes": [
+    {
+      "keywords": ["hook", "hooks", "settings.json", "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "mohan-hooks.json", "common.sh"],
+      "file": "diagrams/hooks/lifecycle.mmd",
+      "priority": 9
+    },
+    {
+      "keywords": ["scaffold", "boilerplate", "boilerplats", "hbs", "template", "mcp-server.js", "core.js", "scaffold.js", "inject marker", "scaffold:inject"],
+      "file": "diagrams/scaffold/boilerplate-system.mmd",
+      "priority": 8
+    },
+    {
+      "keywords": ["nix", "flake.nix", "home-manager", "home.nix", "packages.nix", "setup.sh", "nix flake check"],
+      "file": "diagrams/nix/config-modules.mmd",
+      "priority": 6
+    },
+    {
+      "keywords": ["test", "test-hook.sh", "unittest", "pytest", "test.ts", "test.js", "cmd_selftest"],
+      "file": "diagrams/test/suite-shape.mmd",
+      "priority": 5
+    },
+    {
+      "keywords": ["debug", "bug", "root cause", "traceback", "stack trace", "failing"],
+      "file": "diagrams/debug/playbook.mmd",
+      "priority": 9
+    }
+  ]
+}
