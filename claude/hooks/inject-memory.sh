@@ -25,7 +25,7 @@ out=""
 # A nudge is bound to the repo it was stashed in (state_dir is per-session,
 # not per-repo): flush it only when this prompt's root matches, otherwise
 # leave it for a later prompt back in that repo.
-nudge_file="$state_dir/memory_nudge"
+nudge_file="${state_dir:?state_dir not set by common.sh}/memory_nudge"
 if [ -f "$nudge_file" ] && [ "$(cat "$state_dir/memory_nudge_root" 2>/dev/null)" = "$root" ]; then
   out=$(cat "$nudge_file" 2>/dev/null)
   rm -f "$nudge_file" "$state_dir/memory_nudge_root" 2>/dev/null
