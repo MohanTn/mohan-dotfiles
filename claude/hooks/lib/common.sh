@@ -34,13 +34,15 @@ ai_memory_root() {
 # substring) in $1. Empty stdout, non-zero return if there is no
 # .ai-memory/manifest.json or nothing matches.
 ai_memory_match_route() {
-  local text="$1" manifest
+  local text="$1" manifest match
   manifest="$(ai_memory_root)/.ai-memory/manifest.json"
   [ -f "$manifest" ] || return 1
-  jq -r --arg text "$text" '
+  match=$(jq -r --arg text "$text" '
     ($text | ascii_downcase) as $t
     | (.routes // [])
     | map(select(.keywords as $k | $k | any(. as $kw | $t | contains($kw | ascii_downcase))))
     | sort_by(.priority // 0) | reverse | .[0].file // empty
-  ' "$manifest" 2>/dev/null
+  ' "$manifest" 2>/dev/null)
+  [ -n "$match" ] || return 1
+  printf '%s\n' "$match"
 }

@@ -361,6 +361,19 @@ cmd_selftest() {
   expect_cond "remember-memory stashes a memory_nudge on GOAL_CHECK: ACHIEVED" \
     test -f "$STATE_HOME/$mem_sid/memory_nudge"
 
+  # Same session, different repo: the nudge is bound to the repo it was
+  # stashed in and must not leak into another repo's context.
+  local mem_repo2
+  mem_repo2=$(mktemp -d)
+  git -C "$mem_repo2" init -q 2>/dev/null
+  mkdir -p "$mem_repo2/.ai-memory"
+  printf '{"routes":[]}' > "$mem_repo2/.ai-memory/manifest.json"
+  expect_empty "a stashed nudge is not flushed into a different repo" inject-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo2" '{session_id:$sid, cwd:$cwd, prompt:"anything at all here"}')"
+  expect_cond "the nudge survives for a later prompt back in its own repo" \
+    test -f "$STATE_HOME/$mem_sid/memory_nudge"
+  rm -rf "$mem_repo2"
+
   expect_contains "inject-memory flushes the stashed nudge on the next prompt" inject-memory.sh \
     "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"anything at all here"}')" \
     "ai_memory_reminder"

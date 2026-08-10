@@ -44,5 +44,6 @@ achieved=$(jq -r --argjson ln "$last_user_line" \
 
 nudge=$(printf '<ai_memory_reminder>This turn resolved: %s\nThat maps to .ai-memory/%s. If you learned something worth keeping (a fix, a gotcha, a structural change), append a node/edge to that file now, and add any new trigger keywords to .ai-memory/manifest.json.</ai_memory_reminder>' "$goal" "$file")
 printf '%s' "$nudge" > "$state_dir/memory_nudge" 2>/dev/null
+printf '%s' "$root" > "$state_dir/memory_nudge_root" 2>/dev/null
 log "remember-memory: stashed nudge for $file"
 exit 0
