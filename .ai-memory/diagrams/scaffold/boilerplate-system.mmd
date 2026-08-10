@@ -1,0 +1,37 @@
+flowchart TD
+  CLI[scaffold.js: parseArgs, loadData, main] --> Core
+  MCP[mcp-server.js: createServer, requireDep, resolveInRoot] --> Core
+
+  subgraph Core["agents/boilerplats/lib/core.js"]
+    validateData --> render
+    render --> scaffoldCreate[scaffoldCreate: --out is new file]
+    render --> scaffoldInject[scaffoldInject: insert above marker]
+    scaffoldInject --> scaffoldAdopt[scaffoldAdopt: unmarked legacy file, place marker via anchor]
+    scaffoldAdopt --> Anchor
+    scaffoldInject --> numberedLines
+    scaffoldInject --> scanFillable[scanFillable: fillable line numbers for the caller]
+  end
+
+  subgraph Anchor["lib/anchor.js"]
+    braceAnchor[braceAnchor: C-like langs]
+    pythonAnchor[pythonAnchor]
+    shAnchor[shAnchor]
+    resolveAnchor --> findAnchor
+  end
+
+  Core --> Meta[lib/template-meta.js: markerFor, listLanguages, listTemplates]
+  Meta --> Templates
+
+  subgraph Templates["boilerplats/<lang>/*.hbs"]
+    csharp[csharp/]
+    go[go/]
+    javascript[javascript/]
+    typescript[typescript/]
+    python[python/]
+    sh["sh/ (function, helper, member, script, validator only)"]
+  end
+
+  Templates -.-> Kinds["controller, repository, handler, validator, factory,\nmapper, query, command, request, response, helper,\ndi-injection, member"]
+
+  Guard[claude/hooks/boilerplate-guard.sh: PreToolUse Edit/Write] -->|blocks hand-written boilerplate by filename + content signature| CLI
+  Hint[claude/hooks/boilerplate-hint.sh: UserPromptSubmit] -.suggests scaffold_* tools.-> CLI

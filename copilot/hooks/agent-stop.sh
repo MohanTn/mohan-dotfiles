@@ -29,6 +29,7 @@ payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" --arg t "$claude_transc
   '{session_id: $sid, cwd: $cwd, transcript_path: $t}')
 
 printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/pre-tool-use-goal-capture.sh" >/dev/null 2>&1
+printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/remember-memory.sh" >/dev/null 2>&1
 printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/stop-goal-check.sh" >/dev/null 2>&1
 
 allow

@@ -87,6 +87,20 @@ export default function (pi: ExtensionAPI) {
       parts.push(augmentResult.stdout.trim());
     }
 
+    // Optional per-project persistent memory (see the llm-memory repo):
+    // routes this prompt to a diagram in .ai-memory/ via manifest.json, and
+    // flushes any "remember this" nudge remember-memory.sh stashed at the
+    // previous agent_end. No-op in repos without .ai-memory/manifest.json.
+    const memoryResult = runClaudeHook("inject-memory.sh", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      hook_event_name: "UserPromptSubmit",
+      prompt: event.prompt,
+    });
+    if (memoryResult.stdout.trim()) {
+      parts.push(memoryResult.stdout.trim());
+    }
+
     // No boilerplate-hint.sh call here: on Pi the same AGENT-HINT.md is already
     // permanently in the system prompt via ~/.pi/agent/APPEND_SYSTEM.md (see
     // nix/pi.nix), so running the keyword-gated hook as well just paid for the
@@ -244,6 +258,11 @@ export default function (pi: ExtensionAPI) {
     try {
       const payload = { session_id: sessionId, cwd: ctx.cwd, transcript_path: transcriptFile };
       runClaudeHook("pre-tool-use-goal-capture.sh", payload);
+      // Stashes a "remember this" nudge to session state when this turn's
+      // goal routes to a tracked .ai-memory/ diagram; picked up by
+      // inject-memory.sh at the start of the next turn (agent_end can't
+      // inject into the turn that's already ending).
+      runClaudeHook("remember-memory.sh", payload);
       runClaudeHook("stop-goal-check.sh", payload);
     } finally {
       try {

@@ -148,6 +148,44 @@ cmd_selftest() {
     '.additionalContext | contains("auth_service.py") and contains("class AuthService:")'
   rm -rf "$ctx_repo"
 
+  # .ai-memory: user-prompt-submit-memory.sh / agent-stop.sh's remember-memory
+  # call, reusing Claude's inject-memory.sh / remember-memory.sh unmodified
+  # (see the llm-memory repo for the reference .ai-memory/ layout).
+  local mem_repo mem_sid
+  mem_sid="$sid-mem"
+  mem_repo=$(mktemp -d)
+  git -C "$mem_repo" init -q 2>/dev/null
+  mkdir -p "$mem_repo/.ai-memory/diagrams/debug"
+  printf '{"routes":[{"keywords":["segfault"],"file":"diagrams/debug/playbook.mmd","priority":9}]}' \
+    > "$mem_repo/.ai-memory/manifest.json"
+  printf 'flowchart TD\n  A[Segfault] --> B[Check Docker]\n' \
+    > "$mem_repo/.ai-memory/diagrams/debug/playbook.mmd"
+
+  expect_out "user-prompt-submit-memory injects the diagram a prompt routes to" \
+    user-prompt-submit-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{sessionId:$sid, cwd:$cwd, prompt:"debugging a segfault in prod"}')" \
+    '.additionalContext | contains("Check Docker")'
+
+  # goal routes to the tracked diagram + GOAL_CHECK: ACHIEVED -> agent-stop.sh
+  # stashes a nudge that the next userPromptSubmitted flushes.
+  local mem_transcript mem_stop_payload
+  mem_transcript=$(mktemp)
+  jq -nc '{type:"user.message", data:{content:"fix the segfault in the worker"}}' > "$mem_transcript"
+  jq -nc '{type:"assistant.message", data:{content:"GOAL: fix the segfault in the worker"}}' >> "$mem_transcript"
+  jq -nc '{type:"assistant.message", data:{content:"GOAL_CHECK: ACHIEVED"}}' >> "$mem_transcript"
+  mem_stop_payload=$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" --arg t "$mem_transcript" \
+    '{sessionId:$sid, cwd:$cwd, transcriptPath:$t, stopReason:"end_turn"}')
+
+  expect_out "agent-stop allows while stashing a memory nudge" agent-stop.sh \
+    "$mem_stop_payload" '. == {}'
+
+  expect_out "the stashed memory nudge is flushed into the next prompt" \
+    user-prompt-submit-memory.sh \
+    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{sessionId:$sid, cwd:$cwd, prompt:"anything at all here"}')" \
+    '.additionalContext | contains("ai_memory_reminder")'
+
+  rm -rf "$mem_repo" "$mem_transcript" "${STATE_HOME:?}/$mem_sid"
+
   # user-prompt-submit is notification-only: assert empty output + exit 0 directly
   local ups_out ups_rc
   ups_out=$(run_hook user-prompt-submit.sh "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", prompt:"hello"}')")

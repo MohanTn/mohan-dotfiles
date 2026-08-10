@@ -1,0 +1,26 @@
+flowchart TD
+  subgraph ClaudeHooks["claude/hooks tests"]
+    C_runner[test-hook.sh: cmd_run, cmd_selftest, expect_exit/expect_contains/expect_empty] --> C_scripts[exercises every claude/hooks/*.sh via fake stdin payloads]
+    C_pytest[test_context_augment.py: Keywords, Abstraction, Minify, EndToEnd, NoLedger, KeywordPrecision] --> ctx[context-augment.py]
+  end
+
+  subgraph ClaudeTui["claude/ TUI + analytics tests"]
+    T_analytics[test_session_analytics.py: ParseSessionTest, AggregateTest, CopilotParseTest, PiParseTest, PickerFilterTest, SortTest, NotesTest, ReportTest, ThemeTest, ConfigTest] --> analytics[session-analytics.py]
+  end
+
+  subgraph CopilotHooks["copilot/hooks tests"]
+    P_runner[test-hook.sh: cmd_run, cmd_selftest, expect_out] --> P_scripts[exercises every copilot/hooks/*.sh]
+  end
+
+  subgraph Scaffold["agents/boilerplats/test (node)"]
+    core_test[core.test.js] --> core[lib/core.js]
+    scaffold_test[scaffold.test.js] --> scaffoldjs[scaffold.js]
+    mcp_test[mcp-server.test.js: connectedClient, parse] --> mcp[mcp-server.js]
+  end
+
+  subgraph PiTests["pi/agent/extensions (deno/bun ts)"]
+    hooks_test[hooks/test.ts] --> hooks_lib[hooks/lib.ts, index.ts]
+    sandbox_test[sandbox/test.ts: ok, no, check] --> sandbox[sandbox/index.ts, trusted-commands.ts]
+  end
+
+  Note[Each harness has its own runner + framework: bash table-driven for shell hooks,\npython unittest for python hooks/TUI, node's built-in test runner for boilerplats,\npi's own test.ts convention for the pi extension]

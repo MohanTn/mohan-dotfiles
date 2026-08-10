@@ -14,6 +14,7 @@
     jc # converts CLI output (ps, dig, ls, etc.) to JSON for piping into jq
     universal-ctags # session-start.sh's repo map (folder -> file -> symbol)
     python3 # statusline-usage.py
+    uv # fast Python package/project manager
     nodejs_22 # LazyVim LSP extras, pi extensions, npm global CLIs
     pnpm # for enriched_planning
     gcc # Treesitter parser builds

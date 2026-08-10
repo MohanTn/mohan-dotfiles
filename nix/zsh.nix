@@ -216,6 +216,9 @@
       # through untouched.
       source ${../zsh/table-view.zsh}
 
+      # `fkill`: fuzzy-pick a listening port/service/PID from lsof and kill -9 it.
+      source ${../zsh/fkill.zsh}
+
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
       [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
