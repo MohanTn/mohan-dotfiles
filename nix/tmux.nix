@@ -66,9 +66,16 @@
 
     extraConfig = ''
       # pi warns on launch when this is off; lets modified Enter (Shift/Ctrl
-      # +Enter) reach TUI apps instead of being collapsed to plain Enter
-      set -g extended-keys on
-      set -g extended-keys-format csi-u
+      # +Enter) reach TUI apps instead of being collapsed to plain Enter.
+      # WSL's terminal stack (ConPTY underneath, whatever front-end sits on
+      # top) doesn't reliably negotiate the CSI-u keyboard protocol tmux
+      # emits here: undecoded escape bytes leak into the shell buffer as
+      # visible junk ("ghost text") while typing, and Ctrl+C doesn't clear
+      # it because the corruption is below zsh, in the terminal/tmux
+      # protocol layer. Keep it on for native Linux (where it's needed for
+      # pi), skip it under WSL.
+      if-shell -b '[[ $(uname -r) != *[Mm]icrosoft* ]]' 'set -g extended-keys on'
+      if-shell -b '[[ $(uname -r) != *[Mm]icrosoft* ]]' 'set -g extended-keys-format csi-u'
       set -g status-position bottom
       set -g status-left "#{E:@catppuccin_status_session}"
       set -g status-right-length 100
