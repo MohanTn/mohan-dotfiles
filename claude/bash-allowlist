@@ -21,7 +21,6 @@ head
 tail
 wc
 cat
-sort
 uniq
 cut
 tr
