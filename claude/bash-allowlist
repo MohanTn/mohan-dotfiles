@@ -21,7 +21,6 @@ head
 tail
 wc
 cat
-uniq
 cut
 tr
 comm
