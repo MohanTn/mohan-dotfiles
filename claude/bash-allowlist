@@ -32,7 +32,6 @@ dirname
 stat
 file
 ls
-tree
 
 # --- read-only environment and scalars -----------------------------------
 echo
