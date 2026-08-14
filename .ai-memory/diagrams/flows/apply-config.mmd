@@ -1,0 +1,21 @@
+flowchart TD
+  E["1. edit the file HERE in the repo, never the copy under $HOME"] --> T
+  T["2. git add it, staging is enough, committing is not required"] -->|"nix flakes only see git-tracked files, an untracked file is INVISIBLE to the sandboxed build and is the usual cause of a confusing failure"| R
+  R["3. ./setup.sh"] --> B["4. bootstrap window — sources the nix daemon profile when nix is not yet on PATH, forces extra-experimental-features nix-command flakes for this process tree only"]
+  B --> F["5. flake.nix with nixpkgs and home-manager pinned in flake.lock"]
+  F --> S["6. home-manager switch --impure"]
+  S --> H["7. nix/home.nix pulls in the module list"]
+
+  H --> M1["harnesses — nix/claude.nix, copilot.nix, pi.nix, agents.nix, little-coder.nix"]
+  H --> M2["terminal and editor — nix/zsh.nix, alacritty.nix, ptyxis.nix, tmux.nix, nvim.nix"]
+  H --> M3["system — nix/packages.nix, optional-packages.nix, nix-conf.nix, maintenance.nix"]
+
+  M1 --> L["8. $HOME is re-linked to read-only store paths, anything edited by hand is reverted and kept beside it as NAME.hm-backup"]
+  M2 --> L
+  M3 --> L
+  L --> D["9. drift audit runs at the end of every apply"]
+
+  D --> Doc["./setup.sh doctor — audit only, changes nothing, exits 1 on drift"]
+  D --> Up["./setup.sh upgrade — bumps flake.lock inputs, then applies"]
+
+  M2 -.->|"exception, nvim.nix links ~/.config/nvim straight at this checkout, so nvim edits are live without an apply"| Live["expected checkout path ~/REPO/mohan-dotfiles"]

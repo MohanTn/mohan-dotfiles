@@ -5,7 +5,8 @@
     "closer": "p:os",
     "pink": "#F5C2E7",
     "lavender": "#B4BEFE",
-    "blue": "#89B4FA"
+    "blue": "#89B4FA",
+    "green": "#A6E3A1"
   },
   "blocks": [
     {
@@ -28,6 +29,15 @@
           "style": "plain",
           "template": "{{ .Path }} ",
           "type": "path"
+        },
+        {
+          "foreground": "p:green",
+          "properties": {
+            "display_mode": "environment"
+          },
+          "style": "plain",
+          "template": " {{ .Venv }} ",
+          "type": "python"
         },
         {
           "foreground": "p:lavender",

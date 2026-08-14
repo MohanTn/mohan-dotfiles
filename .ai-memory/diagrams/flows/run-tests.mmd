@@ -1,0 +1,19 @@
+flowchart TD
+  Q["I changed something, what do I run"] --> W{"what did you touch"}
+
+  W -->|"claude/hooks/*.sh"| A["bash claude/hooks/test-hook.sh — cmd_run and cmd_selftest, table-driven, feeds each hook a fake stdin payload, asserts with expect_exit, expect_contains, expect_empty"]
+  W -->|"context-augment.py"| B["python3 claude/hooks/test_context_augment.py — Keywords, Abstraction, Minify, EndToEnd, NoLedger, KeywordPrecision"]
+  W -->|"claude/session-analytics.py"| C["python3 claude/test_session_analytics.py — ParseSession, Aggregate, CopilotParse, PiParse, PickerFilter, Sort, Notes, Report, Theme, Config"]
+  W -->|"copilot/hooks/*.sh"| D["bash copilot/hooks/test-hook.sh — same shape as the claude runner, asserts with expect_out"]
+  W -->|"agents/boilerplats"| E["npm test in agents/boilerplats — node --test over core.test.js, scaffold.test.js, mcp-server.test.js"]
+  W -->|"pi/agent/extensions"| F["hooks/test.ts and sandbox/test.ts — pi's own test.ts convention, sandbox asserts with ok, no, check"]
+  W -->|"any .nix file, or ANY new file"| G["nix flake check — git add first, it fails on untracked files"]
+
+  A --> N
+  B --> N
+  C --> N
+  D --> N
+  E --> N
+  F --> N
+  G --> N
+  N["There is no repo-wide test command — each harness owns its runner and framework: bash table-driven for shell hooks, python unittest for python, node --test for boilerplats, test.ts for pi"]
