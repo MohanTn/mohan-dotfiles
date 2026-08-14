@@ -1,29 +1,44 @@
 {
   "routes": [
     {
-      "keywords": ["hook", "hooks", "settings.json", "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "mohan-hooks.json", "common.sh"],
-      "file": "diagrams/hooks/lifecycle.mmd",
+      "keywords": ["architecture", "overview", "big picture", "how does this repo work", "what is this repo", "how it all fits", "orient me"],
+      "file": "diagrams/overview/system.mmd",
+      "priority": 10
+    },
+    {
+      "keywords": ["debug", "root cause", "traceback", "stack trace", "why is it failing", "not working", "broken", "regression", "off-center", "nerd font", "glyph", "garbage", "corrupt"],
+      "file": "diagrams/debug/playbook.mmd",
       "priority": 9
     },
     {
-      "keywords": ["scaffold", "boilerplate", "boilerplats", "hbs", "template", "mcp-server.js", "core.js", "scaffold.js", "inject marker", "scaffold:inject"],
-      "file": "diagrams/scaffold/boilerplate-system.mmd",
+      "keywords": ["prompt lifecycle", "userpromptsubmit", "sessionstart", "session-start", "repo-map", "context-augment", "inject-memory", "remember-memory", "stop hook", "goal_check", "nudge", "ai-memory", "manifest", "keyword", "route"],
+      "file": "diagrams/flows/prompt-lifecycle.mmd",
       "priority": 8
     },
     {
-      "keywords": ["nix", "flake.nix", "home-manager", "home.nix", "packages.nix", "setup.sh", "nix flake check"],
-      "file": "diagrams/nix/config-modules.mmd",
+      "keywords": ["blocked", "guard", "pretooluse", "posttooluse", "allowlist", "boilerplate-guard", "secret-guard", "loop breaker", "why was my edit", "refused"],
+      "file": "diagrams/flows/tool-guard-path.mmd",
+      "priority": 8
+    },
+    {
+      "keywords": ["scaffold", "boilerplate", "boilerplats", "hbs", "scaffold:inject", "inject marker", "anchor.js", "template-meta", "generate a controller", "generate a repository"],
+      "file": "diagrams/flows/scaffold-a-file.mmd",
+      "priority": 7
+    },
+    {
+      "keywords": ["nix", "setup.sh", "home-manager", "flake", "home.nix", "packages.nix", "apply the config", "hm-backup", "drift", "doctor", "alacritty", "ptyxis", "tmux", "package"],
+      "file": "diagrams/flows/apply-config.mmd",
+      "priority": 7
+    },
+    {
+      "keywords": ["zsh", "zshrc", "oh-my-posh", "prompt theme", "zinit", "shell startup", "completion", "catppuccin", "transient prompt"],
+      "file": "diagrams/flows/shell-startup.mmd",
       "priority": 6
     },
     {
-      "keywords": ["test", "test-hook.sh", "unittest", "pytest", "test.ts", "test.js", "cmd_selftest"],
-      "file": "diagrams/test/suite-shape.mmd",
+      "keywords": ["run the tests", "test suite", "test-hook.sh", "unittest", "npm test", "node --test", "test.ts", "failing test", "nix flake check"],
+      "file": "diagrams/flows/run-tests.mmd",
       "priority": 5
-    },
-    {
-      "keywords": ["debug", "bug", "root cause", "traceback", "stack trace", "failing"],
-      "file": "diagrams/debug/playbook.mmd",
-      "priority": 9
     }
   ]
 }

@@ -1,0 +1,30 @@
+sequenceDiagram
+  autonumber
+  actor U as You
+  participant CC as Claude Code
+  participant H as claude/hooks
+  participant M as Model
+
+  Note over CC,H: SessionStart, once per session (startup or resume)
+  CC->>H: session-start.sh --no-claude-md
+  H->>H: repo-map.sh regenerates .claude/repo-map.md, no cache, every session by design
+  H-->>M: short digest pointing at the map, so the agent skips the fd and rg orientation pass
+
+  Note over CC,H: UserPromptSubmit, in claude/settings.json order
+  U->>CC: prompt
+  CC->>H: user-prompt-submit.sh resets per-turn state and injects the MCP reader hint
+  CC->>H: context-augment.py extracts keywords and abstracted file excerpts
+  CC->>H: boilerplate-hint.sh fires only when the prompt looks boilerplate-shaped
+  CC->>H: inject-memory.sh flushes any stashed nudge, then routes this prompt
+  H->>H: ai_memory_match_route in hooks/lib/common.sh:36, case-insensitive SUBSTRING match, highest priority wins, exactly ONE file
+  H-->>M: relevant_system_map block with the matched .mmd inlined verbatim
+
+  M->>M: turn runs, each tool call enters flows/tool-guard-path.mmd
+  M-->>CC: reply containing GOAL_CHECK
+
+  Note over CC,H: Stop
+  CC->>H: remember-memory.sh reads state_dir/goal.txt captured by pre-tool-use-goal-capture.sh
+  H->>H: routes that goal, and requires GOAL_CHECK ACHIEVED in assistant text after the last user message
+  H->>H: stashes the nudge to state_dir/memory_nudge because Stop stdout NEVER reaches the model
+  CC->>H: stop-goal-check.sh logs only, never exit 2, a forced block would cost a whole extra turn
+  H-->>U: the nudge is delivered at the START of the next turn by inject-memory.sh
