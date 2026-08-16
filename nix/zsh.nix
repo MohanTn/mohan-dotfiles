@@ -40,6 +40,21 @@
     };
 
     initContent = ''
+      # Auto-start tmux for real interactive terminals. Runs first and uses
+      # exec so the outer zsh is replaced before plugins/completions load,
+      # instead of paying that cost twice. -A attaches to "main" if it
+      # exists, creates it otherwise, so every terminal window lands in the
+      # same session. Guards, in order: interactive shell, attached to a tty,
+      # not already inside tmux (nvim :terminal, nested shells), tmux on
+      # PATH, and an opt-out for editor/agent shells that drive zsh
+      # programmatically and would break if swallowed by a TUI.
+      if [[ $- == *i* ]] && [[ -t 1 ]] && [[ -z $TMUX ]] \
+        && [[ -z $NO_TMUX ]] && [[ -z $CLAUDECODE ]] && [[ -z $INSIDE_EMACS ]] \
+        && [[ $TERM_PROGRAM != "vscode" ]] && [[ $TERM != "dumb" ]] \
+        && command -v tmux > /dev/null; then
+        exec tmux new-session -A -s main
+      fi
+
       setopt CORRECT
 
       # Only keep commands that succeeded in $HISTFILE. zshaddhistory fires
