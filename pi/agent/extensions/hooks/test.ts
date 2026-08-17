@@ -98,12 +98,10 @@ for (const [input, want] of toolNameCases) {
 }
 
 // ---- entriesToClaudeTranscript ----
-// The goal-check policy itself now lives only in claude/hooks/
-// pre-tool-use-goal-capture.sh + stop-goal-check.sh, run against this
-// translated transcript (see index.ts's agent_end handler) — no goal-scan
-// logic is reimplemented here. What's unique to the TS port is the
-// translation: session entries -> a Claude-shaped JSONL file those scripts
-// can read unmodified.
+// Used to hand Pi's in-memory session entries to session-audit.py (via
+// session-end-audit.sh, see index.ts's session_shutdown handler) unmodified.
+// What's unique to the TS port is the translation: session entries -> a
+// Claude-shaped JSONL file that script can read unmodified.
 
 function userEntry(text: string): MessageEntryLike {
   return { type: "message", message: { role: "user", content: text } };
@@ -164,7 +162,7 @@ async function main() {
   const { api, handlers } = fakePi();
   (mod.default as (pi: unknown) => void)(api);
 
-  for (const event of ["session_start", "before_agent_start", "tool_call", "tool_result", "agent_end", "session_compact", "session_shutdown"]) {
+  for (const event of ["session_start", "before_agent_start", "tool_call", "tool_result", "session_compact", "session_shutdown"]) {
     handlers.has(event)
       ? ok(`registers a ${event} handler`)
       : no(`registers a ${event} handler`);

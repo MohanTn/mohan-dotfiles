@@ -181,7 +181,7 @@
           '';
 
         # Pi hooks extension: TypeScript port that shells out to the same
-        # Claude scripts plus native edit-no-op + goal-capture/check gates.
+        # Claude scripts plus a native edit-no-op gate.
         # This used to derive the source path from `builtins.getEnv "PWD"` so
         # that untracked TS files were visible during local --impure work. That
         # made the check silently depend on being invoked from the repo root,

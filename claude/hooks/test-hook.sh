@@ -21,20 +21,17 @@ TEST_SESSION_ID="manual-test"
 # hook basename -> "event_name::one-line purpose"
 declare -A HOOK_INFO=(
   [session-start.sh]="SessionStart::regenerate .claude/repo-map.md (via repo-map.sh) + print the digest that points at it"
-  [user-prompt-submit.sh]="UserPromptSubmit::clear prior loop/goal state, hint the MCP reader for @-referenced documents"
+  [user-prompt-submit.sh]="UserPromptSubmit::clear prior loop state"
   [boilerplate-hint.sh]="UserPromptSubmit::point at ~/.agents/boilerplats/scaffold.js on boilerplate-flavored prompts"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
   [boilerplate-guard.sh]="PreToolUse (Edit/Write)::mandate the scaffold generator for new boilerplate files (by name AND by content signature), protect scaffold:inject markers"
   [bash-allowlist-guard.sh]="PreToolUse (Bash)::deny any command whose binaries are not on the shared Bash allowlist (allowlist-only shell policy)"
   [bash-write-guard.sh]="PreToolUse (Bash)::block shell redirection/heredoc/tee writes into code files (the write-around of boilerplate-guard)"
   [secret-guard.sh]="PreToolUse (*)::block tool calls whose input looks like a live secret/credential (invoke-time guardrail)"
-  [pre-tool-use-goal-capture.sh]="PreToolUse (*)::capture the stated GOAL: line from the transcript"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
   [pre-compact.sh]="PreCompact::replay goal + files edited + diffstat across a compaction"
-  [inject-memory.sh]="UserPromptSubmit::flush any stashed .ai-memory nudge, inject the diagram matching .ai-memory/manifest.json"
-  [remember-memory.sh]="Stop::advisory-only; stash a .ai-memory nudge when GOAL_CHECK: ACHIEVED routes to a tracked diagram"
-  [stop-goal-check.sh]="Stop::advisory-only; log if GOAL_CHECK: was never stated (never blocks)"
+  [inject-memory.sh]="UserPromptSubmit::inject the diagram matching .ai-memory/manifest.json"
   [session-end-cleanup.sh]="SessionEnd::prune stale hook state"
   [session-end-audit.sh]="SessionEnd::auto-generate the session audit file (system layer + hook inventory + trace)"
 )
@@ -79,7 +76,7 @@ default_payload() {
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Bash",
           tool_input:{command:"export AWS_KEY=AKIAABCDEFGHIJKLMNOP"}}'
       ;;
-    pre-tool-use-goal-capture.sh | pre-tool-use-loop-breaker.sh)
+    pre-tool-use-loop-breaker.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PreToolUse", tool_name:"Bash",
           tool_input:{command:"echo hi"}, transcript_path:"/nonexistent/transcript.jsonl"}'
@@ -88,10 +85,6 @@ default_payload() {
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PostToolUse", tool_name:"Edit",
           tool_input:{file_path:"/tmp/example.md"}}'
-      ;;
-    stop-goal-check.sh | remember-memory.sh)
-      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
-        '{session_id:$sid, cwd:$cwd, hook_event_name:"Stop", transcript_path:"/nonexistent/transcript.jsonl", stop_hook_active:false}'
       ;;
     inject-memory.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -293,11 +286,6 @@ cmd_selftest() {
     pre-tool-use-loop-breaker.sh "$loop_payload" 2
   rm -rf "${STATE_HOME:?}/selftest-loop"
 
-  expect_exit "stop-goal-check no-ops with no captured goal" \
-    stop-goal-check.sh \
-    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, transcript_path:"/nonexistent", stop_hook_active:false}')" \
-    0
-
   expect_exit "session-end-cleanup runs cleanly" \
     session-end-cleanup.sh '{}' 0
 
@@ -314,8 +302,8 @@ cmd_selftest() {
     "/tmp/two.ts"
   rm -rf "$pc_dir"
 
-  # .ai-memory: inject-memory / remember-memory (see llm-memory repo for the
-  # reference .ai-memory/ layout these read).
+  # .ai-memory: inject-memory (see llm-memory repo for the reference
+  # .ai-memory/ layout it reads).
   expect_empty "inject-memory stays silent without .ai-memory/manifest.json" \
     inject-memory.sh \
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest-mem-none", cwd:$cwd, prompt:"debug this segfault please"}')"
@@ -337,51 +325,7 @@ cmd_selftest() {
 
   expect_empty "inject-memory stays silent when no route matches" inject-memory.sh \
     "$(jq -n --arg sid "$mem_sid-nomatch" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"please format this markdown file"}')"
-  rm -rf "${STATE_HOME:?}/$mem_sid-nomatch"
-
-  expect_empty "remember-memory stays silent with no captured goal" remember-memory.sh \
-    "$(jq -n --arg sid "$mem_sid-nogoal" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, transcript_path:"/nonexistent"}')"
-  rm -rf "${STATE_HOME:?}/$mem_sid-nogoal"
-
-  # goal routes to a tracked diagram + GOAL_CHECK: ACHIEVED -> a nudge is
-  # stashed, then flushed by inject-memory.sh on the very next prompt.
-  mkdir -p "$STATE_HOME/$mem_sid"
-  printf 'fix the segfault in the worker' > "$STATE_HOME/$mem_sid/goal.txt"
-  local mem_transcript
-  mem_transcript=$(mktemp)
-  {
-    printf '%s\n' '{"type":"user","message":{"role":"user","content":"fix it"}}'
-    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"GOAL_CHECK: ACHIEVED"}]}}'
-  } > "$mem_transcript"
-
-  run_hook remember-memory.sh \
-    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" --arg t "$mem_transcript" '{session_id:$sid, cwd:$cwd, transcript_path:$t}')" \
-    >/dev/null 2>&1
-
-  expect_cond "remember-memory stashes a memory_nudge on GOAL_CHECK: ACHIEVED" \
-    test -f "$STATE_HOME/$mem_sid/memory_nudge"
-
-  # Same session, different repo: the nudge is bound to the repo it was
-  # stashed in and must not leak into another repo's context.
-  local mem_repo2
-  mem_repo2=$(mktemp -d)
-  git -C "$mem_repo2" init -q 2>/dev/null
-  mkdir -p "$mem_repo2/.ai-memory"
-  printf '{"routes":[]}' > "$mem_repo2/.ai-memory/manifest.json"
-  expect_empty "a stashed nudge is not flushed into a different repo" inject-memory.sh \
-    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo2" '{session_id:$sid, cwd:$cwd, prompt:"anything at all here"}')"
-  expect_cond "the nudge survives for a later prompt back in its own repo" \
-    test -f "$STATE_HOME/$mem_sid/memory_nudge"
-  rm -rf "$mem_repo2"
-
-  expect_contains "inject-memory flushes the stashed nudge on the next prompt" inject-memory.sh \
-    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"anything at all here"}')" \
-    "ai_memory_reminder"
-
-  expect_cond "the nudge is consumed, not left behind for a later turn" \
-    bash -c "[ ! -f '$STATE_HOME/$mem_sid/memory_nudge' ]"
-
-  rm -rf "$mem_repo" "$mem_transcript" "${STATE_HOME:?}/$mem_sid"
+  rm -rf "${STATE_HOME:?}/$mem_sid-nomatch" "$mem_repo"
 
   expect_exit "boilerplate-guard blocks a hand-written new controller" \
     boilerplate-guard.sh \
@@ -630,49 +574,10 @@ cmd_selftest() {
     test -s "$STATE_HOME/selftest-postedit/edit_gen"
   rm -rf "$pte_dir" "${STATE_HOME:?}/selftest-postedit"
 
-  # ---- pre-tool-use-goal-capture.sh ----
-  local gc_transcript gc_payload
-  gc_transcript=$(mktemp)
-  jq -nc '{type:"user", message:{role:"user", content:"do the thing"}}' > "$gc_transcript"
-  jq -nc '{type:"assistant", message:{role:"assistant", content:[{type:"text", text:"GOAL: prove the capture works"}]}}' >> "$gc_transcript"
-  gc_payload=$(jq -n --arg t "$gc_transcript" \
-    '{session_id:"selftest-goal", cwd:"/tmp", tool_name:"Bash", tool_input:{command:"true"}, transcript_path:$t}')
-  run_hook pre-tool-use-goal-capture.sh "$gc_payload" >/dev/null 2>&1
-  expect_cond "goal-capture stores the GOAL line stated after the last user turn" \
-    grep -qxF "prove the capture works" "$STATE_HOME/selftest-goal/goal.txt"
-  rm -rf "${STATE_HOME:?}/selftest-goal"
-
-  # The scan is deliberately scoped to text after the newest user message, so a
-  # GOAL: from an earlier turn must not be picked up as this turn's goal.
-  jq -nc '{type:"assistant", message:{role:"assistant", content:[{type:"text", text:"GOAL: a stale goal from an earlier turn"}]}}' > "$gc_transcript"
-  jq -nc '{type:"user", message:{role:"user", content:"now do something else"}}' >> "$gc_transcript"
-  run_hook pre-tool-use-goal-capture.sh \
-    "$(jq -n --arg t "$gc_transcript" '{session_id:"selftest-stale", cwd:"/tmp", tool_name:"Bash", tool_input:{command:"true"}, transcript_path:$t}')" \
-    >/dev/null 2>&1
-  expect_cond "goal-capture ignores a GOAL line predating the last user turn" \
-    test ! -f "$STATE_HOME/selftest-stale/goal.txt"
-  rm -f "$gc_transcript"
-  rm -rf "${STATE_HOME:?}/selftest-stale"
-
   # ---- user-prompt-submit.sh ----
-  expect_contains "user-prompt-submit hints the MCP reader for an @-referenced pdf" \
-    user-prompt-submit.sh \
-    "$(jq -n '{session_id:"selftest-ups", cwd:"/tmp", prompt:"summarise @docs/spec.pdf for me"}')" \
-    "mcp__files-mcp__convert_file"
-
-  expect_empty "user-prompt-submit stays silent on a prompt with no documents" \
+  expect_empty "user-prompt-submit stays silent (state reset only, no stdout)" \
     user-prompt-submit.sh \
     "$(jq -n '{session_id:"selftest-ups", cwd:"/tmp", prompt:"why is the login test flaky"}')"
-
-  # Per-turn reset: a goal left over from the previous turn must not survive into
-  # the next one, or stop-goal-check gates against a goal nobody restated.
-  mkdir -p "$STATE_HOME/selftest-ups"
-  printf 'stale goal' > "$STATE_HOME/selftest-ups/goal.txt"
-  run_hook user-prompt-submit.sh \
-    "$(jq -n '{session_id:"selftest-ups", cwd:"/tmp", prompt:"a fresh prompt"}')" >/dev/null 2>&1
-  expect_cond "user-prompt-submit clears the previous turn's captured goal" \
-    test ! -f "$STATE_HOME/selftest-ups/goal.txt"
-  rm -rf "${STATE_HOME:?}/selftest-ups"
 
   # ---- repo-map.sh + session-start.sh ----
   # repo-map.sh is not a stdin hook (it takes a root as $1) but session-start.sh

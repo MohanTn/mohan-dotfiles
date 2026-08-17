@@ -103,11 +103,6 @@
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/pre-tool-use-goal-capture.sh\"",
-            "timeout": 5
-          },
-          {
-            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/pre-tool-use-loop-breaker.sh\"",
             "timeout": 5
           }
@@ -133,22 +128,6 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/pre-compact.sh\"",
             "timeout": 5
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/remember-memory.sh\"",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/stop-goal-check.sh\"",
-            "timeout": 8
           }
         ]
       }

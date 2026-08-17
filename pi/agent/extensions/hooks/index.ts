@@ -2,30 +2,17 @@
 // out to the existing claude/hooks/*.sh (and *.py) scripts via lib.ts's
 // runClaudeHook — the same reuse pattern copilot/hooks uses — so there is one
 // authored copy of each gate's logic and policy (edit no-op guard, boilerplate
-// mandate, secret/credential guardrail, loop breaker, digest generation, context augmentation, the
-// import/type-check/build + lint/test chain, the goal-check policy, session
-// audit) shared across all three tools. Pi must not reimplement its own
-// policy on top of these.
+// mandate, secret/credential guardrail, loop breaker, digest generation,
+// context augmentation, the import/type-check/build + lint/test chain,
+// session audit) shared across all three tools. Pi must not reimplement its
+// own policy on top of these.
 //
 // One spot still needs native code, but only to translate Pi's shapes into
-// what the scripts expect — not to reimplement their logic:
-//
-// - goal-capture/goal-check: Pi's transcript is in-memory session entries,
-//   not a JSONL file. entriesToClaudeTranscript() (lib.ts) serializes them
-//   into Claude's JSONL shape so pre-tool-use-goal-capture.sh and
-//   stop-goal-check.sh can run completely unmodified against a temp file.
-//   Evaluated once per user-facing turn on `agent_end`, not `turn_end`: a
-//   "turn" in Pi is one LLM response and repeats internally while the LLM
-//   keeps calling tools (see the TurnStartEvent/TurnEndEvent vs.
-//   AgentStartEvent/AgentEndEvent split in the extension types), so a single
-//   user prompt can produce many turn_end events before the agent is
-//   actually done. agent_end ("fired when an agent loop ends") fires once —
-//   the closest match to Claude Code's Stop hook timing.
-//
-// Enforcement is advisory-only, matching stop-goal-check.sh's canonical
-// policy (see its header comment: forcing a block costs a whole extra AI
-// turn for two lines of text, and isn't worth it). Pi does not force a
-// follow-up turn or otherwise block on a missing GOAL_CHECK:.
+// what the scripts expect — not to reimplement their logic: the edit no-op
+// guard (Pi's `edit` tool takes `{path, edits: [{oldText, newText}]}`, an
+// array, not Claude's single `{file_path, old_string, new_string}` — verify
+// against `dist/core/tools/edit.d.ts` in the installed
+// `@earendil-works/pi-coding-agent` package before assuming otherwise).
 import { randomUUID } from "node:crypto";
 import { unlinkSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -88,9 +75,8 @@ export default function (pi: ExtensionAPI) {
     }
 
     // Optional per-project persistent memory (see the llm-memory repo):
-    // routes this prompt to a diagram in .ai-memory/ via manifest.json, and
-    // flushes any "remember this" nudge remember-memory.sh stashed at the
-    // previous agent_end. No-op in repos without .ai-memory/manifest.json.
+    // routes this prompt to a diagram in .ai-memory/ via manifest.json.
+    // No-op in repos without .ai-memory/manifest.json.
     const memoryResult = runClaudeHook("inject-memory.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
@@ -246,30 +232,6 @@ export default function (pi: ExtensionAPI) {
         details: event.details,
         isError: true,
       };
-    }
-  });
-
-  // Adapter for the canonical goal-check gate in claude/hooks (see the
-  // module-level comment for why transcript translation is needed and why
-  // this runs on agent_end). Advisory-only — never blocks or forces a
-  // follow-up turn.
-  pi.on("agent_end", async (_event, ctx) => {
-    const transcriptFile = entriesToClaudeTranscript(ctx.sessionManager.getEntries());
-    try {
-      const payload = { session_id: sessionId, cwd: ctx.cwd, transcript_path: transcriptFile };
-      runClaudeHook("pre-tool-use-goal-capture.sh", payload);
-      // Stashes a "remember this" nudge to session state when this turn's
-      // goal routes to a tracked .ai-memory/ diagram; picked up by
-      // inject-memory.sh at the start of the next turn (agent_end can't
-      // inject into the turn that's already ending).
-      runClaudeHook("remember-memory.sh", payload);
-      runClaudeHook("stop-goal-check.sh", payload);
-    } finally {
-      try {
-        unlinkSync(transcriptFile);
-      } catch {
-        // best-effort cleanup
-      }
     }
   });
 

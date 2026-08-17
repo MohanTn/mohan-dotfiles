@@ -102,30 +102,6 @@ cmd_selftest() {
   expect_out "post-tool-use passes a non-code edit through the edit gate" post-tool-use.sh \
     "$(payload_tool $sid edit '{"path":"/tmp/does-not-exist-'"$sid"'/notes.md","old_str":"a","new_str":"b"}')" '. == {}'
 
-  expect_out "agent-stop allows with no transcript" agent-stop.sh \
-    "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", transcriptPath:"/nonexistent", stopReason:"end_turn"}')" \
-    '. == {}'
-
-  # Copilot events.jsonl transcript: GOAL stated, no GOAL_CHECK. Advisory-only
-  # (matches stop-goal-check.sh's canonical policy) — always allows, never
-  # blocks, whether or not GOAL_CHECK ever shows up.
-  local transcript stop_payload
-  transcript=$(mktemp)
-  jq -nc '{type:"user.message", data:{content:"do the thing"}}' > "$transcript"
-  jq -nc '{type:"assistant.message", data:{content:"GOAL: prove the gate works\nworking on it"}}' >> "$transcript"
-  stop_payload=$(jq -n --arg sid "$sid" --arg t "$transcript" \
-    '{sessionId:$sid, cwd:"/tmp", transcriptPath:$t, stopReason:"end_turn"}')
-
-  expect_out "agent-stop allows a GOAL without GOAL_CHECK (advisory only)" agent-stop.sh \
-    "$stop_payload" '. == {}'
-  expect_out "agent-stop still allows on a second look at the same goal" agent-stop.sh \
-    "$stop_payload" '. == {}'
-
-  jq -nc '{type:"assistant.message", data:{content:"GOAL_CHECK: ACHIEVED"}}' >> "$transcript"
-  expect_out "agent-stop allows when GOAL_CHECK is stated" agent-stop.sh \
-    "$stop_payload" '. == {}'
-  rm -f "$transcript"
-
   expect_out "session-start emits the boilerplate-generator hint" session-start.sh \
     "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \
     '.additionalContext | contains("scaffold.js")'
@@ -148,9 +124,8 @@ cmd_selftest() {
     '.additionalContext | contains("auth_service.py") and contains("class AuthService:")'
   rm -rf "$ctx_repo"
 
-  # .ai-memory: user-prompt-submit-memory.sh / agent-stop.sh's remember-memory
-  # call, reusing Claude's inject-memory.sh / remember-memory.sh unmodified
-  # (see the llm-memory repo for the reference .ai-memory/ layout).
+  # .ai-memory: user-prompt-submit-memory.sh, reusing Claude's inject-memory.sh
+  # unmodified (see the llm-memory repo for the reference .ai-memory/ layout).
   local mem_repo mem_sid
   mem_sid="$sid-mem"
   mem_repo=$(mktemp -d)
@@ -166,25 +141,7 @@ cmd_selftest() {
     "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{sessionId:$sid, cwd:$cwd, prompt:"debugging a segfault in prod"}')" \
     '.additionalContext | contains("Check Docker")'
 
-  # goal routes to the tracked diagram + GOAL_CHECK: ACHIEVED -> agent-stop.sh
-  # stashes a nudge that the next userPromptSubmitted flushes.
-  local mem_transcript mem_stop_payload
-  mem_transcript=$(mktemp)
-  jq -nc '{type:"user.message", data:{content:"fix the segfault in the worker"}}' > "$mem_transcript"
-  jq -nc '{type:"assistant.message", data:{content:"GOAL: fix the segfault in the worker"}}' >> "$mem_transcript"
-  jq -nc '{type:"assistant.message", data:{content:"GOAL_CHECK: ACHIEVED"}}' >> "$mem_transcript"
-  mem_stop_payload=$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" --arg t "$mem_transcript" \
-    '{sessionId:$sid, cwd:$cwd, transcriptPath:$t, stopReason:"end_turn"}')
-
-  expect_out "agent-stop allows while stashing a memory nudge" agent-stop.sh \
-    "$mem_stop_payload" '. == {}'
-
-  expect_out "the stashed memory nudge is flushed into the next prompt" \
-    user-prompt-submit-memory.sh \
-    "$(jq -n --arg sid "$mem_sid" --arg cwd "$mem_repo" '{sessionId:$sid, cwd:$cwd, prompt:"anything at all here"}')" \
-    '.additionalContext | contains("ai_memory_reminder")'
-
-  rm -rf "$mem_repo" "$mem_transcript" "${STATE_HOME:?}/$mem_sid"
+  rm -rf "$mem_repo" "${STATE_HOME:?}/$mem_sid"
 
   # user-prompt-submit is notification-only: assert empty output + exit 0 directly
   local ups_out ups_rc
@@ -233,21 +190,6 @@ cmd_selftest() {
     pass_count=$((pass_count + 1))
   fi
   rm -rf "$pc_repo" "${STATE_HOME:?}/$pc_sid"
-
-  # Per-turn reset: goal-capture runs at agentStop and no-ops when goal.txt
-  # already exists, so a goal surviving into the next turn would never be
-  # replaced. Mirrors the same assertion in claude/hooks/test-hook.sh.
-  mkdir -p "$STATE_HOME/$sid"
-  printf 'stale goal' > "$STATE_HOME/$sid/goal.txt"
-  run_hook user-prompt-submit.sh \
-    "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", prompt:"a fresh prompt"}')" >/dev/null 2>&1
-  if [ ! -f "$STATE_HOME/$sid/goal.txt" ]; then
-    echo "PASS: user-prompt-submit clears the previous turn's captured goal"
-    pass_count=$((pass_count + 1))
-  else
-    echo "FAIL: user-prompt-submit left goal.txt in place"
-    fail_count=$((fail_count + 1))
-  fi
 
   rm -rf "${STATE_HOME:?}/$sid"
 
