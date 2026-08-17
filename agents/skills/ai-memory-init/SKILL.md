@@ -78,7 +78,7 @@ These are what make an injected diagram self-sufficient. Follow all seven.
   goes in and what comes out, not just the transformation's name. Prefer
   real values traced from the actual code/logs over invented ones. Format:
   `Node[what it does — in: <example input> -> out: <example output>]`, e.g.
-  `Parse[splits the prompt into words — in: "why was my edit blocked" -> out:
+  `Parse["splits the prompt into words — in: #quot;why was my edit blocked#quot; -> out: the 5 separate words"]`.
   ["why","was","my","edit","blocked"]]`. For a decision/branch node, give one
   example per branch (the input that takes each path, and that path's
   output). Skip this only for a pure pass-through node that changes nothing.
