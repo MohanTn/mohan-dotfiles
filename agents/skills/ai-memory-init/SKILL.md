@@ -58,7 +58,7 @@ Three reasons this is the right unit here:
 
 ## 3. Drawing conventions
 
-These are what make an injected diagram self-sufficient. Follow all five.
+These are what make an injected diagram self-sufficient. Follow all seven.
 
 - **Number the edges in flow order.** `A -->|1. reads stdin| B`. The order is
   the payload; an unlabeled arrow carries almost nothing.
@@ -67,13 +67,31 @@ These are what make an injected diagram self-sufficient. Follow all five.
   hand-written boilerplate by content signature]`.
 - **Say what a node decides, not just its name.** The label carries the
   explanation so the agent does not need a follow-up read.
+- **Use simple English in every label.** Write labels a non-expert teammate
+  could follow: short plain sentences, everyday words, no unexplained jargon
+  or acronyms. If a technical term is unavoidable (a real file, function, or
+  protocol name), keep the term but explain what it does in plain words right
+  next to it, e.g. `Router[ai_memory_match_route — picks ONE diagram file by
+  comparing the prompt text to each route's keyword list]`.
+- **Give an input example and an output example for every stage/block.**
+  Each node's label (or an attached note) states a concrete example of what
+  goes in and what comes out, not just the transformation's name. Prefer
+  real values traced from the actual code/logs over invented ones. Format:
+  `Node[what it does — in: <example input> -> out: <example output>]`, e.g.
+  `Parse["splits the prompt into words — in: #quot;why was my edit blocked#quot; -> out: the 5 separate words"]`.
+  ["why","was","my","edit","blocked"]]`. For a decision/branch node, give one
+  example per branch (the input that takes each path, and that path's
+  output). Skip this only for a pure pass-through node that changes nothing.
 - **Match the diagram type to the shape.** `sequenceDiagram` for a lifecycle
   with participants passing control, `flowchart` for layering and branch
   logic, `stateDiagram-v2` for a failure-mode catalog, `classDiagram` only
   when methods genuinely matter.
 - **Cap at 10-30 nodes.** The matched file is inlined verbatim into every
   matching prompt, so the density lives in labels and edge text, never in
-  node count. Split a bloated flow into two flows instead of growing it.
+  node count. Split a bloated flow into two flows instead of growing it. If
+  the simple-English explanation plus the input/output example makes a
+  label too long for the node shape, move the example into a `note` attached
+  to that node rather than dropping it.
 
 ## 4. Always write the overview
 
@@ -101,7 +119,12 @@ stateDiagram-v2
 
 Each learned entry should become a state named for the **symptom** (what the
 user sees), with the transition label carrying root cause and fix. Symptom
-naming matters: that is the text the router matches against.
+naming matters: that is the text the router matches against. Write the
+symptom and the root-cause/fix in simple English, and where possible phrase
+the fix as an input/output example: the command or input that reproduced the
+bug, and the output after the fix, e.g. `BadRoute --> Fixed: in: prompt
+"why blocked" matched 0 routes -> out: added keyword "why blocked" to
+edit-guard-path route, now matches it`.
 
 ## 6. Write the manifest
 
