@@ -18,9 +18,6 @@
     "preCompact": [
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/pre-compact.sh\"", "timeoutSec": 5 }
     ],
-    "agentStop": [
-      { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/agent-stop.sh\"", "timeoutSec": 10 }
-    ],
     "sessionEnd": [
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/session-end-cleanup.sh\"", "timeoutSec": 150 },
       { "type": "command", "bash": "bash \"$HOME/.copilot/hooks/session-end-audit.sh\"", "timeoutSec": 30 }

@@ -57,11 +57,11 @@ claude_payload() {
 
 # Translates a Copilot events.jsonl transcript ({type:"user.message"|
 # "assistant.message", data:{content}}) into Claude Code's JSONL transcript
-# shape ({type:"user"|"assistant", message:{role, content}}) so the goal-scan
-# logic in pre-tool-use-goal-capture.sh / stop-goal-check.sh can read it
-# unmodified instead of being reimplemented against Copilot's format. Prints
-# the path to a translated temp file (caller must rm it) and returns 1 with
-# no output if the source transcript doesn't exist.
+# shape ({type:"user"|"assistant", message:{role, content}}) so
+# session-audit.py (via session-end-audit.sh / session-end-cleanup.sh) can
+# read it unmodified instead of being reimplemented against Copilot's format.
+# Prints the path to a translated temp file (caller must rm it) and returns 1
+# with no output if the source transcript doesn't exist.
 claude_transcript() {
   local src="$1" out
   [ -n "$src" ] && [ -f "$src" ] || return 1

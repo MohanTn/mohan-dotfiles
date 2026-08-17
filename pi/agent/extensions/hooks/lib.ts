@@ -3,8 +3,8 @@
 // in TypeScript, the same reuse-via-payload-translation pattern copilot/hooks
 // already uses for the Bash-based port. Keeps one authored copy of each
 // gate's logic (edit no-op guard, loop breaker, digest generation, the
-// import/type-check/build chain, the goal-check policy) shared across all
-// three tools — Pi must not reimplement its own policy on top of these.
+// import/type-check/build chain) shared across all three tools — Pi must not
+// reimplement its own policy on top of these.
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -59,11 +59,11 @@ function entryRole(e: MessageEntryLike): string | undefined {
 
 // Serializes Pi's in-memory session entries into a Claude Code-shaped JSONL
 // transcript file ({type:"user"|"assistant", message:{role, content}}) so
-// pre-tool-use-goal-capture.sh and stop-goal-check.sh can read it unmodified,
-// the same role this plays for session-end-audit.sh. Only user/assistant
-// message entries are emitted — tool calls etc. don't affect the goal scan
-// and both scripts only correlate lines by relative order, not exact count.
-// Caller owns the returned path and should unlink it once done.
+// session-audit.py (via session-end-audit.sh) can read it unmodified. Only
+// user/assistant message entries are emitted — tool calls etc. don't affect
+// that script's rendering, which only correlates lines by relative order,
+// not exact count. Caller owns the returned path and should unlink it once
+// done.
 export function entriesToClaudeTranscript(entries: MessageEntryLike[]): string {
   const lines: string[] = [];
   for (const e of entries) {

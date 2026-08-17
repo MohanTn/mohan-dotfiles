@@ -23,9 +23,8 @@ log() { printf '[%(%H:%M:%S)T] %s\n' -1 "$*" >> "${state_dir}/hook.log" 2>/dev/n
 # --- .ai-memory routing ---------------------------------------------------
 # Optional per-project persistent memory (see the llm-memory repo): a repo
 # that grows a .ai-memory/manifest.json gets prompt-time diagram injection
-# and Stop-time "remember this" nudges for free, via inject-memory.sh and
-# remember-memory.sh. Repos without .ai-memory/ are untouched — every caller
-# of ai_memory_match_route treats "no manifest" as a plain no-op.
+# for free, via inject-memory.sh. Repos without .ai-memory/ are untouched —
+# every caller of ai_memory_match_route treats "no manifest" as a plain no-op.
 ai_memory_root() {
   git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null || printf '%s' "${cwd:-.}"
 }
