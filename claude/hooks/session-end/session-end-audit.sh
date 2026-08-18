@@ -19,9 +19,9 @@ out="$audit_dir/${stamp}-${session_id}.md"
 # Prefer the explicit transcript from the payload; the python falls back to the
 # latest session for --cwd if it is missing.
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-  python3 "$HOME/.claude/hooks/session-audit.py" "$transcript" --out "$out" 2>/dev/null
+  python3 "$HOME/.claude/hooks/session-end/session-audit.py" "$transcript" --out "$out" 2>/dev/null
 else
-  python3 "$HOME/.claude/hooks/session-audit.py" --cwd "$cwd" --out "$out" 2>/dev/null
+  python3 "$HOME/.claude/hooks/session-end/session-audit.py" --cwd "$cwd" --out "$out" 2>/dev/null
 fi
 
 if [ -f "$out" ]; then

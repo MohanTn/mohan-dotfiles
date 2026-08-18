@@ -9,7 +9,7 @@ source "$HOME/.copilot/hooks/lib/common.sh"
 prompt=$(printf '%s' "$input" | jq -r '.prompt // ""' 2>/dev/null)
 payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" --arg prompt "$prompt" \
   '{session_id: $sid, cwd: $cwd, prompt: $prompt}')
-context=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/inject-memory.sh" 2>/dev/null)
+context=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/user-prompt-submit/inject-memory.sh" 2>/dev/null)
 
 if [ -n "$context" ]; then
   printf '%s' "$context" | jq -Rs '{additionalContext: .}'

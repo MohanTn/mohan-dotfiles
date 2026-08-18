@@ -162,12 +162,15 @@ nix flake check --impure    # everything CI runs
 
 Eight checks: the full home configuration evaluates; `setup.sh` is shellchecked and its drift audit exercised against a synthetic profile; the Claude, Copilot, and Pi hook suites run; `context-augment.py` and the feature-plan injector run their unit tests; and a parity check asserts the container images ship every hook the configs actually register. The boilerplate generator's suite needs the npm registry, so it runs as a separate CI job rather than inside the offline Nix sandbox.
 
-Individual hooks can be driven by hand:
+Tests live beside the hooks they cover, never inside the deployed tree: `claude/tests/` and `copilot/tests/`. Individual hooks can be driven by hand:
 
 ```bash
-claude/hooks/test-hook.sh list          # every hook, its event, what it does
-claude/hooks/test-hook.sh selftest      # regression checks
-claude/hooks/test-hook.sh run pre-tool-use-edit-guard.sh   # with a sample payload
+claude/tests/test-hook.sh list          # every hook, its event, what it does
+claude/tests/test-hook.sh selftest      # regression checks
+claude/tests/test-hook.sh run pre-tool-use-edit-guard.sh   # with a sample payload
+
+copilot/tests/test-hook.sh selftest     # the Copilot ports, one file per area
+copilot/tests/pre-tool-use.test.sh      # or just one area
 ```
 
 Hook runtime state (logs, loop counters, digests) lives in `~/.local/state/claude-hooks/`, never in this repo.

@@ -8,7 +8,8 @@
 #   try-context-augment.sh "some prompt" /path/to/other/repo
 set -euo pipefail
 
-HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(dirname "$TESTS_DIR")/hooks}"
 SCRIPT="$HOOKS_DIR/context-augment.py"
 
 prompt="${1:-}"

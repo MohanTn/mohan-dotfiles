@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/session-start.sh\" --no-claude-md",
+            "command": "bash \"$HOME/.claude/hooks/session-start/session-start.sh\" --no-claude-md",
             "timeout": 30
           }
         ]
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/user-prompt-submit.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/user-prompt-submit/user-prompt-submit.sh\"",
             "timeout": 5
           }
         ]
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/hooks/context-augment.py\"",
+            "command": "python3 \"$HOME/.claude/hooks/user-prompt-submit/context-augment.py\"",
             "timeout": 10
           }
         ]
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/boilerplate-hint.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/user-prompt-submit/boilerplate-hint.sh\"",
             "timeout": 5
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/inject-memory.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/user-prompt-submit/inject-memory.sh\"",
             "timeout": 5
           }
         ]
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/boilerplate-guard.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-tool-use/boilerplate-guard.sh\"",
             "timeout": 5
           }
         ]
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/pre-tool-use-edit-guard.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-tool-use/pre-tool-use-edit-guard.sh\"",
             "timeout": 5
           }
         ]
@@ -83,12 +83,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/bash-allowlist-guard.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-tool-use/bash-allowlist-guard.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/bash-write-guard.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-tool-use/bash-write-guard.sh\"",
             "timeout": 5
           }
         ]
@@ -98,12 +98,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/secret-guard.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-tool-use/secret-guard.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/pre-tool-use-loop-breaker.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-tool-use/pre-tool-use-loop-breaker.sh\"",
             "timeout": 5
           }
         ]
@@ -115,7 +115,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/post-tool-use-edit.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/post-tool-use/post-tool-use-edit.sh\"",
             "timeout": 10
           }
         ]
@@ -126,7 +126,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/pre-compact.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/pre-compact/pre-compact.sh\"",
             "timeout": 5
           }
         ]
@@ -137,12 +137,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/session-end-cleanup.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/session-end/session-end-cleanup.sh\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/session-end-audit.sh\"",
+            "command": "bash \"$HOME/.claude/hooks/session-end/session-end-audit.sh\"",
             "timeout": 30
           }
         ]

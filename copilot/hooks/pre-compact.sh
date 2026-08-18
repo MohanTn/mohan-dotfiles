@@ -21,7 +21,7 @@ trigger=$(printf '%s' "$input" | jq -r '.trigger // "auto"' 2>/dev/null)
 payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" --arg trigger "$trigger" \
   '{session_id: $sid, cwd: $cwd, hook_event_name: "PreCompact", trigger: $trigger}')
 
-block=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/pre-compact.sh" 2>/dev/null)
+block=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/pre-compact/pre-compact.sh" 2>/dev/null)
 if [ -n "$block" ]; then
   printf '%s' "$block" > "$state_dir/carry_forward" 2>/dev/null
   log "pre-compact: stashed carry-forward for the next prompt"

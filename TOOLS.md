@@ -86,7 +86,7 @@ Aliases of note: `cc` (Claude with the lean system prompt + tool allowlist),
 | `agents/AGENTS.md`, `agents/lean-system-prompt.md` | agents.nix | Tool-agnostic instructions shared by all three agents |
 | `agents/boilerplats` (`scaffold.js`, `mcp-server.js`, hbs templates for 7 languages) | agents.nix + claude.nix | Boilerplate generator, registered as the user-scope `scaffold` MCP server |
 | `agents/skills/` (`chrome-devtools-axi`, `feature-plan`, `frontend-design`, `graphify`, `repo-map-check`, `resolve-ai-notes`, `sketch-design`) | agents.nix | Discovered by Claude (`~/.claude/skills`), Copilot, and Pi (`~/.agents/skills`) |
-| `claude/hooks/` (15 scripts) | claude.nix | Guardrails: secret-guard, boilerplate guards, goal capture, loop breaker, session start/end, context augment |
+| `claude/hooks/` (18 scripts, one folder per hook event: `session-start/`, `user-prompt-submit/`, `pre-tool-use/`, `post-tool-use/`, `pre-compact/`, `session-end/`, plus `tools/` and `lib/`) | claude.nix | Guardrails: secret-guard, boilerplate guards, goal capture, loop breaker, session start/end, context augment |
 | `copilot/hooks/`, `pi/agent/extensions/hooks` | copilot.nix, pi.nix | Ports of the same policy to the other two harnesses |
 
 ## 9. System, ops, misc

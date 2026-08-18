@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Unit tests for session-analytics.py pure logic (parse / aggregate / notes).
-Run: python3 -m unittest claude/test_session_analytics.py  (from repo root)
-or:  python3 claude/test_session_analytics.py
+Run: python3 claude/tests/test_session_analytics.py  (from repo root)
+The script under test lives one level up, in claude/.
 """
 import importlib.util
 import os
@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _spec = importlib.util.spec_from_file_location(
     "session_analytics", os.path.join(_HERE, "session-analytics.py")
 )

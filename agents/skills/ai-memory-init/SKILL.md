@@ -1,42 +1,54 @@
 ---
 name: ai-memory-init
-description: Bootstrap .ai-memory/ (manifest.json + starter Mermaid diagrams, seeded from the actual codebase) for the current repo, so inject-memory.sh has real content to inject from the first prompt instead of an empty shell. Diagrams are flow-shaped ("what happens when X"), not folder-shaped. Use when the user asks to set up, initialize, or bootstrap .ai-memory, the AI/LLM memory system, or "persistent memory" for a repo. Also use when asked to add or generate a .ai-memory diagram for any topic — section 3's drawing conventions define the required detail level for every diagram, new or grown.
+description: Bootstrap .ai-memory/ (manifest.json + ONE Mermaid diagram, seeded from the actual codebase) for the current repo, so inject-memory.sh has real content to inject from the first prompt instead of an empty shell. There is exactly one diagram per repo, organised into flow-shaped sections ("what happens when X"), not folder-shaped ones, and every later update expands that same file. Use when the user asks to set up, initialize, or bootstrap .ai-memory, the AI/LLM memory system, or "persistent memory" for a repo. Also use when asked to add to or grow the .ai-memory diagram for any topic — section 3's drawing conventions define the required detail level for every section, new or grown.
 ---
 
 # AI Memory Init
 
 Bootstraps `.ai-memory/` for the repo in the current working directory: a
-`manifest.json` routing table plus a small set of Mermaid diagrams. The
-delivery mechanism (`inject-memory.sh` on every prompt, `remember-memory.sh`
-growing the diagrams over time) is already installed globally via
+`manifest.json` plus **exactly one** Mermaid diagram,
+`.ai-memory/diagrams/system.mmd`. The delivery mechanism
+(`inject-memory.sh` on every prompt) is already installed globally via
 mohan-dotfiles and needs no per-repo setup — this skill only needs to produce
 good starting content. See the `llm-memory` repo's `README.md` for the full
 mechanism if you need it.
 
-## The unit is a flow, not a folder
+## One diagram per repo
 
-A diagram answers **"what happens when X"**, not "what lives in directory Y".
-`request-lifecycle.mmd` beats `api.mmd`; `edit-guard-path.mmd` beats `hooks.mmd`.
+`.ai-memory/diagrams/system.mmd` is the whole memory. Never create a second
+`.mmd`. Everything learned later is added **into** this file: a new node, a new
+branch, a new failure-mode line.
 
-Three reasons this is the right unit here:
+Why one file:
 
-- **Routing.** The matcher substring-matches the user's prompt text. People
-  type "why did the edit get blocked", not "hooks". Verb-phrase keywords hit.
-- **Growth.** `remember-memory.sh` nudges an append to the matched diagram.
-  A flow has obvious insertion points (a new step, a new failure branch); an
-  area bucket drifts into a junk drawer.
-- **Sufficiency.** A flow with ordered steps tells the agent where new code
-  goes. An inventory of names does not.
+- **No routing to get wrong.** With a `"diagram"` key in the manifest,
+  `inject-memory.sh` injects this file on *every* prompt. Nothing is starved by
+  a keyword that failed to match or by a higher-priority route.
+- **Growth has one address.** Any new fact has exactly one place to go, so the
+  memory cannot fragment into diagrams that disagree with each other.
+- **It is injected every turn.** That is the cost, and it is what keeps the
+  file honest: a wrong or bloated label is paid for on every prompt, so
+  correctness and compression both matter more than coverage.
+
+## The section unit is a flow, not a folder
+
+Inside the one diagram, each `subgraph` answers **"what happens when X"**, not
+"what lives in directory Y". A "request lifecycle" section beats an "api"
+section; an "edit guard path" section beats a "hooks" section. A flow with
+ordered steps tells the agent where new code goes; an inventory of names does
+not.
 
 ## 1. Guard against clobbering
 
 - Repo root = `git rev-parse --show-toplevel` (fallback: cwd).
 - If `.ai-memory/manifest.json` already exists, stop and ask the user whether
-  to add missing flows only or leave it alone. Never silently overwrite an
-  existing diagram — it may already hold learned history that
-  `remember-memory.sh` appended over past sessions.
+  to add missing sections only or leave it alone. Never overwrite the existing
+  diagram wholesale — it holds learned history appended over past sessions.
+- If the repo still has the old multi-file layout (several `.mmd` files, a
+  `routes` array), offer to merge them into one `system.mmd` and switch the
+  manifest to `{"diagram": "diagrams/system.mmd"}`.
 
-## 2. Survey the repo, then name the flows
+## 2. Survey the repo, then name the sections
 
 - Read `.claude/repo-map.md` if present (see the `repo-map-check` skill)
   instead of re-deriving structure from scratch.
@@ -44,7 +56,7 @@ Three reasons this is the right unit here:
   command dispatch, hook or event registrations, job/queue consumers,
   build entry config. Each entry point is the head of one candidate flow.
 - Trace 3-6 flows end to end, favouring the ones a person would actually ask
-  about. Typical shapes:
+  about. Each becomes one `subgraph` section of `system.mmd`. Typical shapes:
   - **an inbound request** — arrives, is authenticated/validated, hits a
     handler, touches storage, returns
   - **a write path** — the sequence that mutates state, plus what guards it
@@ -54,14 +66,13 @@ Three reasons this is the right unit here:
   - **the test path** — how a test finds and exercises the system
 - Trace it in the actual code with Read/Grep. Never invent a step. If a
   candidate flow turns out to be two lines of glue, drop it rather than pad
-  it into a diagram.
+  it into a section.
 
 ## 3. Drawing conventions
 
-These are what make an injected diagram self-sufficient. The bar: a teammate
-could re-implement the flow from the diagram alone, without opening the code.
-Follow all of them, for starter diagrams and for any diagram generated later
-on request.
+These are what make the injected diagram self-sufficient. The bar: a teammate
+could re-implement any flow from the diagram alone, without opening the code.
+Follow all of them, for the starter file and for every later expansion of it.
 
 - **Number the edges in flow order.** `A -->|1. reads stdin| B`. The order is
   the payload; an unlabeled arrow carries almost nothing.
@@ -142,100 +153,79 @@ on request.
   time, so grown diagrams stay uniform.
 - **Split long sequences into numbered phases.** A `Note over` divider per
   phase: `1. Initial request`, `2. Context loop`, `3. Verify & repair`.
-- **Match the diagram type to the shape.** `sequenceDiagram` for a lifecycle
-  with participants passing control, `flowchart` for layering and branch
-  logic, `stateDiagram-v2` for a failure-mode catalog, `classDiagram` only
-  when methods genuinely matter.
-- **Cap size, not density.** Flowcharts: 10-30 nodes. Sequences: at most 12
-  participants and about 40 messages. The matched file is inlined verbatim
-  into every matching prompt, so the density lives in labels, edge text, and
-  notes, never in element count. Split a bloated flow into two flows instead
-  of growing it. If the simple-English explanation plus the input/output
-  example makes a label too long for the node shape, move the example into a
-  `note` attached to that node rather than dropping it.
+- **`flowchart` is the type.** One file means one diagram type, and only
+  `flowchart` expresses every shape: a lifecycle becomes a numbered chain, a
+  failure-mode catalog becomes a subgraph of symptom nodes. Do not reach for
+  `sequenceDiagram` or `stateDiagram-v2` — they cannot coexist here.
+- **One `subgraph` per flow, numbered in the title.** `subgraph P3["3. Tool
+  call gauntlet — ..."]`. Cross-section edges are how the flows connect; draw
+  them rather than repeating a node in two sections.
+- **Cap the file, not the sections.** Aim for roughly 150 lines / 50 nodes for
+  the whole file. It is inlined verbatim into *every* prompt, so the density
+  lives in labels, edge text, and notes. When it gets too big, compress
+  labels and delete what turned out not to matter — never split it into a
+  second file.
 
 Target density, all conventions in one snippet:
 
 ```mermaid
-sequenceDiagram
-  participant U as User
-  participant G as Gate (softmax, T=0.7)
-  participant W as Writer (cloud LLM, no tools)
-  Note over U,W: 1. Score — the scenario "add rate limiting" threads the whole diagram
-  U->>G: 1. POST /generate {prompt: "add rate limiting", git_hash: "abc1234"}
-  G->>G: 2. score 100 candidate files, keep MaxProb
-  alt MaxProb > 0.85 — fast path
-    G->>W: 3. top-5 files packed under 4k tokens
-  else entropy too high — fallback, +1.5s
-    G->>G: 3. grep -r "app.use" && cat package.json, rescore
+flowchart TD
+  subgraph P1["1. Score — the scenario 'add rate limiting' threads the whole diagram"]
+    U["POST /generate {prompt: 'add rate limiting', git_hash: 'abc1234'}"]
+    G["Gate — softmax over 100 candidate files, T=0.7, keeps MaxProb — in: 100 paths -> out: MaxProb 0.91"]
+    U --> G
   end
-  Note over U,W: 2. Write & verify
-  W-->>U: 4. streamed diff — in: 5 files -> out: diff that passes tsc --noEmit
+  G -->|"1a. MaxProb > 0.85, fast path"| W["Writer, cloud LLM, no tools — in: top-5 files under 4k tokens -> out: streamed diff that passes tsc --noEmit"]
+  G -->|"1b. entropy too high, fallback, +1.5s"| RS["rescore after grep -r 'app.use' — out: new top-5, then into Writer"]
+  RS --> W
 ```
 
-## 4. Always write the overview
+## 4. Open with the orientation section
 
-`.ai-memory/diagrams/overview/system.mmd` — the one-screen god map: the major
-layers or subsystems, the direction data moves between them, and where each
-detailed flow plugs in. Keep it under 20 nodes.
+Section 1 of `system.mmd` is the one-screen god map: the major layers or
+subsystems, the direction data moves between them, and where each later
+section plugs in. Keep it under 10 nodes — the detail lives in the sections
+below it, and every reader passes through this one first.
 
-`inject-memory.sh` injects exactly one file per prompt (highest priority
-match wins), so the overview must earn its own route rather than ride along
-with a deep dive. Give it broad orientation keywords ("architecture",
-"overview", "how does this work", "structure", plus the repo's own name) and
-`priority: 10`.
+## 5. Always end with the failure-mode section
 
-## 5. Always seed the debug playbook
-
-`.ai-memory/diagrams/debug/playbook.mmd` is always created, as a failure-mode
-state machine rather than a flowchart, so learned symptoms append as states:
+The last `subgraph` is the debug playbook. Each entry is one node named for
+the **symptom** (what the user sees), with root cause and fix in the same
+label:
 
 ```mermaid
-stateDiagram-v2
-  [*] --> NoHistory
-  NoHistory: No failure modes recorded yet
-  NoHistory --> [*]: This file grows organically — when a turn fixes a bug and states GOAL_CHECK ACHIEVED, remember-memory.sh nudges the agent to add the symptom, the root cause, and the fix as a state here next turn
+flowchart TD
+  subgraph P7["7. Failure modes — named by SYMPTOM, because the symptom is what you will type"]
+    F1["no failure modes recorded yet — this section grows: when a turn fixes a bug, add the symptom, the root cause and the fix as a node here"]
+  end
 ```
 
-Each learned entry should become a state named for the **symptom** (what the
-user sees), with the transition label carrying root cause and fix. Symptom
-naming matters: that is the text the router matches against. Write the
-symptom and the root-cause/fix in simple English, and where possible phrase
-the fix as an input/output example: the command or input that reproduced the
-bug, and the output after the fix, e.g. `BadRoute --> Fixed: in: prompt
-"why blocked" matched 0 routes -> out: added keyword "why blocked" to
-edit-guard-path route, now matches it`.
+Write symptom, root cause and fix in simple English, and where possible phrase
+the fix as an input/output example: the command that reproduced the bug, and
+the output after the fix.
 
 ## 6. Write the manifest
 
-`.ai-memory/manifest.json`, one route per diagram actually generated:
+`.ai-memory/manifest.json` names the one diagram — that is the whole file:
 
 ```json
 {
-  "routes": [
-    { "keywords": ["...", "..."], "file": "diagrams/<flow>/<name>.mmd", "priority": 8 }
-  ]
+  "diagram": "diagrams/system.mmd"
 }
 ```
 
-- `keywords`: 4-8 entries per route. Include the **verb phrases** someone
-  would type ("prompt gets injected", "why was my edit blocked") alongside the
-  real symbols, file names, and identifiers found in step 2. Matching is
-  case-insensitive substring, so prefer distinctive multi-word phrases over
-  single common words that will over-match.
-- Check for collisions across routes before writing. A keyword that appears
-  in two routes hands the prompt to whichever has the higher priority, which
-  silently starves the other one.
-- `priority`: overview 10, debug playbook 9, remaining flows 5-8 by how
-  central they are to this specific repo.
+`ai_memory_match_route` (in `claude/hooks/lib/common.sh`) returns that path for
+every prompt, with no keyword matching. The older `{"routes": [...]}` schema
+with keywords and priorities is still honoured for repos that have not
+migrated, but do not write a new one.
 
 ## 7. Housekeeping
 
 - Create `.ai-memory/updates/.gitkeep` (reserved for future incremental logs,
   matches the layout in the `llm-memory` repo).
-- Report a short summary: which flows were created and why, which candidates
-  were dropped and why, and remind the user these diagrams are living
-  documents — `remember-memory.sh` grows them, and manual edits are always
+- Report a short summary: which sections were created and why, which
+  candidates were dropped and why, and remind the user the diagram is a living
+  document — later sessions expand this same file, and manual edits are always
   welcome.
 
 ## Non-goals

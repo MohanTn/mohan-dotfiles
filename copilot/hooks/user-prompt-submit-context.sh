@@ -12,7 +12,7 @@ source "$HOME/.copilot/hooks/lib/common.sh"
 prompt=$(printf '%s' "$input" | jq -r '.prompt // ""' 2>/dev/null)
 payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" --arg prompt "$prompt" \
   '{session_id: $sid, cwd: $cwd, prompt: $prompt}')
-context=$(printf '%s' "$payload" | python3 "$CLAUDE_HOOKS_HOME/context-augment.py" 2>/dev/null)
+context=$(printf '%s' "$payload" | python3 "$CLAUDE_HOOKS_HOME/user-prompt-submit/context-augment.py" 2>/dev/null)
 
 # Flush any carry-forward block stashed by pre-compact.sh. Copilot ignores the
 # preCompact hook's own output, so this is the first point after a compaction

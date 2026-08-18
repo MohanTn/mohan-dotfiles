@@ -24,7 +24,7 @@ proj_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 [ -z "$proj_cwd" ] && proj_cwd="$PWD"
 
 claude_md="$proj_cwd/CLAUDE.md"
-map_path=$(bash "$HOOKS_HOME/repo-map.sh" "$proj_cwd" 2>/dev/null)
+map_path=$(bash "$HOOKS_HOME/session-start/repo-map.sh" "$proj_cwd" 2>/dev/null)
 
 echo "## Project digest for: $proj_cwd"
 

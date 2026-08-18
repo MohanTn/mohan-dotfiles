@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Unit tests for context-augment.py. Run: python3 test_context_augment.py"""
+"""Unit tests for context-augment.py, which lives one level up in
+../hooks/user-prompt-submit (hooks are grouped by the event that fires them).
+Run: python3 claude/tests/test_context_augment.py  (from repo root)
+"""
 import importlib.util
 import json
 import os
@@ -9,12 +12,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+_HOOKS = Path(__file__).resolve().parent.parent / "hooks" / "user-prompt-submit"
 _spec = importlib.util.spec_from_file_location(
-    "context_augment", Path(__file__).with_name("context-augment.py"))
+    "context_augment", _HOOKS / "context-augment.py")
 ca = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ca)
 
-SCRIPT = str(Path(__file__).with_name("context-augment.py"))
+SCRIPT = str(_HOOKS / "context-augment.py")
 
 # shared temp fixtures for render_file tier tests
 _TMP = tempfile.TemporaryDirectory()
