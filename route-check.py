@@ -1,10 +1,13 @@
 import json
-import sys
 
 manifest = json.load(open(".ai-memory/manifest.json"))
 
 
 def match(text):
+    """Mirror of ai_memory_match_route: a 'diagram' key wins for every prompt,
+    otherwise fall back to the legacy keyword routes."""
+    if manifest.get("diagram"):
+        return manifest["diagram"]
     t = text.lower()
     routes = [r for r in manifest.get("routes", [])
               if any(kw.lower() in t for kw in r["keywords"])]
@@ -12,6 +15,6 @@ def match(text):
     return routes[0]["file"] if routes else ""
 
 
-assert match("please format this markdown file") == "", "expected no match"
-assert match("why is nix flake check failing") == "diagrams/debug/playbook.mmd"
-print("route logic OK (empty on no match, priority pick on match)")
+assert match("please format this markdown file") == "diagrams/system.mmd"
+assert match("why is nix flake check failing") == "diagrams/system.mmd"
+print("route logic OK (one diagram per repo, injected on every prompt)")

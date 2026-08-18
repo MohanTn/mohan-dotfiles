@@ -16,10 +16,10 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   claude_transcript_file=$(claude_transcript "$transcript")
   if [ -n "$claude_transcript_file" ]; then
     trap 'rm -f "$claude_transcript_file"' EXIT
-    python3 "$CLAUDE_HOOKS_HOME/session-audit.py" "$claude_transcript_file" --out "$out" 2>/dev/null
+    python3 "$CLAUDE_HOOKS_HOME/session-end/session-audit.py" "$claude_transcript_file" --out "$out" 2>/dev/null
   fi
 else
-  python3 "$CLAUDE_HOOKS_HOME/session-audit.py" --cwd "$cwd" --out "$out" 2>/dev/null
+  python3 "$CLAUDE_HOOKS_HOME/session-end/session-audit.py" --cwd "$cwd" --out "$out" 2>/dev/null
 fi
 
 if [ -f "$out" ]; then

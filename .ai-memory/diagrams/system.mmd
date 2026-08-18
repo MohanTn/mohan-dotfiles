@@ -1,0 +1,122 @@
+flowchart TD
+%% THE repo diagram. There is exactly ONE .mmd file in .ai-memory/ and this is it.
+%% Every new thing learned about this repo is added INTO this file — a new node, a
+%% new branch, a new failure mode — never as a second diagram.
+%% inject-memory.sh inlines this file verbatim into EVERY prompt, so keep it true:
+%% a wrong label here is paid for on every turn.
+
+  subgraph P1["1. Source of truth — this repo is the ONLY place you edit"]
+    Nix["nix/*.nix — one module per tool — in: edit nix/zsh.nix -> out: a new generated ~/.zshrc"]
+    Agents["agents/ — AGENTS.md, skills/, boilerplats/, style/ — one shared payload for all three harnesses"]
+    Hooks["claude/hooks, copilot/hooks, pi/agent/extensions — the scripts that gate prompts and tool calls. claude/hooks is split one folder per hook event (session-start/, user-prompt-submit/, pre-tool-use/, post-tool-use/, pre-compact/, session-end/), plus lib/common.sh and tools/ for scripts no event fires — so every caller spells the subfolder: $HOME/.claude/hooks/pre-tool-use/secret-guard.sh"]
+    Mem[".ai-memory/ — manifest.json plus THIS single diagram"]
+  end
+
+  P1 -->|"1. git add the file first — nix flakes only see git-tracked files, staging is enough"| Setup
+  Setup["2. ./setup.sh — bootstrap window sources the nix daemon profile when nix is not on PATH yet, and forces extra-experimental-features 'nix-command flakes' for this process tree only"]
+  Setup -->|"3. flake.nix, versions pinned in flake.lock"| HM["home-manager switch --impure — reads nix/home.nix, which pulls in the module list: harnesses claude/copilot/pi/agents/little-coder, terminal zsh/alacritty/ptyxis/tmux/nvim, system packages/nix-conf/maintenance"]
+  HM -->|"4. relinks $HOME to READ-ONLY nix store paths — anything you hand-edited there is reverted and kept beside it as NAME.hm-backup"| Home["$HOME — ~/.claude, ~/.agents, ~/.config"]
+  HM -->|"5. drift audit runs at the end of every apply"| Doctor["./setup.sh doctor — audit only, changes nothing, exits 1 on drift. ./setup.sh upgrade bumps flake.lock inputs then applies"]
+  HM -.->|"EXCEPTION: nvim.nix links ~/.config/nvim straight at this checkout, so nvim edits are live with no apply. Expected checkout path: ~/REPO/mohan-dotfiles"| Live["live-linked, not copied"]
+
+  Home --> Claude["Claude Code — claude/settings.json"]
+  Home --> Copilot["Copilot CLI — copilot/mohan-hooks.json, its memory hook shells out to Claude's inject-memory.sh unmodified"]
+  Home --> Pi["pi — pi/agent/extensions/hooks/index.ts"]
+
+  subgraph P2["2. Prompt lifecycle — what fires around every message you send"]
+    SS["SessionStart, once per session: session-start.sh --no-claude-md runs repo-map.sh, which regenerates .claude/repo-map.md from scratch every session by design — in: tracked files -> out: folder/file/symbol index with line numbers, so the agent skips an fd+rg orientation pass"]
+    U1["UserPromptSubmit 1: user-prompt-submit.sh — clears per-turn state, injects the MCP reader hint"]
+    U2["UserPromptSubmit 2: context-augment.py — in: 'why is nix flake check failing' -> out: keywords plus abstracted excerpts of the files those keywords hit"]
+    U3["UserPromptSubmit 3: boilerplate-hint.sh — fires ONLY when the prompt looks boilerplate-shaped, e.g. 'add a repository for orders' -> out: use the scaffold generator"]
+    U4["UserPromptSubmit 4: inject-memory.sh — in: .ai-memory/manifest.json -> out: this whole file wrapped in a relevant_system_map block"]
+    SS --> U1 --> U2 --> U3 --> U4
+  end
+
+  Claude -->|"6. in claude/settings.json order"| P2
+  Mem -->|"7. read by"| U4
+  U4 -->|"8. turn runs; every tool call goes through section 3"| P3
+
+  Router["ai_memory_match_route in claude/hooks/lib/common.sh — if manifest.json has a top-level 'diagram' key it returns that ONE file for EVERY prompt, no keyword matching at all. The older 'routes' + keywords schema still works for other repos: case-insensitive substring, highest priority wins, exactly one file"]
+  U4 -.-> Router
+  Note1["CORRECTION: earlier versions of this map described a Stop hook pair, remember-memory.sh and stop-goal-check.sh, that grew the diagrams automatically and stashed a nudge for the next turn. Neither script exists any more and claude/settings.json has NO Stop hook. Growing this file is now a deliberate act by the agent or by you"]
+  U4 -.-> Note1
+
+  subgraph P3["3. Tool-call gauntlet — PreToolUse, matcher * runs first for EVERY tool"]
+    Secret["secret-guard.sh — gates WHAT is read or leaked, e.g. a credential file"]
+    Loop["pre-tool-use-loop-breaker.sh — trips on CONSECUTIVE identical calls, NOT on a cumulative count"]
+    Which{"then, which tool is it"}
+    Secret --> Loop --> Which
+  end
+
+  Which -->|"Edit or Write"| BP["boilerplate-guard.sh — rename-proof: matches the filename AND the file content signature against the boilerplats kinds — in: hand-written OrderRepository.cs -> out: blocked"]
+  BP -->|"9a. boilerplate-shaped"| Blocked["BLOCKED — generate it instead, see section 4"]
+  BP -->|"9b. clean"| NoOp["pre-tool-use-edit-guard.sh — rejects an edit that changes nothing"]
+  NoOp -->|"10. edit lands"| Post["PostToolUse post-tool-use-edit.sh — sets the dirty flag and checks the symbol exists. Deliberately does NOT compile the whole project"]
+
+  Which -->|"Bash"| Allow["bash-allowlist-guard.sh — allowlist-only, and it checks EVERY command position: pipeline stages, chained segments, command substitutions, subshells. Shell keywords count too — in: 'for f in *.mmd; do cat $f; done' -> out: blocked, 'for' is not on the list"]
+  Allow -->|"11a. unlisted binary or shell keyword"| BlockedSh["BLOCKED, exit 2 with exactly TWO stderr lines the agent reads, bash-allowlist-guard.sh:97-102 — in: 'for f in *.mmd; do cat $f; done' -> out: line 1 'Blocked: for is not on the Bash allowlist', line 2 'Use one of the allowed commands:' plus the full sorted list (machine-wide plus project, merged). DELIBERATELY does NOT suggest extending the allowlist: widening the shell policy is the user's call, made by hand in claude/bash-allowlist"]
+  Allow -->|"11b. allowed"| WriteG["bash-write-guard.sh — closes the write-around: heredoc redirects, tee, sed -i"]
+  WriteG -->|"12a. writes a boilerplate file through the shell"| Blocked
+  WriteG -->|"12b. clean"| Run["command runs"]
+
+  subgraph P4["4. Scaffold a file — the only sanctioned way to create boilerplate"]
+    E1["scaffold_* MCP tools — agents/boilerplats/mcp-server.js, PREFERRED"]
+    E2["node ~/.agents/boilerplats/scaffold.js ... --json — fallback"]
+    Parse["scaffold.js parseArgs + loadData, then lib/core.js validateData checks kind, language, required fields"]
+    Meta["lib/template-meta.js markerFor/listLanguages/listTemplates picks boilerplats/LANG/*.hbs — csharp, go, javascript, typescript, python, and sh which only has function, helper, member, script, validator"]
+    Mode{"what does --out point at"}
+    Create["scaffoldCreate — new file, written WITH a scaffold:inject marker"]
+    Inject["scaffoldInject — existing marked file, new member inserted ABOVE the marker"]
+    Adopt["scaffoldAdopt — existing UNMARKED legacy file, adopted automatically; lib/anchor.js resolveAnchor picks the spot, braceAnchor for C-like, pythonAnchor, shAnchor"]
+    Out["every mode returns numberedLines + scanFillable: the full numbered content and the fillable line numbers — so NEVER re-read a file you just scaffolded"]
+    E1 --> Parse
+    E2 --> Parse
+    Parse --> Meta --> Mode
+    Mode -->|"13a"| Create --> Out
+    Mode -->|"13b"| Inject --> Out
+    Mode -->|"13c"| Adopt --> Inject
+    Out -->|"14. fill business logic ABOVE the marker, never delete the marker"| DoneS["ordinary Edit calls, then run the tests"]
+  end
+
+  Blocked -.->|"the guard points here"| E1
+  U3 -.->|"suggests this before you start"| E1
+
+  subgraph P5["5. Interactive zsh startup — the whole rc body is GENERATED by nix/zsh.nix initExtra, never hand-edit ~/.zshrc"]
+    Z1["history hooks: __hist_pending_cmd plus precmd _hist_drop_failed — a command that exits non-zero is written and then dropped back out of HISTFILE"]
+    Z2["zinit sourced from the nix store, no runtime self-clone. Plugins it installs still land in the writable ~/.local/share/zinit, because those are not part of the declarative config"]
+    Z3["oh-my-posh init zsh against the VENDORED theme zsh/oh-my-posh-catppuccin-mocha.omp.json — vendored, not read from the store, so it can carry a right-aligned execution-time segment and a transient prompt"]
+    Z4["export COLUMNS — zsh keeps it current but does NOT export it, and the theme's max_width template is evaluated by oh-my-posh, a CHILD process that cannot see an unexported variable"]
+    Z5["TRAPWINCH re-renders via _omp_get_prompt + zle reset-prompt, because oh-my-posh bakes PS1 into a literal string in precmd, so a resize leaves the prompt and its dotted filler stale until the next command"]
+    Z6["zinit ice blockf then a compinit re-run — blockf stops the plugin fpath being added twice, and home-manager already ran compinit before this block"]
+    Z7["repo function files: zsh/chrome-devtools-axi.zsh, agent-containers.zsh, little-coder.zsh, homebrew.zsh, table-view.zsh, fkill.zsh"]
+    Z8["LAST, ~/.zshrc.local when it exists — first adoption folds any pre-nix ~/.zshrc content in here so it keeps being sourced instead of only being backed up"]
+    Z1 --> Z2 --> Z3 --> Z4 --> Z5 --> Z6 --> Z7 --> Z8
+  end
+
+  Home --> P5
+  Z3 -.->|"catppuccin mocha lives in THREE files — this theme, @catppuccin_flavor in nix/tmux.nix, and the nvim colorscheme. Changing the flavor means changing all three"| Theme["shared flavor"]
+
+  subgraph P6["6. Tests — there is NO repo-wide test command, each harness owns its runner. Tests live in a tests/ folder BESIDE the code, never inside a deployed hooks tree, so ~/.claude/hooks and ~/.copilot/hooks carry only hooks"]
+    T1["claude/hooks/EVENT-FOLDER/*.sh -> claude/tests/test-hook.sh selftest (a bare hook name still works, it is resolved one level deep) — table-driven, feeds each hook a fake stdin payload, asserts with expect_exit / expect_contains / expect_empty. Drives ../hooks, override with CLAUDE_HOOKS_DIR"]
+    T2["context-augment.py -> python3 claude/tests/test_context_augment.py"]
+    T3["claude/session-analytics.py -> python3 claude/tests/test_session_analytics.py; claude/session-web.py -> python3 claude/tests/test_session_web.py"]
+    T4["copilot/hooks/*.sh -> copilot/tests/test-hook.sh selftest, which runs every copilot/tests/*.test.sh (one per area: pre-tool-use, post-tool-use, session, prompt-context, memory, pre-compact) and sums their tallies. Each file is runnable alone and sources tests/lib.sh for run_hook / expect_out / expect_silent / payload_tool / summary"]
+    T5["agents/boilerplats -> npm test there — node --test over core.test.js, scaffold.test.js, mcp-server.test.js"]
+    T6["pi/agent/extensions -> hooks/test.ts and sandbox/test.ts — pi's own test.ts convention"]
+    T7["any .nix file, or ANY new file -> nix flake check, after git add"]
+  end
+
+  Run -.->|"15. after a change, run only the runner that owns what you touched"| P6
+
+  subgraph P7["7. Failure modes — named by SYMPTOM, because the symptom is what you will type"]
+    F1["setup.sh or nix flake check fails right after adding or renaming a file — CAUSE: nix flakes only see git-tracked files, so an untracked file does not exist inside the sandboxed build. FIX: git status --short, then git add it. Do NOT reach for nix log, --rebuild or --keep-failed until this is ruled out"]
+    F2["'Blocked: X is not on the Bash allowlist' — CAUSE: bash-allowlist-guard.sh is allowlist-only and inspects every command position, so shell keywords like for and while are refused too. FIX: rebuild the command from the 'Use one of the allowed commands:' list in the block message, or reach for the Read/Edit/Write/search tools. Do NOT add the binary to claude/bash-allowlist yourself, ask the user"]
+    F3["PreToolUse refused an Edit or Write — CAUSE: boilerplate-guard.sh matched a content signature, and renaming the file does not exempt it; or pre-tool-use-edit-guard.sh saw an edit that changes nothing. FIX: generate it with scaffold_*, then fill logic above the scaffold:inject marker"]
+    F4["an edit under $HOME vanished, or came back as NAME.hm-backup — CAUSE: managed files are read-only nix store symlinks and every apply forcibly relinks them. FIX: make the change in this repo, run ./setup.sh, confirm with ./setup.sh doctor"]
+    F5["escape-sequence garbage in the terminal under WSL — CAUSE: extended-keys mode corrupts output on WSL, fixed in commit fe6ae64. FIX: detect WSL and skip extended-keys, rather than changing the terminal"]
+    F6["a nerd font icon renders off-center or overlapping in Alacritty or VTE — CAUSE: PUA glyphs carry Unicode Ambiguous width, so the cell advance is wrong. FIX: A/B the same slot with a plain ASCII character to prove it is width and not the font, then adjust the width setting"]
+    F7["the injected system map is stale or wrong — CAUSE: this file is only as true as the last person who edited it, and it is injected on EVERY prompt. FIX: fix the wrong label here and leave a CORRECTION note beside it saying what was wrong, so the misconception is not relearned"]
+  end
+
+  Grow["HOW TO GROW THIS FILE: learned something? add it INTO the section it belongs to — a node in 1-6, a symptom line in 7. Do NOT create a second .mmd. If a section gets unreadable, compress its labels before you consider splitting"]
+  P7 -.-> Grow

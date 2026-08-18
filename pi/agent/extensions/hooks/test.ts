@@ -3,7 +3,7 @@
  *
  * Tests the pure/logic functions in lib.ts and verifies the extension module
  * shape. The shell-out gates (runClaudeHook) are integration-tested in the
- * existing claude/hooks/test-hook.sh selftest; this file only covers what is
+ * existing claude/tests/test-hook.sh selftest; this file only covers what is
  * unique to or reimplemented in the TypeScript port.
  *
  * Run:

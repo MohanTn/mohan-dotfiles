@@ -29,18 +29,24 @@ ai_memory_root() {
   git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null || printf '%s' "${cwd:-.}"
 }
 
-# Highest-priority manifest route whose keywords appear (case-insensitive,
-# substring) in $1. Empty stdout, non-zero return if there is no
-# .ai-memory/manifest.json or nothing matches.
+# The manifest's diagram for prompt $1. Two schemas, checked in this order:
+#   {"diagram": "..."}  — one diagram for the whole repo, returned for EVERY
+#                         prompt, no keyword matching. The current shape.
+#   {"routes": [...]}   — legacy: highest-priority route whose keywords appear
+#                         (case-insensitive, substring) in $1.
+# Empty stdout, non-zero return if there is no .ai-memory/manifest.json or
+# nothing matches.
 ai_memory_match_route() {
   local text="$1" manifest match
   manifest="$(ai_memory_root)/.ai-memory/manifest.json"
   [ -f "$manifest" ] || return 1
   match=$(jq -r --arg text "$text" '
+    if (.diagram // "") != "" then .diagram else
     ($text | ascii_downcase) as $t
     | (.routes // [])
     | map(select(.keywords as $k | $k | any(. as $kw | $t | contains($kw | ascii_downcase))))
     | sort_by(.priority // 0) | reverse | .[0].file // empty
+    end
   ' "$manifest" 2>/dev/null)
   [ -n "$match" ] || return 1
   printf '%s\n' "$match"

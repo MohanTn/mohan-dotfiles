@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # UserPromptSubmit — optional per-project memory (.ai-memory/, see the
-# llm-memory repo for the reference layout). Routes this prompt to the
-# best-matching diagram via .ai-memory/manifest.json and injects it as
+# llm-memory repo for the reference layout). Injects the repo's diagram as
 # context, wrapped in a ```mermaid block — Claude reads Mermaid natively.
+# Which diagram comes from .ai-memory/manifest.json: a "diagram" key means one
+# diagram for the whole repo, injected on every prompt; the legacy "routes"
+# schema picks the best keyword match instead. See ai_memory_match_route.
 #
 # Silently a no-op (no output, exit 0) in any repo without
 # .ai-memory/manifest.json. Always fail-open.

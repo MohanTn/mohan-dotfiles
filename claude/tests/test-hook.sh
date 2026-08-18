@@ -3,6 +3,9 @@
 # a JSON payload piped on stdin, nothing else. Reports exit code, stdout, and
 # stderr so a hook's behavior can be checked without needing a live session.
 #
+# Lives in claude/tests/, not claude/hooks/, so the deployed ~/.claude/hooks
+# tree carries only hooks. It drives ../hooks (CLAUDE_HOOKS_DIR overrides).
+#
 # Usage:
 #   test-hook.sh list                         list hooks with their event + default payload
 #   test-hook.sh run <hook.sh> [payload.json]  run a hook (default payload if omitted)
@@ -14,7 +17,31 @@
 # error shown only to the user.
 set -uo pipefail
 
-HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The hooks live beside this folder, not in it — that separation is the point.
+# CLAUDE_HOOKS_DIR overrides it (the flake check runs against $HOME copies).
+HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(dirname "$TESTS_DIR")/hooks}"
+
+# Hooks are grouped into per-event subfolders (hooks/pre-tool-use/secret-guard.sh),
+# so a bare basename is resolved one level deep. Keeps every call site below —
+# and `run <hook.sh>` on the command line — spelled with the plain name.
+hook_path() {
+  local name="$1" p
+  case "$name" in
+    */*) printf '%s\n' "$name"; return ;;
+  esac
+  if [ -f "$HOOKS_DIR/$name" ]; then
+    printf '%s\n' "$HOOKS_DIR/$name"
+    return
+  fi
+  for p in "$HOOKS_DIR"/*/"$name"; do
+    if [ -f "$p" ]; then
+      printf '%s\n' "$p"
+      return
+    fi
+  done
+  printf '%s\n' "$HOOKS_DIR/$name"
+}
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/claude-hooks"
 TEST_SESSION_ID="manual-test"
 
@@ -127,11 +154,7 @@ cmd_list() {
 # run_hook <hook.sh> <payload-json-string>  -> prints report, returns hook's exit code
 run_hook() {
   local hook="$1" payload="$2" hook_path
-  if [[ "$hook" == */* ]]; then
-    hook_path="$hook"
-  else
-    hook_path="$HOOKS_DIR/$hook"
-  fi
+  hook_path="$(hook_path "$hook")"
 
   if [ ! -f "$hook_path" ]; then
     echo "No such hook script: $hook_path" >&2
@@ -214,7 +237,7 @@ expect_exit() {
 expect_contains() {
   local desc="$1" hook="$2" payload="$3" needle="$4" out
   shift 4
-  out=$(printf '%s' "$payload" | bash "$HOOKS_DIR/$hook" "$@" 2>/dev/null)
+  out=$(printf '%s' "$payload" | bash "$(hook_path "$hook")" "$@" 2>/dev/null)
   if printf '%s' "$out" | grep -qF "$needle"; then
     echo "PASS: $desc"
     pass_count=$((pass_count + 1))
@@ -227,7 +250,7 @@ expect_contains() {
 expect_not_contains() {
   local desc="$1" hook="$2" payload="$3" needle="$4" out
   shift 4
-  out=$(printf '%s' "$payload" | bash "$HOOKS_DIR/$hook" "$@" 2>/dev/null)
+  out=$(printf '%s' "$payload" | bash "$(hook_path "$hook")" "$@" 2>/dev/null)
   if printf '%s' "$out" | grep -qF "$needle"; then
     echo "FAIL: $desc (output unexpectedly contained: $needle)"
     fail_count=$((fail_count + 1))
@@ -239,7 +262,7 @@ expect_not_contains() {
 
 expect_empty() {
   local desc="$1" hook="$2" payload="$3" out
-  out=$(printf '%s' "$payload" | bash "$HOOKS_DIR/$hook" 2>/dev/null)
+  out=$(printf '%s' "$payload" | bash "$(hook_path "$hook")" 2>/dev/null)
   if [ -z "$out" ]; then
     echo "PASS: $desc"
     pass_count=$((pass_count + 1))
@@ -304,10 +327,15 @@ cmd_selftest() {
 
   # .ai-memory: inject-memory (see llm-memory repo for the reference
   # .ai-memory/ layout it reads).
+  # A manifest-free dir, NOT $PWD: this repo has its own .ai-memory/, and its
+  # single-diagram manifest injects on every prompt.
+  local bare_repo
+  bare_repo=$(mktemp -d)
+  git -C "$bare_repo" init -q 2>/dev/null
   expect_empty "inject-memory stays silent without .ai-memory/manifest.json" \
     inject-memory.sh \
-    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest-mem-none", cwd:$cwd, prompt:"debug this segfault please"}')"
-  rm -rf "${STATE_HOME:?}/selftest-mem-none"
+    "$(jq -n --arg cwd "$bare_repo" '{session_id:"selftest-mem-none", cwd:$cwd, prompt:"debug this segfault please"}')"
+  rm -rf "${STATE_HOME:?}/selftest-mem-none" "$bare_repo"
 
   local mem_repo mem_sid
   mem_sid="selftest-mem"
@@ -325,7 +353,20 @@ cmd_selftest() {
 
   expect_empty "inject-memory stays silent when no route matches" inject-memory.sh \
     "$(jq -n --arg sid "$mem_sid-nomatch" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"please format this markdown file"}')"
-  rm -rf "${STATE_HOME:?}/$mem_sid-nomatch" "$mem_repo"
+  rm -rf "${STATE_HOME:?}/$mem_sid-nomatch"
+
+  # Single-diagram manifest: one diagram for the whole repo, injected on every
+  # prompt, keywords irrelevant.
+  mkdir -p "$mem_repo/.ai-memory/diagrams"
+  printf '{"diagram":"diagrams/system.mmd"}' > "$mem_repo/.ai-memory/manifest.json"
+  printf 'flowchart TD\n  A[Repo] --> B[One Map]\n' \
+    > "$mem_repo/.ai-memory/diagrams/system.mmd"
+
+  expect_contains "inject-memory injects the single diagram whatever the prompt says" \
+    inject-memory.sh \
+    "$(jq -n --arg sid "$mem_sid-single" --arg cwd "$mem_repo" '{session_id:$sid, cwd:$cwd, prompt:"please format this markdown file"}')" \
+    "One Map"
+  rm -rf "${STATE_HOME:?}/$mem_sid-single" "$mem_repo"
 
   expect_exit "boilerplate-guard blocks a hand-written new controller" \
     boilerplate-guard.sh \
@@ -499,7 +540,7 @@ cmd_selftest() {
 
   expect_exit "secret-guard does not self-match its own pattern source" \
     secret-guard.sh \
-    "$(jq -n --arg cwd "$cwd" --rawfile c "$HOOKS_DIR/secret-guard.sh" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/secret-guard.sh", content:$c}}')" \
+    "$(jq -n --arg cwd "$cwd" --rawfile c "$(hook_path secret-guard.sh)" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/secret-guard.sh", content:$c}}')" \
     0
 
   # overwrite rules need a real file: marked file loses marker -> block, keeps marker -> allow
@@ -588,7 +629,7 @@ cmd_selftest() {
   printf 'def login(user):\n    return True\n' > "$map_dir/auth.py"
   printf '# Project\nnotes\n' > "$map_dir/CLAUDE.md"
   git -C "$map_dir" add auth.py CLAUDE.md
-  map_out=$(bash "$HOOKS_DIR/repo-map.sh" "$map_dir" 2>/dev/null)
+  map_out=$(bash "$(hook_path repo-map.sh)" "$map_dir" 2>/dev/null)
   expect_cond "repo-map writes the map and returns its path" \
     test -n "$map_out" -a -f "$map_out"
   expect_cond "repo-map lists the tracked file" \

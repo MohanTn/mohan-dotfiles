@@ -95,9 +95,10 @@ done < <(command_words "$cmd")
 
 log "bash-allowlist-guard: blocked non-allowlisted command '$denied'"
 {
-  echo "Blocked: '$denied' is not on the Bash allowlist, and shell access is allowlist-only."
-  echo "Allowed: $(printf '%s\n' "${!ALLOWED[@]}" | sort | tr '\n' ' ')"
-  echo "Use the Read/Edit/Write/search tools instead, or add the binary to"
-  echo "~/.claude/bash-allowlist (machine-wide) or .claude/bash-allowlist (this project)."
+  # Two lines, deliberately: the denied command and the list to pick from.
+  # It does NOT invite the agent to extend the allowlist — widening the shell
+  # policy is the user's call, made by editing claude/bash-allowlist by hand.
+  echo "Blocked: '$denied' is not on the Bash allowlist."
+  echo "Use one of the allowed commands: $(printf '%s\n' "${!ALLOWED[@]}" | sort | tr '\n' ' ')"
 } >&2
 exit 2

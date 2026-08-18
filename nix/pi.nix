@@ -22,7 +22,7 @@
 
   # Boilerplate-generator hint (see agents/boilerplats/AGENT-HINT.md): on
   # Claude Code it's a keyword-gated UserPromptSubmit hook
-  # (claude/hooks/boilerplate-hint.sh) and on Copilot it's appended to
+  # (claude/hooks/user-prompt-submit/boilerplate-hint.sh) and on Copilot it's appended to
   # session-start.sh's once-per-session additionalContext, since neither of
   # Pi's own per-turn hook events can rewrite the system prompt outside an
   # extension. APPEND_SYSTEM.md is Pi's native, documented mechanism for a

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""session-analytics.py — a curses TUI that mines Claude Code session transcripts
-for workflow analytics and lets you jot observation notes to review later.
+"""session-analytics.py — mines Claude Code session transcripts for workflow
+analytics and lets you jot observation notes to review later. Starting it with
+no arguments serves a local web UI (session-web.py) and opens a browser; the
+original curses TUI is still there behind --tui.
 
 It complements session-audit.py: where that renders ONE session into a readable
 trace, this reads ALL sessions across every harness — Claude
@@ -10,7 +12,11 @@ turns, tool mix, token/cache efficiency, hook fires, tool errors, and
 GOAL_CHECK outcomes, so recurring workflow patterns surface. Copilot logs carry
 no token usage, so token metrics read zero for copilot sessions.
 
-Views (keys shown in the footer):
+Web UI (default): a session list + dashboard, and per session a trajectory of
+every step — user prompts, context injections, hook fires, assistant messages
+and tool calls — each one inspectable (summary, full text, raw JSON).
+
+TUI views (keys shown in the footer):
   list       scrollable session table; sort (s), search (/), open (Enter)
   detail     one session's full metrics + tool-mix bars + its notes; add note (n)
   dashboard  aggregate analytics across the currently-filtered sessions (d)
@@ -24,12 +30,15 @@ terminal's own background via use_default_colors(); cycle with 't' in-app (the
 choice is remembered in ~/.claude/session-analytics.json) or pick with --theme.
 
 Usage:
-  session-analytics.py            # launch the TUI over every project
+  session-analytics.py            # serve the web UI over every project
+  session-analytics.py --tui      # the curses TUI instead
+  session-analytics.py --port N   # serve on another port (default 8765)
+  session-analytics.py --no-open  # don't launch a browser
   session-analytics.py --cwd DIR  # only sessions recorded for DIR's project
-  session-analytics.py --report   # print the aggregate dashboard as text (no TUI)
+  session-analytics.py --report   # print the aggregate dashboard as text
   session-analytics.py --limit N  # only scan the N most-recent transcripts
   session-analytics.py --harness H # only claude | copilot | pi sessions
-  session-analytics.py --theme T  # start in theme T (default: last used)
+  session-analytics.py --theme T  # start the TUI in theme T (default: last used)
 """
 import argparse
 import glob
@@ -1566,6 +1575,18 @@ def run_tui(sessions, theme=None):
 
 # ---- entrypoint --------------------------------------------------------------
 
+def load_web():
+    """Import session-web.py from next to this file. Hyphenated names cannot be
+    imported normally, and loading it lazily keeps --report/--tui free of the
+    http machinery."""
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "session-web.py")
+    spec = importlib.util.spec_from_file_location("session_web", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1574,18 +1595,31 @@ def main(argv):
                    help="only sessions from this agent (default: all)")
     p.add_argument("--limit", type=int, help="scan only the N most-recent transcripts")
     p.add_argument("--report", action="store_true",
-                   help="print aggregate dashboard as text and exit (no TUI)")
+                   help="print aggregate dashboard as text and exit")
+    p.add_argument("--tui", action="store_true",
+                   help="run the curses TUI instead of serving the web UI")
+    p.add_argument("--host", default="127.0.0.1", help="web UI bind address")
+    p.add_argument("--port", type=int, default=8765, help="web UI port")
+    p.add_argument("--no-open", action="store_true",
+                   help="do not open a browser when the server starts")
     p.add_argument("--theme", choices=THEME_NAMES,
-                   help=f"color theme (default: saved or {THEME_NAMES[0]}); "
+                   help=f"TUI color theme (default: saved or {THEME_NAMES[0]}); "
                         "cycle in-app with 't'")
     args = p.parse_args(argv)
 
-    sessions = load_sessions(cwd=args.cwd, limit=args.limit, harness=args.harness)
     if args.report:
-        print(render_report(sessions))
+        print(render_report(
+            load_sessions(cwd=args.cwd, limit=args.limit, harness=args.harness)))
         return 0
-    run_tui(sessions, theme=args.theme)
-    return 0
+    if args.tui:
+        run_tui(load_sessions(cwd=args.cwd, limit=args.limit, harness=args.harness),
+                theme=args.theme)
+        return 0
+    # web is the default: it scans on start and re-scans on demand, so the
+    # sessions are loaded inside serve() rather than here.
+    return load_web().serve(
+        sys.modules[__name__], host=args.host, port=args.port, cwd=args.cwd,
+        limit=args.limit, harness=args.harness, open_browser=not args.no_open)
 
 
 if __name__ == "__main__":

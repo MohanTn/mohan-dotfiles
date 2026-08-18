@@ -38,7 +38,7 @@ export default function (pi: ExtensionAPI) {
     sessionId = crypto.randomUUID();
     digestInjected = false;
 
-    const result = runClaudeHook("session-start.sh", {
+    const result = runClaudeHook("session-start/session-start.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       hook_event_name: "SessionStart",
@@ -54,7 +54,7 @@ export default function (pi: ExtensionAPI) {
       digestInjected = true;
     }
 
-    const promptResult = runClaudeHook("user-prompt-submit.sh", {
+    const promptResult = runClaudeHook("user-prompt-submit/user-prompt-submit.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       hook_event_name: "UserPromptSubmit",
@@ -64,7 +64,7 @@ export default function (pi: ExtensionAPI) {
       parts.push(promptResult.stdout.trim());
     }
 
-    const augmentResult = runClaudeHook("context-augment.py", {
+    const augmentResult = runClaudeHook("user-prompt-submit/context-augment.py", {
       session_id: sessionId,
       cwd: ctx.cwd,
       hook_event_name: "UserPromptSubmit",
@@ -77,7 +77,7 @@ export default function (pi: ExtensionAPI) {
     // Optional per-project persistent memory (see the llm-memory repo):
     // routes this prompt to a diagram in .ai-memory/ via manifest.json.
     // No-op in repos without .ai-memory/manifest.json.
-    const memoryResult = runClaudeHook("inject-memory.sh", {
+    const memoryResult = runClaudeHook("user-prompt-submit/inject-memory.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       hook_event_name: "UserPromptSubmit",
@@ -114,7 +114,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     // Invoke-time guardrail: applies to every tool, independent of toolName,
     // same authored copy as Claude/Copilot (see secret-guard.sh header).
-    const secretGuard = runClaudeHook("secret-guard.sh", {
+    const secretGuard = runClaudeHook("pre-tool-use/secret-guard.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       tool_name: toClaudeToolName(event.toolName),
@@ -133,7 +133,7 @@ export default function (pi: ExtensionAPI) {
       // inline here; running the real pre-tool-use-edit-guard.sh instead keeps
       // one authored copy of that rule, per this file's opening note.
       for (const e of input.edits ?? []) {
-        const noop = runClaudeHook("pre-tool-use-edit-guard.sh", {
+        const noop = runClaudeHook("pre-tool-use/pre-tool-use-edit-guard.sh", {
           session_id: sessionId,
           cwd: ctx.cwd,
           tool_name: "Edit",
@@ -142,7 +142,7 @@ export default function (pi: ExtensionAPI) {
         if (noop.exitCode === 2) {
           return { block: true, reason: noop.stderr.trim() };
         }
-        const guard = runClaudeHook("boilerplate-guard.sh", {
+        const guard = runClaudeHook("pre-tool-use/boilerplate-guard.sh", {
           session_id: sessionId,
           cwd: ctx.cwd,
           tool_name: "Edit",
@@ -156,7 +156,7 @@ export default function (pi: ExtensionAPI) {
 
     if (event.toolName === "write") {
       const input = event.input as WriteInput;
-      const guard = runClaudeHook("pre-tool-use-edit-guard.sh", {
+      const guard = runClaudeHook("pre-tool-use/pre-tool-use-edit-guard.sh", {
         session_id: sessionId,
         cwd: ctx.cwd,
         tool_name: "Write",
@@ -165,7 +165,7 @@ export default function (pi: ExtensionAPI) {
       if (guard.exitCode === 2) {
         return { block: true, reason: guard.stderr.trim() };
       }
-      const boilerplate = runClaudeHook("boilerplate-guard.sh", {
+      const boilerplate = runClaudeHook("pre-tool-use/boilerplate-guard.sh", {
         session_id: sessionId,
         cwd: ctx.cwd,
         tool_name: "Write",
@@ -180,7 +180,7 @@ export default function (pi: ExtensionAPI) {
       // Allowlist-only shell policy, same authored copy as Claude/Copilot (see
       // bash-allowlist-guard.sh header). First: a command that may not run at
       // all needs no further inspection.
-      const allowlist = runClaudeHook("bash-allowlist-guard.sh", {
+      const allowlist = runClaudeHook("pre-tool-use/bash-allowlist-guard.sh", {
         session_id: sessionId,
         cwd: ctx.cwd,
         tool_name: "Bash",
@@ -192,7 +192,7 @@ export default function (pi: ExtensionAPI) {
 
       // Closes the shell write-around of the boilerplate mandate, same
       // authored copy as Claude/Copilot (see bash-write-guard.sh header).
-      const bashGuard = runClaudeHook("bash-write-guard.sh", {
+      const bashGuard = runClaudeHook("pre-tool-use/bash-write-guard.sh", {
         session_id: sessionId,
         cwd: ctx.cwd,
         tool_name: "Bash",
@@ -203,7 +203,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    const loop = runClaudeHook("pre-tool-use-loop-breaker.sh", {
+    const loop = runClaudeHook("pre-tool-use/pre-tool-use-loop-breaker.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       tool_name: toClaudeToolName(event.toolName),
@@ -219,7 +219,7 @@ export default function (pi: ExtensionAPI) {
     const filePath = (event.input as { path?: string } | undefined)?.path;
     if (!filePath) return;
 
-    const gate = runClaudeHook("post-tool-use-edit.sh", {
+    const gate = runClaudeHook("post-tool-use/post-tool-use-edit.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       hook_event_name: "PostToolUse",
@@ -246,7 +246,7 @@ export default function (pi: ExtensionAPI) {
   // next before_agent_start. On overflow recovery (`willRetry`) that may land
   // one turn later than Claude's equivalent — degraded, not lost.
   pi.on("session_compact", async (event, ctx) => {
-    const result = runClaudeHook("pre-compact.sh", {
+    const result = runClaudeHook("pre-compact/pre-compact.sh", {
       session_id: sessionId,
       cwd: ctx.cwd,
       hook_event_name: "PreCompact",
@@ -260,7 +260,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", async (_event, ctx) => {
     const transcriptFile = entriesToClaudeTranscript(ctx.sessionManager.getEntries());
     try {
-      runClaudeHook("session-end-audit.sh", { session_id: sessionId, cwd: ctx.cwd, transcript_path: transcriptFile });
+      runClaudeHook("session-end/session-end-audit.sh", { session_id: sessionId, cwd: ctx.cwd, transcript_path: transcriptFile });
     } finally {
       try {
         unlinkSync(transcriptFile);
@@ -268,6 +268,6 @@ export default function (pi: ExtensionAPI) {
         // best-effort cleanup
       }
     }
-    runClaudeHook("session-end-cleanup.sh", {});
+    runClaudeHook("session-end/session-end-cleanup.sh", {});
   });
 }

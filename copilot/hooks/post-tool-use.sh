@@ -21,7 +21,7 @@ esac
 payload=$(claude_payload)
 [ -z "$payload" ] && { printf '{}'; exit 0; }
 
-err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/post-tool-use-edit.sh" 2>&1 >/dev/null)
+err=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/post-tool-use/post-tool-use-edit.sh" 2>&1 >/dev/null)
 if [ $? -eq 2 ] && [ -n "$err" ]; then
   printf '%s' "$err" | jq -Rs '{additionalContext: ("Post-edit gate FAILED — fix this before proceeding:\n" + .)}'
   exit 0

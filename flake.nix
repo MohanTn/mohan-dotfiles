@@ -79,8 +79,9 @@
             export HOME="$TMPDIR/home"
             mkdir -p "$HOME/.claude"
             cp -r ${./claude/hooks} "$HOME/.claude/hooks"
-            chmod -R u+w "$HOME/.claude/hooks"
-            bash "$HOME/.claude/hooks/test-hook.sh" selftest > "$out"
+            cp -r ${./claude/tests} "$HOME/.claude/tests"
+            chmod -R u+w "$HOME/.claude/hooks" "$HOME/.claude/tests"
+            bash "$HOME/.claude/tests/test-hook.sh" selftest > "$out"
             cat "$out"
           '';
 
@@ -111,9 +112,11 @@
             done
 
             # Every hook settings.json points at must exist in claude/hooks/,
-            # which the Dockerfile copies wholesale.
+            # which the Dockerfile copies wholesale. Hooks live in per-event
+            # subfolders (hooks/pre-tool-use/secret-guard.sh), so the captured
+            # name keeps its slashes.
             for s in $(jq -r '[.hooks[][].hooks[].command, .statusLine.command]
-                              | .[] | capture("\\.claude/(hooks/)?(?<n>[A-Za-z0-9._-]+)").n' \
+                              | .[] | capture("\\.claude/(hooks/)?(?<n>[A-Za-z0-9._/-]+)").n' \
                          ${./claude/settings.json} | sort -u); do
               if [ ! -e "${./claude/hooks}/$s" ] && [ ! -e "${./claude}/$s" ]; then
                 echo "MISSING: claude/$s referenced by settings.json" >&2
@@ -143,11 +146,13 @@
         context-augment-tests = pkgs.runCommand "context-augment-tests"
           { nativeBuildInputs = [ pkgs.python3 pkgs.git ]; }
           ''
-            cp -r ${./claude/hooks} hooks
-            chmod -R u+w hooks
+            mkdir -p claude
+            cp -r ${./claude/hooks} claude/hooks
+            cp -r ${./claude/tests} claude/tests
+            chmod -R u+w claude
             export HOME="$TMPDIR/home"
             mkdir -p "$HOME"
-            python3 hooks/test_context_augment.py > "$out" 2>&1 || { cat "$out"; exit 1; }
+            python3 claude/tests/test_context_augment.py > "$out" 2>&1 || { cat "$out"; exit 1; }
             cat "$out"
           '';
 
@@ -167,7 +172,7 @@
         # Same suite for the Copilot CLI hooks, which reuse the Claude scripts
         # through payload translation — so both hook trees are deployed.
         # python3 is here because the context-augmentation case shells out to
-        # claude/hooks/context-augment.py.
+        # claude/hooks/user-prompt-submit/context-augment.py.
         copilot-hooks-selftest = pkgs.runCommand "copilot-hooks-selftest"
           { nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.git pkgs.python3 ]; }
           ''
@@ -175,8 +180,9 @@
             mkdir -p "$HOME/.claude" "$HOME/.copilot"
             cp -r ${./claude/hooks} "$HOME/.claude/hooks"
             cp -r ${./copilot/hooks} "$HOME/.copilot/hooks"
-            chmod -R u+w "$HOME/.claude/hooks" "$HOME/.copilot/hooks"
-            bash "$HOME/.copilot/hooks/test-hook.sh" selftest > "$out"
+            cp -r ${./copilot/tests} "$HOME/.copilot/tests"
+            chmod -R u+w "$HOME/.claude/hooks" "$HOME/.copilot/hooks" "$HOME/.copilot/tests"
+            bash "$HOME/.copilot/tests/test-hook.sh" selftest > "$out"
             cat "$out"
           '';
 

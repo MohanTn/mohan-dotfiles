@@ -7,7 +7,7 @@ input=$(cat)
 export HOOK_INPUT="$input"
 source "$HOME/.copilot/hooks/lib/common.sh"
 
-bash "$HOME/.claude/hooks/session-end-cleanup.sh"
+bash "$HOME/.claude/hooks/session-end/session-end-cleanup.sh"
 
 transcript=$(printf '%s' "$input" | jq -r '.transcriptPath // empty' 2>/dev/null)
 claude_transcript_file=$(claude_transcript "$transcript" 2>/dev/null)
@@ -18,6 +18,6 @@ if [ -n "$claude_transcript_file" ]; then
 else
   payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" '{session_id: $sid, cwd: $cwd}')
 fi
-printf '%s' "$payload" | bash "$HOME/.claude/hooks/session-end-audit.sh" >/dev/null 2>&1
+printf '%s' "$payload" | bash "$HOME/.claude/hooks/session-end/session-end-audit.sh" >/dev/null 2>&1
 
 exit 0
