@@ -74,8 +74,10 @@
       # it because the corruption is below zsh, in the terminal/tmux
       # protocol layer. Keep it on for native Linux (where it's needed for
       # pi), skip it under WSL.
-      if-shell -b '[[ $(uname -r) != *[Mm]icrosoft* ]]' 'set -g extended-keys on'
-      if-shell -b '[[ $(uname -r) != *[Mm]icrosoft* ]]' 'set -g extended-keys-format csi-u'
+      # tmux runs if-shell/run-shell via /bin/sh (dash here), not
+      # default-shell, so this must be POSIX sh, not bash/zsh [[ ]] syntax.
+      if-shell -b '! uname -r | grep -qi microsoft' 'set -g extended-keys on'
+      if-shell -b '! uname -r | grep -qi microsoft' 'set -g extended-keys-format csi-u'
       set -g status-position bottom
       set -g status-left "#{E:@catppuccin_status_session}"
       set -g status-right-length 100

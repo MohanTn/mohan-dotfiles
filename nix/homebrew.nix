@@ -33,7 +33,14 @@ in
 
   config = mkIf cfg.enableHomebrew {
     home.activation.installHomebrew = hm.dag.entryAfter [ "writeBoundary" ] ''
-      export PATH="${pkgs.curl}/bin:${pkgs.git}/bin:${pkgs.bash}/bin:$PATH"
+      # glibc.bin provides `ldd`, which Homebrew's installer shells out to for
+      # its Glibc-version check; without it on PATH the check can't run and
+      # the installer refuses to proceed, misreporting Glibc as "too old"
+      # even when it isn't. Activation runs with a minimal inherited PATH
+      # (notably inside sandboxed agent shells, which don't carry /usr/bin),
+      # so this can't rely on the ambient PATH the way it can on a normal
+      # interactive shell.
+      export PATH="${pkgs.curl}/bin:${pkgs.git}/bin:${pkgs.bash}/bin:${pkgs.glibc.bin}/bin:$PATH"
 
       (
         brew_bin=""
