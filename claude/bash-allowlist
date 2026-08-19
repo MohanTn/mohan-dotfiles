@@ -9,10 +9,11 @@
 # default-allow, because the guard only checks the FIRST word of each
 # command position. Those are deliberately absent and should stay absent.
 #
-# Chosen from measurement, not guesswork: these cleared 20 of the 27 blocks
-# recorded across five sessions (head 6, echo 5, cd 4, tail 3, wc 1,
-# printenv 1). The remaining 7 were pip (correctly denied — use uv), zsh
-# (runs arbitrary scripts), and five parser artifacts that no allowlist can
+# Chosen from measurement, not guesswork: these cleared 19 of the 27 blocks
+# recorded across five sessions (head 6, echo 5, cd 4, tail 3, wc 1). The
+# remaining 8 were pip (correctly denied — use uv), zsh (runs arbitrary
+# scripts), printenv (dumps the whole environment including secrets, denied
+# on purpose, see below), and five parser artifacts that no allowlist can
 # fix: fd's `--exec ... \;` terminator, heredoc bodies, and `python -c`
 # strings containing a nested double quote.
 
@@ -34,8 +35,10 @@ file
 ls
 
 # --- read-only environment and scalars -----------------------------------
+# printenv is deliberately absent: with no args it dumps the whole
+# environment, including any secret sitting in an env var. Read a named,
+# known-safe var with a dedicated tool instead of a blanket dump.
 echo
-printenv
 date
 seq
 

@@ -51,3 +51,48 @@ ai_memory_match_route() {
   [ -n "$match" ] || return 1
   printf '%s\n' "$match"
 }
+
+# --- secret-shaped patterns --------------------------------------------------
+# Single source of truth for both PreToolUse's secret-guard.sh (scans a tool
+# CALL before it runs: command text, or Write/Edit content) and PostToolUse's
+# secret-post-guard.sh (scans a Bash/Read RESULT after it ran, which
+# secret-guard.sh structurally cannot see). One array here so the two layers
+# never drift apart the way a second hand-copied list would.
+# Tight, low-false-positive shapes for live credentials. Each pattern's
+# required literal run is broken up by a regex metachar in this very file, so
+# the pattern source never matches itself when this file is the tool input
+# (e.g. being written or edited).
+LEAK_VALUE_PATTERNS=(
+  'AKIA[0-9A-Z]{16}'
+  '\-\-\-\-\-BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY\-\-\-\-\-'
+  'gh[pousr]_[A-Za-z0-9]{36,}'
+  'xox[baprs]-[A-Za-z0-9-]{10,}'
+  'sk-[A-Za-z0-9]{20,}'
+)
+
+# Workaround shapes: none of the above catch a secret's VALUE when a tool
+# call only ever handles its NAME, e.g. an echo of a secret-named shell
+# variable (secret-guard.sh sees the command text, not the expanded stdout,
+# that gap is what secret-post-guard.sh is for), or a Python/JS/Go/C# script
+# that reads a secret-named env var and prints it, then gets run through the
+# interpreter. Since there is no network tool on the Bash allowlist, the only
+# place a read secret can go is stdout captured back into this conversation,
+# so gate at the READ, in code being written OR in an inlined `-c` command,
+# rather than trying to prove a print follows it. Deliberately narrow trigger
+# words (not bare KEY/API, which are common non-secret names) to keep false
+# positives low. NOTE: do not spell out a literal example of the shell shape
+# in this comment (a real "dollar sign followed by a SECRET-ish name") or it
+# self-matches the pattern below the next time this file itself is edited.
+# Only meaningful against CODE (a call or file content), never against a
+# RESULT, so secret-post-guard.sh does not use this array.
+LEAK_ENV_NAME_RX='[A-Za-z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|API_KEY|ACCESS_KEY|PRIVATE_KEY)[A-Za-z0-9_]*'
+# Callers scan jq -c output: every '"' inside a scanned string (Bash command
+# or Write/Edit content) comes through backslash-escaped as \", so every
+# quote these patterns look for must tolerate one leading backslash.
+LEAK_ENV_READ_PATTERNS=(
+  "\\\$\\{?${LEAK_ENV_NAME_RX}\\}?"                                          # shell: $VAR / ${VAR}
+  "os\\.(environ(\\.get)?\\[?\\(?|getenv\\()\\s*\\\\?['\"]${LEAK_ENV_NAME_RX}" # python
+  "process\\.env(\\.|\\[\\\\?['\"]?)${LEAK_ENV_NAME_RX}"                     # javascript/typescript
+  "os\\.Getenv\\(\\s*\\\\?\"${LEAK_ENV_NAME_RX}"                             # go
+  "Environment\\.GetEnvironmentVariable\\(\\s*\\\\?\"${LEAK_ENV_NAME_RX}"    # csharp
+)

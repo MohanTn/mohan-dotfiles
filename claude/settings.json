@@ -119,6 +119,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/post-tool-use/secret-post-guard.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreCompact": [

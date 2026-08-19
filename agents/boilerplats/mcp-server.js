@@ -48,15 +48,17 @@ function createServer() {
 
   server.tool(
     'scaffold_list',
-    'List every scaffolding language and its templates. Boilerplate files (controller, repository, handler, validator, factory, mapper, query, commands, request, response, di-injection, helper, member) MUST be created through scaffold_create, never hand-written.',
+    'Call this FIRST, before hand-writing any boilerplate file and before scaffold_create. Lists every scaffolding language and template, and for each template its required/optional data fields, default inject marker, and doc comment — everything scaffold_create needs, in one call, so there is normally no separate scaffold_describe round trip and no guess-then-fail-on-missing-fields loop. Boilerplate files (controller, repository, handler, validator, factory, mapper, query, commands, request, response, di-injection, helper, member) MUST be created through scaffold_create, never hand-written.',
     {},
     async () => {
       try {
         const languages = {};
+        const templates = {};
         for (const lang of meta.listLanguages()) {
           languages[lang] = meta.listTemplates(lang);
+          templates[lang] = meta.listTemplatesWithMeta(lang);
         }
-        return ok({ languages });
+        return ok({ languages, templates });
       } catch (err) {
         return fail(err);
       }
@@ -65,7 +67,7 @@ function createServer() {
 
   server.tool(
     'scaffold_describe',
-    'Describe one template: the data fields it needs (required vs optional), its default inject marker, and its documentation comment. Call this before scaffold_create when unsure which fields to pass.',
+    'Describe one template in isolation: the data fields it needs (required vs optional), its default inject marker, and its documentation comment. scaffold_list already includes this for every template, so only reach for this when you want a single template looked up without the full listing.',
     { lang: z.string(), template: z.string() },
     async ({ lang, template }) => {
       try {

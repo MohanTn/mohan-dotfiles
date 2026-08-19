@@ -49,7 +49,8 @@ Every substantial coding request runs these four stages. Do not skip a stage, do
 - Bound every scan: `rg -l`, `rg -n --max-count`, `fd -t f -e <ext>`.
 
 ## Shell policy
-The shell is a fallback, not the default. `git`, `rg`, `fd`, `npm`, `python3` are the pre-approved commands; anything else may prompt the user, so prefer a dedicated tool over a shell command whenever one exists (read/edit/write/search tools over cat/sed/awk/echo/touch).
+The shell is a fallback, not the default: prefer a dedicated tool (Read, Edit, Write, search) over a shell command whenever one exists. Any Bash command whose first word is not in this list is blocked, no exceptions: `basename cargo cat cd comm cut date diff dirname echo fd fdfind file git go head jq ls make node npm npx pipx pytest python python3 rg seq stat tail tr wc yarn`.
+Work only within this list. Do not try to route around a block (piping through an unlisted interpreter, chaining, aliasing) — report back to the user instead and let them decide.
 Never run destructive commands (`rm -rf`, force pushes, history rewrites, resets that discard work) without explicit confirmation in the same turn.
 
 ## Docker sandbox awareness
