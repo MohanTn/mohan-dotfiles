@@ -15,9 +15,20 @@ function printHelp() {
   console.log(`scaffold - render a Handlebars boilerplate and write or inject it
 
 Usage:
+  node scaffold.js --list [--lang <lang>] [--json]
+  node scaffold.js --describe --lang <lang> --template <name> [--json]
   node scaffold.js --lang <lang> --template <name> --out <path> [options]
 
-Required:
+Discovery (run these first, before hand-writing anything):
+  --list                 all languages and templates; with --lang, that
+                         language's templates plus each one's required/
+                         optional data fields, default marker, and doc comment
+                         — usually all scaffold_create needs, no --describe
+                         round trip required
+  --describe             one template in isolation: same fields --list gives,
+                         for a single --lang/--template pair (needs both)
+
+Required (create/inject/adopt):
   --lang <lang>        subfolder under boilerplats/, e.g. csharp
   --template <name>    template file (without .hbs), e.g. controller
   --out <path>         file to create or inject into
@@ -63,6 +74,12 @@ function parseArgs(argv) {
       case '-v':
       case '--version':
         args.version = true;
+        break;
+      case '--list':
+        args.list = true;
+        break;
+      case '--describe':
+        args.describe = true;
         break;
       case '--inject':
         args.inject = true;
@@ -123,6 +140,56 @@ function main(argv) {
   }
   if (args.version) {
     console.log(pkg.version);
+    return;
+  }
+
+  if (args.list) {
+    if (args.lang) {
+      const templates = meta.listTemplatesWithMeta(args.lang);
+      if (args.json) {
+        console.log(JSON.stringify({ lang: args.lang, templates }, null, 2));
+      } else {
+        for (const [name, info] of Object.entries(templates)) {
+          console.log(`${args.lang}/${name}`);
+          console.log(`  required: ${info.required.join(', ') || '(none)'}`);
+          console.log(`  optional: ${info.optional.join(', ') || '(none)'}`);
+          console.log(`  marker:   ${info.markerDefault}`);
+        }
+      }
+    } else {
+      const languages = {};
+      const templates = {};
+      for (const lang of meta.listLanguages()) {
+        languages[lang] = meta.listTemplates(lang);
+        templates[lang] = meta.listTemplatesWithMeta(lang);
+      }
+      if (args.json) {
+        console.log(JSON.stringify({ languages, templates }, null, 2));
+      } else {
+        for (const [lang, names] of Object.entries(languages)) {
+          console.log(`${lang}: ${names.join(', ')}`);
+        }
+        console.log('\nRun --list --lang <lang> for required/optional fields per template.');
+      }
+    }
+    return;
+  }
+
+  if (args.describe) {
+    if (!args.lang || !args.template) {
+      printHelp();
+      throw new Error('Missing required arguments for --describe: --lang, --template');
+    }
+    const info = meta.templateMeta(args.lang, args.template);
+    if (args.json) {
+      console.log(JSON.stringify(info, null, 2));
+    } else {
+      console.log(`${args.lang}/${args.template}`);
+      console.log(`  required: ${info.required.join(', ') || '(none)'}`);
+      console.log(`  optional: ${info.optional.join(', ') || '(none)'}`);
+      console.log(`  marker:   ${info.markerDefault}`);
+      if (info.dataComment) console.log(`  doc:      ${info.dataComment}`);
+    }
     return;
   }
 

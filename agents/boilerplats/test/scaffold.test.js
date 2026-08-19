@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { parseArgs, render, writeNewFile, injectIntoFile } = require('../scaffold');
+const { parseArgs, main, render, writeNewFile, injectIntoFile } = require('../scaffold');
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'scaffold-test-'));
@@ -30,6 +30,46 @@ test('parseArgs reads flags into an object', () => {
 
 test('parseArgs rejects unknown flags', () => {
   assert.throws(() => parseArgs(['--bogus']), /Unknown argument/);
+});
+
+function captureLog(fn) {
+  const logs = [];
+  const original = console.log;
+  console.log = (...args) => logs.push(args.join(' '));
+  try {
+    fn();
+  } finally {
+    console.log = original;
+  }
+  return logs.join('\n');
+}
+
+test('--list --json reports languages and per-template required/optional fields with no other flags', () => {
+  const out = captureLog(() => main(['--list', '--json']));
+  const parsed = JSON.parse(out);
+  assert.ok(parsed.languages.typescript.includes('controller'));
+  assert.ok(parsed.templates.typescript.controller.required.includes('EntityName'));
+  assert.equal(parsed.templates.python.member.markerDefault, '# scaffold:inject');
+});
+
+test('--list --lang scopes to one language', () => {
+  const out = captureLog(() => main(['--list', '--lang', 'sh', '--json']));
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.lang, 'sh');
+  assert.ok(parsed.templates.script);
+  assert.ok(!parsed.templates.controller);
+});
+
+test('--describe --json reports one template\'s fields, matching --list', () => {
+  const out = captureLog(() => main(['--describe', '--lang', 'python', '--template', 'member', '--json']));
+  const parsed = JSON.parse(out);
+  assert.ok(parsed.required.includes('Signature'));
+  assert.ok(parsed.optional.includes('Body'));
+  assert.equal(parsed.markerDefault, '# scaffold:inject');
+});
+
+test('--describe without --template is a hard error naming what is missing', () => {
+  assert.throws(() => main(['--describe', '--lang', 'python']), /Missing required arguments for --describe/);
 });
 
 test('render compiles a template file with the given data', () => {

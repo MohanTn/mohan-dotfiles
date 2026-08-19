@@ -107,6 +107,16 @@ function shAnchor(lines) {
       return { index: i, indent: '' };
     }
   }
+  // Hook and hook-test shaped files (sh/hook.hbs, sh/hook-test.hbs, and every
+  // legacy hook script that predates those templates) end in a top-level
+  // `exit N` or `summary` call that decides the script's outcome. Anything
+  // injected AFTER that line would be dead code the shell never reaches, so
+  // anchor just above it instead of falling through to end-of-file.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^(exit\b|summary\s*$)/.test(lines[i])) {
+      return { index: i, indent: '' };
+    }
+  }
   const lastCode = lastNonEmpty(lines);
   if (lastCode === -1) {
     throw new AnchorError('File is empty, nothing to anchor a scaffold:inject marker to.', []);

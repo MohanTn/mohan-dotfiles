@@ -57,6 +57,7 @@ declare -A HOOK_INFO=(
   [secret-guard.sh]="PreToolUse (*)::block tool calls whose input looks like a live secret/credential (invoke-time guardrail)"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
+  [secret-post-guard.sh]="PostToolUse (Bash/Read)::block a tool RESULT that looks like a live secret/credential, the second layer catching what secret-guard.sh's pre-execution scan structurally cannot see"
   [pre-compact.sh]="PreCompact::replay goal + files edited + diffstat across a compaction"
   [inject-memory.sh]="UserPromptSubmit::inject the diagram matching .ai-memory/manifest.json"
   [session-end-cleanup.sh]="SessionEnd::prune stale hook state"
@@ -112,6 +113,13 @@ default_payload() {
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PostToolUse", tool_name:"Edit",
           tool_input:{file_path:"/tmp/example.md"}}'
+      ;;
+    secret-post-guard.sh)
+      # split literal on purpose: written whole, this trips secret-guard.sh on
+      # the way in, which is exactly the shape secret-post-guard.sh must catch
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"PostToolUse", tool_name:"Bash",
+          tool_input:{command:"cat .env"}, tool_response:{stdout:("AKIA" + "ABCDEFGHIJKLMNOP" + "\n"), stderr:""}}'
       ;;
     inject-memory.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
@@ -543,6 +551,62 @@ cmd_selftest() {
     "$(jq -n --arg cwd "$cwd" --rawfile c "$(hook_path secret-guard.sh)" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/secret-guard.sh", content:$c}}')" \
     0
 
+  # workaround shapes: the command/file never carries a secret VALUE, only a
+  # secret-NAMED env var being read out, e.g. to dodge the value-shaped
+  # patterns above by round-tripping through echo or a script's stdout
+  expect_exit "secret-guard blocks echo of a secret-named shell var" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"echo $AWS_SECRET_ACCESS_KEY"}}')" \
+    2
+
+  expect_exit "secret-guard allows echo of an ordinary, non-secret-named var" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"echo $HOME"}}')" \
+    0
+
+  expect_exit "secret-guard blocks a Write of Python that reads a secret-named env var" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/dump.py", content:"import os\nprint(os.environ[\"DB_PASSWORD\"])"}}')" \
+    2
+
+  expect_exit "secret-guard blocks a Write of JS that reads a secret-named env var" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/dump.js", content:"console.log(process.env.STRIPE_API_KEY)"}}')" \
+    2
+
+  expect_exit "secret-guard allows a Write of Python that reads a non-secret-named env var" \
+    secret-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Write", tool_input:{file_path:"/tmp/ok.py", content:"import os\nprint(os.environ[\"DEBUG\"])"}}')" \
+    0
+
+  # secret-post-guard: PostToolUse second layer, scans a RESULT secret-guard.sh
+  # never sees (the tool already ran by the time this fires). Literals split
+  # on purpose, same reason as the secret-guard fixtures above.
+  expect_exit "secret-post-guard blocks a Bash result containing a live-looking key" \
+    secret-post-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"cat .env"}, tool_response:{stdout:("AKIA" + "ABCDEFGHIJKLMNOP" + "\n"), stderr:""}}')" \
+    2
+
+  expect_exit "secret-post-guard blocks a Read result containing a private key block" \
+    secret-post-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Read", tool_input:{file_path:"/tmp/id_rsa"}, tool_response:{content:("-----BEGIN RSA " + "PRIVATE KEY-----\nMIIB...\n-----END RSA PRIVATE KEY-----")}}')" \
+    2
+
+  expect_exit "secret-post-guard allows an ordinary Bash result" \
+    secret-post-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"git status"}, tool_response:{stdout:"nothing to commit, working tree clean\n", stderr:""}}')" \
+    0
+
+  expect_exit "secret-post-guard does not apply the CODE-only env-name patterns to a RESULT" \
+    secret-post-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"cat dump.py"}, tool_response:{stdout:"import os\nprint(os.environ[\"DB_PASSWORD\"])\n", stderr:""}}')" \
+    0
+
+  expect_exit "secret-post-guard stays silent on an empty tool_response" \
+    secret-post-guard.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, tool_name:"Bash", tool_input:{command:"echo hi"}}')" \
+    0
+
   # overwrite rules need a real file: marked file loses marker -> block, keeps marker -> allow
   local guard_dir guard_file
   guard_dir=$(mktemp -d)
@@ -571,6 +635,16 @@ cmd_selftest() {
   expect_empty "boilerplate-hint stays silent on an unrelated prompt" \
     boilerplate-hint.sh \
     "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, prompt:"why is the login test flaky"}')"
+
+  expect_contains "boilerplate-hint fires on nouns outside the original narrow list (helper)" \
+    boilerplate-hint.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, prompt:"write a helper to format dates"}')" \
+    "scaffold.js"
+
+  expect_contains "boilerplate-hint fires on nouns outside the original narrow list (response)" \
+    boilerplate-hint.sh \
+    "$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, prompt:"add a response object for orders"}')" \
+    "scaffold.js"
 
   expect_exit "session-end-audit exits 0 even when transcript is missing" \
     session-end-audit.sh \

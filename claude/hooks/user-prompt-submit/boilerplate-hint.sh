@@ -6,7 +6,14 @@
 input=$(cat)
 prompt=$(printf '%s' "$input" | jq -r '.prompt // ""' 2>/dev/null)
 
-pattern='boilerplate|scaffold|\b(controller|repository|handler|validator|factory|mapper|di.injection)\b.*\b(class|endpoint|method|file)\b|\b(new|generate|create|add|build|write)\b.*\b(controller|repository|handler|validator|factory|mapper|endpoint|route|crud)\b'
+# Noun list mirrors AGENT-HINT.md / boilerplate-guard.sh's mandate exactly
+# (controller/repository/handler/validator/factory/commands/query/request/
+# response/mapper/helper/di-injection) so a prompt naming any of them, in
+# either phrasing shape, gets pointed at the generator before the model ever
+# reaches for Write/Edit — the block message should be a rare backstop, not
+# the primary way this gets discovered.
+noun='(controller|repository|handler|validator|factory|mapper|quer(y|ies)|command(s)?|request|response|di.injection|helper|member)'
+pattern="boilerplate|scaffold|\\b${noun}\\b.*\\b(class|endpoint|method|file|object|dto)\\b|\\b(new|generate|create|add|build|write)\\b.*\\b${noun}\\b|\\b(new|generate|create|add|build|write)\\b.*\\b(endpoint|route|crud)\\b"
 if printf '%s' "$prompt" | grep -qiE "$pattern"; then
   hint_file="$HOME/.agents/boilerplats/AGENT-HINT.md"
   if [ -f "$hint_file" ]; then

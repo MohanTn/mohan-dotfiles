@@ -252,6 +252,124 @@ test('adoption never touches a file it was not asked about', () => {
   assert.equal(fs.readFileSync(bystander, 'utf8'), 'public class Bystander\n{\n}\n');
 });
 
+// --- sh/hook.hbs, sh/hook-test.hbs, python/js/ts test-module.hbs ----------
+
+test('sh/hook.hbs renders the standard stdin/common.sh/exit-0 hook shape', () => {
+  const out = path.join(tmpDir(), 'my-hook.sh');
+  const result = core.scaffoldCreate({
+    lang: 'sh',
+    template: 'hook',
+    out,
+    data: { HookEvent: 'PreToolUse', Matcher: 'Edit|Write', Description: 'blocks something' },
+  });
+  const disk = fs.readFileSync(out, 'utf8');
+  assert.match(disk, /^#!\/usr\/bin\/env bash\n# PreToolUse: Edit\|Write — blocks something\n/);
+  assert.match(disk, /source "\$HOME\/\.claude\/hooks\/lib\/common\.sh"/);
+  assert.match(disk, /# scaffold:inject[\s\S]*exit 0\n$/);
+  assert.equal(result.marker, '# scaffold:inject');
+});
+
+test('sh/hook.hbs omits the matcher segment when Matcher is not passed', () => {
+  const out = path.join(tmpDir(), 'my-hook2.sh');
+  core.scaffoldCreate({
+    lang: 'sh',
+    template: 'hook',
+    out,
+    data: { HookEvent: 'UserPromptSubmit', Description: 'hints at something' },
+  });
+  const disk = fs.readFileSync(out, 'utf8');
+  assert.match(disk, /^#!\/usr\/bin\/env bash\n# UserPromptSubmit — hints at something\n/);
+});
+
+test('sh/hook-test.hbs renders the lib.sh-sourcing, summary-ending test shape', () => {
+  const out = path.join(tmpDir(), 'my-hook.test.sh');
+  const result = core.scaffoldCreate({
+    lang: 'sh',
+    template: 'hook-test',
+    out,
+    data: { TestSubject: 'my-hook.sh', Description: 'covers the deny path' },
+  });
+  const disk = fs.readFileSync(out, 'utf8');
+  assert.match(disk, /source "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/lib\.sh"/);
+  assert.match(disk, /# scaffold:inject\n\nsummary\n$/);
+  assert.equal(result.marker, '# scaffold:inject');
+});
+
+test('sh anchor fix: adopting a legacy hook-shaped file anchors above the trailing exit, not after it', () => {
+  const out = path.join(tmpDir(), 'legacy-hook.sh');
+  fs.writeFileSync(
+    out,
+    '#!/usr/bin/env bash\ninput=$(cat)\nexport HOOK_INPUT="$input"\nsource "$HOME/.claude/hooks/lib/common.sh"\n\nlog "ran"\n\nexit 0\n'
+  );
+  const result = core.scaffoldAdopt({ lang: 'sh', out });
+  const lines = fs.readFileSync(out, 'utf8').split('\n');
+  const markerLine = lines.findIndex((l) => l.includes('scaffold:inject'));
+  const exitLine = lines.findIndex((l) => l === 'exit 0');
+  assert.ok(markerLine < exitLine, 'marker must land before exit 0, or injected code would be unreachable');
+  assert.equal(result.adopted, true);
+});
+
+test('sh anchor fix: adopting a legacy hook-test-shaped file anchors above summary', () => {
+  const out = path.join(tmpDir(), 'legacy.test.sh');
+  fs.writeFileSync(out, '#!/usr/bin/env bash\nsource "$(dirname "${BASH_SOURCE[0]}")/lib.sh"\n\nexpect_out "x" a.sh "{}" \'. == {}\'\n\nsummary\n');
+  core.scaffoldAdopt({ lang: 'sh', out });
+  const lines = fs.readFileSync(out, 'utf8').split('\n');
+  const markerLine = lines.findIndex((l) => l.includes('scaffold:inject'));
+  const summaryLine = lines.findIndex((l) => l === 'summary');
+  assert.ok(markerLine < summaryLine, 'marker must land before summary, or injected cases would never run');
+});
+
+test('python/test-module.hbs renders a unittest.TestCase module ending in unittest.main()', () => {
+  const out = path.join(tmpDir(), 'test_orders.py');
+  const result = core.scaffoldCreate({
+    lang: 'python',
+    template: 'test-module',
+    out,
+    data: { ModuleUnderTest: 'orders.py', ClassName: 'OrdersTests' },
+  });
+  const disk = fs.readFileSync(out, 'utf8');
+  assert.match(disk, /"""Unit tests for orders\.py\."""/);
+  assert.match(disk, /class OrdersTests\(unittest\.TestCase\):/);
+  assert.match(disk, /if __name__ == "__main__":\n\s+unittest\.main\(\)/);
+  assert.equal(result.marker, '# scaffold:inject');
+});
+
+test('python/test-module.hbs accepts a member injection as an ordinary test method', () => {
+  const out = path.join(tmpDir(), 'test_orders2.py');
+  core.scaffoldCreate({ lang: 'python', template: 'test-module', out, data: { ModuleUnderTest: 'orders.py', ClassName: 'OrdersTests' } });
+  core.scaffoldInject({ lang: 'python', template: 'member', out, data: { Signature: 'def test_list_empty(self)' } });
+  assert.match(fs.readFileSync(out, 'utf8'), /def test_list_empty\(self\):[\s\S]*# scaffold:inject/);
+});
+
+test('javascript/test-module.hbs renders a node:test module requiring the subject', () => {
+  const out = path.join(tmpDir(), 'orders.test.js');
+  const result = core.scaffoldCreate({
+    lang: 'javascript',
+    template: 'test-module',
+    out,
+    data: { ModuleUnderTest: './orders' },
+  });
+  const disk = fs.readFileSync(out, 'utf8');
+  assert.match(disk, /const test = require\('node:test'\);/);
+  assert.match(disk, /const assert = require\('node:assert\/strict'\);/);
+  assert.match(disk, /const subject = require\('\.\/orders'\);/);
+  assert.equal(result.marker, '// scaffold:inject');
+});
+
+test('typescript/test-module.hbs renders an ESM node:test module', () => {
+  const out = path.join(tmpDir(), 'orders.test.ts');
+  const result = core.scaffoldCreate({
+    lang: 'typescript',
+    template: 'test-module',
+    out,
+    data: { ModuleUnderTest: './orders.js' },
+  });
+  const disk = fs.readFileSync(out, 'utf8');
+  assert.match(disk, /import test from 'node:test';/);
+  assert.match(disk, /import \* as subject from '\.\/orders\.js';/);
+  assert.equal(result.marker, '// scaffold:inject');
+});
+
 test('member template treats Body as optional', () => {
   const out = path.join(tmpDir(), 'Holder.cs');
   fs.writeFileSync(out, 'class Holder {\n  // scaffold:inject\n}\n');

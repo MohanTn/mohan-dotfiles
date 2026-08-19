@@ -4,11 +4,15 @@ For repository/controller/handler/validator/factory/commands/query/request/respo
 
 Preferred path — the scaffold MCP tools:
 
-    scaffold_list                                    all languages and templates
-    scaffold_describe { lang, template }             required/optional data fields, default marker
+    scaffold_list                                    all languages/templates PLUS each template's
+                                                       required/optional fields, marker, doc comment —
+                                                       call this first, it's usually all you need
+    scaffold_describe { lang, template }             same fields as scaffold_list, for one template only
     scaffold_create   { lang, template, out, data }  new file
     scaffold_inject   { lang, template, out, data }  add a member to an existing file
     scaffold_adopt    { lang, out, anchor? }         marker only, no member
+
+Call `scaffold_list` before `scaffold_create`, not after a "missing required data fields" error — its result already carries every template's required/optional field names, so a first `scaffold_create` call can be correct on the first try instead of guessing field names and retrying.
 
 Every result contains the file type, the fillable line numbers, and the FULL numbered file content. NEVER re-read a file you just scaffolded — edit it directly from the returned lines.
 
@@ -28,8 +32,10 @@ This is ongoing discovery, not a bootstrap: only the file you are working on is 
 
 Fallback without MCP (same engine, same structured results with `--json`):
 
+    node ~/.agents/boilerplats/scaffold.js --list [--lang <lang>] [--json]                       discovery, same as scaffold_list/_describe
+    node ~/.agents/boilerplats/scaffold.js --describe --lang <lang> --template <name> [--json]
     node ~/.agents/boilerplats/scaffold.js --lang <lang> --template <name> --out <path> --data '<json>' [--inject] [--adopt] [--anchor '<line|snippet>'] [--json]
 
-Missing required data fields are a hard error, nothing is written. The marker defaults per language (`# scaffold:inject` for python/sh, `// scaffold:inject` otherwise), no `--marker` needed. Templates live at `~/.agents/boilerplats/<lang>/<template>.hbs`; member templates are indentation-relative, so an injected member is re-indented to the marker's depth.
+Run `--list --lang <lang>` before the first `--out` call on a language you haven't used yet — same reasoning as `scaffold_list` above. Missing required data fields are a hard error, nothing is written. The marker defaults per language (`# scaffold:inject` for python/sh, `// scaffold:inject` otherwise), no `--marker` needed. Templates live at `~/.agents/boilerplats/<lang>/<template>.hbs`; member templates are indentation-relative, so an injected member is re-indented to the marker's depth.
 
 Never remove a `scaffold:inject` marker — the guard blocks edits and overwrites that drop it. The templates are intentionally generic starting points; run them, then correct and fill in whatever the skeleton got wrong.

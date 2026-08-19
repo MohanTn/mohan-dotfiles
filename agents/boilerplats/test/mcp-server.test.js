@@ -31,9 +31,22 @@ test('scaffold_list returns all six languages with their templates', async () =>
   const { languages } = parse(await client.callTool({ name: 'scaffold_list', arguments: {} }));
 
   assert.deepEqual(Object.keys(languages).sort(), ['csharp', 'go', 'javascript', 'python', 'sh', 'typescript']);
-  assert.equal(languages.typescript.length, 13);
+  assert.equal(languages.typescript.length, 14);
   assert.ok(languages.typescript.includes('controller'));
+  assert.ok(languages.typescript.includes('test-module'));
   assert.ok(languages.sh.includes('script'));
+  assert.ok(languages.sh.includes('hook'));
+  assert.ok(languages.sh.includes('hook-test'));
+});
+
+test('scaffold_list also returns required/optional fields and marker per template, so scaffold_create needs no follow-up scaffold_describe call', async () => {
+  const client = await connectedClient();
+  const { templates } = parse(await client.callTool({ name: 'scaffold_list', arguments: {} }));
+
+  assert.ok(templates.typescript.controller.required.includes('EntityName'));
+  assert.equal(templates.typescript.controller.markerDefault, '// scaffold:inject');
+  assert.ok(templates.python.member.optional.includes('Body'));
+  assert.equal(templates.python.member.markerDefault, '# scaffold:inject');
 });
 
 test('scaffold_describe reports fields, required/optional split, and per-language marker', async () => {

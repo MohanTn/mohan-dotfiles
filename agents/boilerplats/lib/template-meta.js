@@ -86,6 +86,19 @@ function templateMeta(lang, template) {
   };
 }
 
+// Every template's fields/required/optional/marker/doc in one call, keyed by
+// template name — what scaffold_list hands to agents so the common path
+// (pick a template, call scaffold_create) needs no separate scaffold_describe
+// round trip, and no guess-then-fail-on-missing-fields loop.
+function listTemplatesWithMeta(lang) {
+  const out = {};
+  for (const template of listTemplates(lang)) {
+    const { required, optional, markerDefault, dataComment } = templateMeta(lang, template);
+    out[template] = { required, optional, markerDefault, dataComment };
+  }
+  return out;
+}
+
 module.exports = {
   ROOT,
   MARKERS,
@@ -93,6 +106,7 @@ module.exports = {
   markerFor,
   listLanguages,
   listTemplates,
+  listTemplatesWithMeta,
   templateSource,
   templateMeta,
 };

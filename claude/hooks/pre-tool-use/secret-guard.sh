@@ -12,19 +12,9 @@ source "$HOME/.claude/hooks/lib/common.sh"
 payload=$(printf '%s' "$input" | jq -c '.tool_input // {}' 2>/dev/null)
 [ -n "$payload" ] && [ "$payload" != "null" ] || exit 0
 
-# Tight, low-false-positive shapes for live credentials. Each pattern's
-# required literal run is broken up by a regex metachar in this very file, so
-# the pattern source never matches itself when this file is the tool input
-# (e.g. being written or edited).
-patterns=(
-  'AKIA[0-9A-Z]{16}'
-  '\-\-\-\-\-BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY\-\-\-\-\-'
-  'gh[pousr]_[A-Za-z0-9]{36,}'
-  'xox[baprs]-[A-Za-z0-9-]{10,}'
-  'sk-[A-Za-z0-9]{20,}'
-)
-
-for p in "${patterns[@]}"; do
+# LEAK_VALUE_PATTERNS and LEAK_ENV_READ_PATTERNS: lib/common.sh, shared
+# with secret-post-guard.sh so the two layers never drift apart.
+for p in "${LEAK_VALUE_PATTERNS[@]}" "${LEAK_ENV_READ_PATTERNS[@]}"; do
   if printf '%s' "$payload" | grep -qE "$p"; then
     log "secret-guard: blocked tool call ($tool_name) matching secret pattern"
     cat >&2 <<'MSG'
