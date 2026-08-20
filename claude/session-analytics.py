@@ -238,6 +238,10 @@ def parse_session(rows, path="", fallback_project="") -> Session:
         os.path.splitext(os.path.basename(path))[0] if path else ""
     )
     tool_by_id = {}  # tool_use_id -> (name, input), to attribute each error
+    # Claude Code splits one API response across several assistant rows (one per
+    # content block) that all repeat the same message.id and the same usage, so
+    # usage is counted once per id or every token metric inflates.
+    counted_usage = set()
     for r in rows:
         t = r.get("type")
         ts = _parse_ts(r.get("timestamp"))
@@ -303,11 +307,15 @@ def parse_session(rows, path="", fallback_project="") -> Session:
             msg = r.get("message", {})
             if msg.get("model"):
                 s.models.add(msg["model"])
-            usage = msg.get("usage") or {}
-            s.input_tokens += usage.get("input_tokens", 0) or 0
-            s.output_tokens += usage.get("output_tokens", 0) or 0
-            s.cache_read += usage.get("cache_read_input_tokens", 0) or 0
-            s.cache_creation += usage.get("cache_creation_input_tokens", 0) or 0
+            mid = msg.get("id")
+            if mid is None or mid not in counted_usage:
+                if mid is not None:
+                    counted_usage.add(mid)
+                usage = msg.get("usage") or {}
+                s.input_tokens += usage.get("input_tokens", 0) or 0
+                s.output_tokens += usage.get("output_tokens", 0) or 0
+                s.cache_read += usage.get("cache_read_input_tokens", 0) or 0
+                s.cache_creation += usage.get("cache_creation_input_tokens", 0) or 0
             has_text = False
             for c in msg.get("content", []) or []:
                 if not isinstance(c, dict):

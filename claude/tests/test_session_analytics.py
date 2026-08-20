@@ -33,6 +33,23 @@ def _assistant(usage=None, tools=(), text=None, model="claude-opus-4-8"):
 
 
 class ParseSessionTest(unittest.TestCase):
+    def test_usage_is_counted_once_per_response(self):
+        # Claude Code writes one API response as several rows (one per content
+        # block) that all repeat the same message.id and the same usage.
+        usage = {"input_tokens": 10, "output_tokens": 100,
+                 "cache_read_input_tokens": 900, "cache_creation_input_tokens": 5}
+        rows = []
+        for content in ([{"type": "thinking", "thinking": ""}],
+                        [{"type": "text", "text": "hi"}]):
+            r = _assistant(usage=usage)
+            r["message"]["content"] = content
+            r["message"]["id"] = "msg_1"
+            rows.append(r)
+        s = sa.parse_session(rows, path="/x/dup.jsonl")
+        self.assertEqual(s.output_tokens, 100)
+        self.assertEqual(s.input_tokens, 10)
+        self.assertEqual(s.cache_read, 900)
+
     def test_full_session(self):
         rows = [
             {"type": "ai-title", "aiTitle": "Fix the widget"},

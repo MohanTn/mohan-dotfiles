@@ -100,6 +100,12 @@ def _mk(kind, badge, title, text="", preview="", ts="", raw=None, **extra):
         "tool": None,               # {name, args, result}
         "error": False,
         "raw": "",
+        # unclipped sizes of what this event contributed, so token attribution
+        # is not skewed by the MAX_TEXT clipping done for display.
+        "chars": {},                # think|text|args|result -> character count
+        "mid": "",                  # response id: events of one API response share it
+        "think_blocks": 0,          # reasoning blocks in this response, text or not
+        "est": {},                  # filled in by token_report()
     }
     if raw is not None:
         try:
@@ -110,11 +116,24 @@ def _mk(kind, badge, title, text="", preview="", ts="", raw=None, **extra):
     return e
 
 
+def _raw_len(x):
+    """Character size of a tool argument blob, before any clipping."""
+    if x is None:
+        return 0
+    if isinstance(x, str):
+        return len(x)
+    try:
+        return len(json.dumps(x, ensure_ascii=False))
+    except Exception:
+        return len(str(x))
+
+
 def _events_claude(rows):
     """Replay a Claude Code transcript. tool_use and its later tool_result are
     merged into one TOOL event so a call and its outcome read as one line."""
     evs = []
     pending = {}   # tool_use_id -> (event index, request timestamp)
+    counted = {}   # message id -> its usage, emptied once attached to an event
     turn = step = 0
     for r in rows:
         t = r.get("type")
@@ -134,26 +153,29 @@ def _events_claude(rows):
                 evs.append(_mk(
                     "hook", "HOOK", f"{name}  exit {code}", text=body,
                     preview=body, ts=ts, raw=r, turn=turn, error=code not in (0, None),
-                    dur_ms=att.get("durationMs"),
+                    dur_ms=att.get("durationMs"), chars={"text": len(body)},
                 ))
             else:
                 evs.append(_mk("context", "CONTEXT", f"{at}: {_oneline(body, 120)}",
-                               text=body, ts=ts, raw=r, turn=turn))
+                               text=body, ts=ts, raw=r, turn=turn,
+                               chars={"text": len(body)}))
         elif t == "system":
             sub = r.get("subtype", "system")
             body = json.dumps(r, ensure_ascii=False, indent=2)
-            evs.append(_mk("system", "SYSTEM", sub, text=body, ts=ts, raw=r, turn=turn))
+            evs.append(_mk("system", "SYSTEM", sub, text=body, ts=ts, raw=r, turn=turn,
+                           chars={"text": len(body)}))
         elif t == "user":
             content = (r.get("message") or {}).get("content")
             if isinstance(content, str):
                 st = content.strip()
                 if st.startswith("<command-name>") or st.startswith("<local-command"):
                     evs.append(_mk("context", "COMMAND", st, text=st, ts=ts,
-                                   raw=r, turn=turn))
+                                   raw=r, turn=turn, chars={"text": len(st)}))
                 else:
                     turn += 1
                     step = 0
-                    evs.append(_mk("user", "USER", st, text=st, ts=ts, raw=r, turn=turn))
+                    evs.append(_mk("user", "USER", st, text=st, ts=ts, raw=r, turn=turn,
+                                   chars={"text": len(st)}))
                 continue
             for c in content or []:
                 if not isinstance(c, dict):
@@ -162,19 +184,20 @@ def _events_claude(rows):
                     txt = c.get("text", "") or ""
                     if "<system-reminder>" in txt[:400] or "<command-name>" in txt[:400]:
                         evs.append(_mk("context", "CONTEXT", txt, text=txt, ts=ts,
-                                       raw=r, turn=turn))
+                                       raw=r, turn=turn, chars={"text": len(txt)}))
                     else:
                         turn += 1
                         step = 0
                         evs.append(_mk("user", "USER", txt, text=txt, ts=ts,
-                                       raw=r, turn=turn))
+                                       raw=r, turn=turn, chars={"text": len(txt)}))
                 elif c.get("type") == "tool_result":
                     body = _blocks_text(c.get("content"))
                     hit = pending.pop(c.get("tool_use_id"), None)
                     if hit is None:
                         evs.append(_mk("tool", "TOOL", "(orphan result)", text=body,
                                        preview=body, ts=ts, raw=r, turn=turn,
-                                       error=bool(c.get("is_error"))))
+                                       error=bool(c.get("is_error")),
+                                       chars={"result": len(body)}))
                         continue
                     i, req_ts = hit
                     ev = evs[i]
@@ -182,38 +205,60 @@ def _events_claude(rows):
                     ev["preview"] = _oneline(body)
                     ev["error"] = bool(c.get("is_error"))
                     ev["dur_ms"] = _iso_ms(req_ts, ts)
+                    ev["chars"]["result"] = len(body)
         elif t == "assistant":
             msg = r.get("message") or {}
-            usage = msg.get("usage") or {}
-            tokens = {
-                "input": usage.get("input_tokens", 0) or 0,
-                "output": usage.get("output_tokens", 0) or 0,
-                "cache_read": usage.get("cache_read_input_tokens", 0) or 0,
-                "cache_create": usage.get("cache_creation_input_tokens", 0) or 0,
-            }
+            mid = msg.get("id") or f"row{len(evs)}"
+            # One API response is written as several rows sharing message.id, each
+            # repeating the same usage. Hold it against the id and hand it to the
+            # first event built for that response, whichever row that comes from.
+            if mid not in counted:
+                counted[mid] = {
+                    "input": (msg.get("usage") or {}).get("input_tokens", 0) or 0,
+                    "output": (msg.get("usage") or {}).get("output_tokens", 0) or 0,
+                    "cache_read": (msg.get("usage") or {}).get(
+                        "cache_read_input_tokens", 0) or 0,
+                    "cache_create": (msg.get("usage") or {}).get(
+                        "cache_creation_input_tokens", 0) or 0,
+                }
             model = msg.get("model", "")
-            think = "\n".join(c.get("thinking", "") for c in msg.get("content", []) or []
-                              if isinstance(c, dict) and c.get("type") == "thinking")
-            texts = [c.get("text", "") for c in msg.get("content", []) or []
-                     if isinstance(c, dict) and c.get("type") == "text"]
-            body = "\n".join(x for x in texts if x)
-            if body or think:
+            blocks = [c for c in msg.get("content", []) or [] if isinstance(c, dict)]
+            # Reasoning is often stored as an empty block plus a signature, so count
+            # the blocks as well as their text: token_report needs to know a response
+            # was thinking even when the text of that thinking was never written down.
+            think = "\n".join(c.get("thinking", "") for c in blocks
+                              if c.get("type") == "thinking")
+            nthink = sum(1 for c in blocks
+                         if c.get("type") in ("thinking", "redacted_thinking"))
+            body = "\n".join(x for x in
+                             (c.get("text", "") for c in blocks
+                              if c.get("type") == "text") if x)
+            if body or think or nthink:
                 step += 1
-                evs.append(_mk("assistant", "ASSISTANT", body or "(thinking only)",
+                evs.append(_mk("assistant", "ASSISTANT",
+                               body or think or "(reasoning, text not recorded)",
                                text=body, ts=ts, raw=r, turn=turn, step=step,
-                               tokens=tokens, model=model,
+                               tokens=counted[mid], model=model, mid=mid,
+                               think_blocks=nthink,
+                               chars={"text": len(body), "think": len(think)},
                                thinking=_clip(think, MAX_TEXT)))
-            for c in msg.get("content", []) or []:
-                if not isinstance(c, dict) or c.get("type") != "tool_use":
+                counted[mid] = {}
+                nthink = 0
+            for c in blocks:
+                if c.get("type") != "tool_use":
                     continue
                 step += 1
                 name = c.get("name", "?")
                 args = c.get("input")
                 evs.append(_mk("tool", "TOOL", f"{name} {_args_line(args)}",
                                ts=ts, raw=r, turn=turn, step=step, model=model,
+                               mid=mid, tokens=counted[mid], think_blocks=nthink,
+                               chars={"args": _raw_len(args)},
                                tool={"name": name,
                                      "args": _clip(_args_line(args, 100000), MAX_TEXT),
                                      "result": ""}))
+                counted[mid] = {}
+                nthink = 0
                 if c.get("id"):
                     pending[c["id"]] = (len(evs) - 1, ts)
         if len(evs) >= MAX_EVENTS:
@@ -233,32 +278,37 @@ def _events_copilot(rows):
         d = r.get("data") or {}
         if t == "session.start":
             ctx = d.get("context") or {}
+            body = json.dumps(d, ensure_ascii=False, indent=2)
             evs.append(_mk("system", "SESSION", f"session start — {ctx.get('cwd', '?')}",
-                           text=json.dumps(d, ensure_ascii=False, indent=2),
-                           ts=ts, raw=r))
+                           text=body, ts=ts, raw=r, chars={"text": len(body)}))
         elif t == "system.message":
             body = d.get("content") or ""
             evs.append(_mk("system", "SYSTEM", "system prompt", text=body,
-                           preview=body, ts=ts, raw=r, turn=turn))
+                           preview=body, ts=ts, raw=r, turn=turn,
+                           chars={"text": len(body)}))
         elif t == "user.message":
             body = d.get("content") or ""
             turn += 1
             step = 0
-            evs.append(_mk("user", "USER", body, text=body, ts=ts, raw=r, turn=turn))
+            evs.append(_mk("user", "USER", body, text=body, ts=ts, raw=r, turn=turn,
+                           chars={"text": len(body)}))
         elif t == "assistant.message":
             body = d.get("content") or ""
             model = d.get("model", "")
+            mid = d.get("id") or f"row{len(evs)}"
             if body:
                 step += 1
                 evs.append(_mk("assistant", "ASSISTANT", body, text=body, ts=ts,
-                               raw=r, turn=turn, step=step, model=model))
+                               raw=r, turn=turn, step=step, model=model, mid=mid,
+                               chars={"text": len(body)}))
             for tr in d.get("toolRequests") or []:
                 step += 1
                 name = tr.get("name", "?")
                 args = tr.get("arguments")
                 evs.append(_mk("tool", "TOOL", f"{name} {_args_line(args)}", ts=ts,
-                               raw=r, turn=turn, step=step, model=model,
+                               raw=r, turn=turn, step=step, model=model, mid=mid,
                                preview=tr.get("intentionSummary", ""),
+                               chars={"args": _raw_len(args)},
                                tool={"name": name,
                                      "args": _clip(_args_line(args, 100000), MAX_TEXT),
                                      "result": ""}))
@@ -275,19 +325,22 @@ def _events_copilot(rows):
             hit = by_id.pop(d.get("toolCallId"), None)
             if hit is None:
                 evs.append(_mk("tool", "TOOL", d.get("toolName", "?"), text=body,
-                               preview=body, ts=ts, raw=r, turn=turn, error=failed))
+                               preview=body, ts=ts, raw=r, turn=turn, error=failed,
+                               chars={"result": len(body)}))
                 continue
             i, req_ts = hit
             evs[i]["tool"]["result"] = _clip(body, MAX_TEXT)
             evs[i]["preview"] = _oneline(body)
             evs[i]["error"] = failed
             evs[i]["dur_ms"] = _iso_ms(req_ts, ts)
+            evs[i]["chars"]["result"] = len(body)
         elif t == "hook.end":
             ok = d.get("success", True) and d.get("exitCode", 0) in (0, None)
+            hbody = json.dumps(d, ensure_ascii=False, indent=2)
             evs.append(_mk("hook", "HOOK", f"{d.get('hookType', '?')}"
                            f"{'' if ok else '  failed'}",
-                           text=json.dumps(d, ensure_ascii=False, indent=2),
-                           ts=ts, raw=r, turn=turn, error=not ok))
+                           text=hbody, ts=ts, raw=r, turn=turn, error=not ok,
+                           chars={"text": len(hbody)}))
         elif t == "session.shutdown":
             evs.append(_mk("system", "END", "session shutdown",
                            text=json.dumps(d, ensure_ascii=False, indent=2),
@@ -312,16 +365,19 @@ def _events_pi(rows):
         elif t in ("custom_message", "compaction", "session_info"):
             body = r.get("content") or r.get("summary") or r.get("name") or ""
             evs.append(_mk("context", "CONTEXT", f"{t}: {_oneline(body, 120)}",
-                           text=body, ts=ts, raw=r, turn=turn))
+                           text=body, ts=ts, raw=r, turn=turn,
+                           chars={"text": len(body)}))
         elif t == "message":
             m = r.get("message") or {}
             role = m.get("role")
             content = m.get("content") or []
+            mid = m.get("id") or f"row{len(evs)}"
             if role == "user":
                 body = _blocks_text(content)
                 turn += 1
                 step = 0
-                evs.append(_mk("user", "USER", body, text=body, ts=ts, raw=r, turn=turn))
+                evs.append(_mk("user", "USER", body, text=body, ts=ts, raw=r, turn=turn,
+                               chars={"text": len(body)}))
             elif role == "assistant":
                 u = m.get("usage") or {}
                 tokens = {
@@ -339,8 +395,10 @@ def _events_pi(rows):
                     step += 1
                     evs.append(_mk("assistant", "ASSISTANT", body or "(thinking only)",
                                    text=body, ts=ts, raw=r, turn=turn, step=step,
-                                   tokens=tokens, model=model,
+                                   tokens=tokens, model=model, mid=mid,
+                                   chars={"text": len(body), "think": len(think)},
                                    thinking=_clip(think, MAX_TEXT)))
+                    tokens = {}
                 for c in content:
                     if not isinstance(c, dict) or c.get("type") != "toolCall":
                         continue
@@ -348,10 +406,12 @@ def _events_pi(rows):
                     name = c.get("name", "?")
                     args = c.get("arguments")
                     evs.append(_mk("tool", "TOOL", f"{name} {_args_line(args)}", ts=ts,
-                                   raw=r, turn=turn, step=step, model=model,
+                                   raw=r, turn=turn, step=step, model=model, mid=mid,
+                                   tokens=tokens, chars={"args": _raw_len(args)},
                                    tool={"name": name,
                                          "args": _clip(_args_line(args, 100000), MAX_TEXT),
                                          "result": ""}))
+                    tokens = {}
                     if c.get("id"):
                         by_id[c["id"]] = (len(evs) - 1, ts)
             elif role == "toolResult":
@@ -360,13 +420,15 @@ def _events_pi(rows):
                 hit = by_id.pop(m.get("toolCallId"), None)
                 if hit is None:
                     evs.append(_mk("tool", "TOOL", m.get("toolName", "?"), text=body,
-                                   preview=body, ts=ts, raw=r, turn=turn, error=failed))
+                                   preview=body, ts=ts, raw=r, turn=turn, error=failed,
+                                   chars={"result": len(body)}))
                     continue
                 i, req_ts = hit
                 evs[i]["tool"]["result"] = _clip(body, MAX_TEXT)
                 evs[i]["preview"] = _oneline(body)
                 evs[i]["error"] = failed
                 evs[i]["dur_ms"] = _iso_ms(req_ts, ts)
+                evs[i]["chars"]["result"] = len(body)
         if len(evs) >= MAX_EVENTS:
             break
     return evs
@@ -382,6 +444,210 @@ EVENT_PARSERS = {
 def extract_events(rows, harness="claude"):
     """Replay one transcript into an ordered list of inspectable events."""
     return EVENT_PARSERS.get(harness, _events_claude)(rows)
+
+
+# ---- token attribution -------------------------------------------------------
+# Transcripts record token usage per API response, never per content block, so
+# no file says "50k of the output was thinking". What they do record is the
+# exact size of every response and the exact text of every part of it, so the
+# split below is the response's real token count divided by character share.
+# Totals are exact; the slices inside them are estimates, and the payload says
+# so, because acting on a made-up number is worse than acting on none.
+
+CHARS_PER_TOKEN = 4.0   # fallback only, for harnesses that log no usage at all
+
+OUT_LABELS = {"think": "Thinking", "text": "Reply text", "args": "Tool calls"}
+CTX_LABELS = {
+    "boot": "System prompt & tools",
+    "user": "User prompts",
+    "result": "Tool results",
+    "context": "Context injections",
+    "hook": "Hook output",
+    "model": "Model turns re-read",
+    # growth the transcript does not spell out: tool schemas loaded mid-session,
+    # skill bodies, per-turn reminders the harness never writes to the log.
+    "other": "Not in the transcript",
+}
+
+
+def _share(total, parts):
+    """Split `total` across {key: weight} proportionally, without losing a token
+    to rounding (the largest slice absorbs the remainder)."""
+    weight = sum(parts.values())
+    if total <= 0 or weight <= 0:
+        return {}
+    out = {k: int(total * w / weight) for k, w in parts.items() if w > 0}
+    if out:
+        big = max(out, key=lambda k: out[k])
+        out[big] += total - sum(out.values())
+    return out
+
+
+def _ctx_of(tokens):
+    """Everything the model had to read for one request."""
+    return ((tokens.get("input", 0) or 0) + (tokens.get("cache_read", 0) or 0)
+            + (tokens.get("cache_create", 0) or 0))
+
+
+def token_report(events):
+    """Where a session's tokens went, and a per-event estimate written back onto
+    the events (`est`) so a single step can show its own share.
+
+    Output side: a response's output tokens are split over its reply text and
+    tool-call arguments by character share. Reasoning is the residual: Claude
+    stores thinking blocks with the text stripped (an empty string plus a
+    signature), so the only honest measure of it is "the tokens this response
+    was billed minus the tokens its visible text can account for".
+
+    Context side: each request's context is compared with the previous one and
+    the growth is attributed to whatever entered the conversation in between
+    (tool results, injections, prompts, the model's own last turn). The first
+    request also carries the system prompt and tool definitions, which no row
+    records, so what the visible text cannot explain lands in "System prompt".
+
+    Both sides convert characters to tokens with a ratio calibrated on this
+    session's own responses rather than a guessed constant.
+    """
+    out_parts = {k: 0 for k in OUT_LABELS}
+    ctx_parts = {k: 0 for k in CTX_LABELS}
+    by_tool = {}
+    context_reads = requests = cache_read = 0
+
+    # --- group events by the response they belong to -------------------------
+    groups, index = [], {}
+    for i, e in enumerate(events):
+        key = e.get("mid") or f"_{i}"
+        g = index.get(key)
+        if g is None:
+            g = {"out": 0, "think_blocks": 0, "evs": []}
+            index[key] = g
+            groups.append(g)
+        g["evs"].append(e)
+        g["out"] = g["out"] or (e.get("tokens") or {}).get("output", 0) or 0
+        g["think_blocks"] += e.get("think_blocks", 0) or 0
+
+    def weigh(g):
+        """{(event, part): characters} for everything this response generated."""
+        w = {}
+        for e in g["evs"]:
+            if e.get("kind") not in ("assistant", "tool"):
+                continue
+            c = e.get("chars") or {}
+            for k in OUT_LABELS:
+                if c.get(k):
+                    w[(id(e), k)] = c[k]
+        return w
+
+    gen = [g for g in groups
+           if any(e.get("kind") in ("assistant", "tool") for e in g["evs"])]
+    exact = any(g["out"] for g in gen)
+
+    # --- calibrate: chars per token, measured on responses that did not think
+    seen_chars = billed = 0
+    for g in gen:
+        if g["out"] and not g["think_blocks"]:
+            seen_chars += sum(weigh(g).values())
+            billed += g["out"]
+    ratio = seen_chars / billed if billed and seen_chars else CHARS_PER_TOKEN
+    ratio = min(8.0, max(1.5, ratio))
+
+    # --- output: visible parts by character share, reasoning as the residual --
+    for g in gen:
+        weights = weigh(g)
+        visible = sum(weights.values())
+        out = g["out"] or (0 if exact else int(visible / ratio))
+        if out <= 0:
+            continue
+        if g["think_blocks"]:
+            spend = min(out, int(visible / ratio)) if visible else 0
+        else:
+            spend = out                      # nothing hidden: it is all visible
+        split = _share(spend, weights)
+        for (eid, k), n in split.items():
+            out_parts[k] += n
+        for e in g["evs"]:
+            mine = {k: v for (eid, k), v in split.items() if eid == id(e)}
+            if mine:
+                e["est"]["out"] = sum(mine.values())
+                e["est"]["out_parts"] = {OUT_LABELS[k]: v for k, v in mine.items()}
+        rest = out - spend
+        if rest > 0:
+            out_parts["think"] += rest
+            carrier = g["evs"][0]
+            carrier["est"]["think"] = carrier["est"].get("think", 0) + rest
+            carrier["est"]["out"] = carrier["est"].get("out", 0) + rest
+
+    # --- context: attribute each request's growth to what arrived before it ---
+    pending = {k: 0 for k in CTX_LABELS}
+    pending_tool = {}
+    pending_evs = []
+    prev_ctx = 0
+    for e in events:
+        tokens = e.get("tokens") or {}
+        ctx = _ctx_of(tokens)
+        if ctx:
+            requests += 1
+            context_reads += ctx
+            cache_read += tokens.get("cache_read", 0) or 0
+            grew = ctx - prev_ctx if prev_ctx else ctx
+            prev_ctx = ctx
+            if grew > 0:
+                seen = sum(pending.values())
+                explained = min(grew, int(seen / ratio)) if seen else 0
+                for k, n in _share(explained, pending).items():
+                    ctx_parts[k] += n
+                for ev, chars in pending_evs:
+                    if seen:
+                        ev["est"]["ctx"] = int(explained * chars / seen)
+                for name, chars in pending_tool.items():
+                    if seen:
+                        by_tool[name] = by_tool.get(name, 0) + int(explained * chars / seen)
+                rest = grew - explained
+                if rest > 0:
+                    ctx_parts["boot" if requests == 1 else "other"] += rest
+            pending = {k: 0 for k in CTX_LABELS}
+            pending_tool = {}
+            pending_evs = []
+        c = e.get("chars") or {}
+        kind = e.get("kind")
+        bucket = ("user" if kind == "user" else "hook" if kind == "hook"
+                  else "model" if kind == "assistant" else "context")
+        own = (c.get("text", 0) + c.get("think", 0)
+               + (c.get("args", 0) if kind != "tool" else 0))
+        if own:
+            pending[bucket] += own
+            pending_evs.append((e, own))
+        if kind == "tool":
+            grown = c.get("result", 0) + c.get("args", 0)
+            if grown:
+                pending["result" if c.get("result") else "model"] += grown
+                pending_evs.append((e, grown))
+                if c.get("result"):
+                    name = (e.get("tool") or {}).get("name", "?")
+                    pending_tool[name] = pending_tool.get(name, 0) + grown
+
+    def rows(parts, labels):
+        total = sum(parts.values()) or 1
+        return [{"label": labels[k], "tokens": v, "pct": round(100.0 * v / total, 1)}
+                for k, v in sorted(parts.items(), key=lambda kv: -kv[1]) if v > 0]
+
+    out_total = sum(out_parts.values())
+    ctx_total = sum(ctx_parts.values())
+    tools = sorted(by_tool.items(), key=lambda kv: -kv[1])[:10]
+    return {
+        "exact": exact,
+        "ratio": round(ratio, 2),
+        "output": {"total": out_total, "rows": rows(out_parts, OUT_LABELS)},
+        "context": {"total": ctx_total, "rows": rows(ctx_parts, CTX_LABELS)},
+        "by_tool": [{"label": n, "tokens": v,
+                     "pct": round(100.0 * v / (ctx_total or 1), 1)} for n, v in tools],
+        "reads": {
+            "context_reads": context_reads,
+            "requests": requests,
+            "cache_read": cache_read,
+            "reread": round(context_reads / ctx_total, 1) if ctx_total else 0,
+        },
+    }
 
 
 # ---- JSON shaping ------------------------------------------------------------
@@ -476,20 +742,22 @@ class Scope:
         return len(self.sessions)
 
     def events(self, path):
+        """(events, token report) for one transcript, parsed once per mtime."""
         s = self.by_path.get(path)
         if s is None:
-            return None
+            return None, None
         try:
             mtime = os.path.getmtime(path)
         except OSError:
             mtime = 0
         cached = self._events.get(path)
         if cached and cached[0] == mtime:
-            return cached[1]
+            return cached[1], cached[2]
         rows = list(self.sa._iter_rows(path))
         evs = extract_events(rows, s.harness)
-        self._events[path] = (mtime, evs)
-        return evs
+        rep = token_report(evs)   # also writes each event's own estimate
+        self._events[path] = (mtime, evs, rep)
+        return evs, rep
 
 
 def _routes(scope):
@@ -535,9 +803,11 @@ def _routes(scope):
                 s = scope.by_path.get(path)
                 if s is None:
                     return self._json({"error": "unknown session"}, 404)
+                events, tokens = scope.events(path)
                 return self._json({
                     "session": session_row(s),
-                    "events": scope.events(path),
+                    "events": events,
+                    "tokens": tokens,
                     "notes": sa.notes_for(s.session_id, sa.load_notes()),
                 })
             return self._json({"error": "not found"}, 404)
@@ -600,400 +870,648 @@ PAGE = r"""<!doctype html>
 <title>Session Analytics</title>
 <style>
 :root{
-  --bg:#0f1116; --panel:#161922; --panel2:#1b1f2a; --line:#262b38;
-  --fg:#dfe3ec; --dim:#8b93a7; --accent:#6ea8fe; --ok:#5fd48a; --err:#ff6b6b;
-  --warn:#ffc46b; --tool:#e08a3c; --model:#a78bfa; --input:#4e9be6;
+  --bg:#ffffff; --side:#f7f8fa; --panel:#fbfbfd; --line:#e5e7ec; --line2:#eef0f4;
+  --fg:#1f2328; --dim:#69707d; --faint:#9aa1ac;
+  --accent:#3b6ef6; --accbg:#e9eefb; --ok:#1a7f4b; --err:#c8342b;
+  --user:#2563eb; --userbg:#e8f0ff; --asst:#7442cf; --asstbg:#f2ecfd;
+  --tool:#b8620f; --toolbg:#fcf0e2; --ctx:#0f766e; --ctxbg:#e6f4f2;
+  --sys:#5b6472; --sysbg:#eef0f4; --hook:#1a7f4b; --hookbg:#e7f4ec;
   --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
+html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);
-  font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  font:13px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 a{color:var(--accent);text-decoration:none}
 .hidden{display:none!important}
-.top{display:flex;align-items:center;gap:14px;padding:10px 16px;
-  border-bottom:1px solid var(--line);background:var(--panel)}
-.top h1{font-size:14px;font-weight:600;margin:0}
-.sub{color:var(--dim);font-size:12px}
 .spacer{flex:1}
-.tabs{display:flex;gap:4px}
-.tab{padding:4px 10px;border-radius:6px;color:var(--dim);cursor:pointer;
-  border:1px solid transparent}
-.tab:hover{color:var(--fg)}
-.tab.on{color:var(--fg);border-color:var(--line);background:var(--panel2)}
-.tab.link{border-bottom:2px solid transparent;border-radius:0;padding:4px 2px}
-.tab.link.on{border-bottom-color:var(--accent);background:none;border-radius:0;
-  border-left:0;border-right:0;border-top:0}
-input[type=search],input[type=text]{background:var(--panel2);border:1px solid var(--line);
-  color:var(--fg);border-radius:6px;padding:5px 9px;font:inherit;min-width:220px}
-button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
-  border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
-button:hover{border-color:var(--accent)}
-.wrap{padding:14px 16px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-.tile .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-.tile .v{font-size:20px;font-weight:600;margin-top:2px}
-.cols{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(280px,1fr);
-  gap:12px;margin-top:12px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.card h2{font-size:12px;margin:0;padding:9px 12px;border-bottom:1px solid var(--line);
-  color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.card .body{padding:8px 12px}
-table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{text-align:left;color:var(--dim);font-weight:600;font-size:11px;padding:7px 10px;
-  border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap}
-th:hover{color:var(--fg)}
-td{padding:6px 10px;border-bottom:1px solid #1e2330;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
-tr.srow{cursor:pointer}
-tr.srow:hover td{background:var(--panel2)}
+.dim{color:var(--dim)} .ok{color:var(--ok)} .bad{color:var(--err)}
 .num{text-align:right;font-variant-numeric:tabular-nums}
-.pill{display:inline-block;padding:1px 6px;border-radius:999px;font-size:10.5px;
-  border:1px solid var(--line);color:var(--dim)}
-.pill.cla{color:#9ecbff;border-color:#26405e}
-.pill.cop{color:#9ae6b4;border-color:#1f4632}
-.pill.pi{color:#d6bcfa;border-color:#3d2f5e}
-.bar{height:6px;border-radius:3px;background:#243049}
-.rowbar{display:flex;align-items:center;gap:8px;margin:3px 0}
-.rowbar .lbl{width:120px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap}
-.rowbar .n{width:52px;text-align:right;font-variant-numeric:tabular-nums}
-.rowbar .track{flex:1;background:#1d2231;border-radius:3px;overflow:hidden}
-.rowbar .fill{height:6px;background:var(--accent)}
-/* ---- detail / trajectory ---- */
-.dwrap{display:flex;flex-direction:column;height:calc(100vh - 45px)}
-.chips{display:flex;align-items:center;gap:8px;padding:7px 16px;
-  border-bottom:1px solid var(--line);background:var(--panel)}
-.chip{padding:3px 9px;border-radius:999px;border:1px solid var(--line);
-  color:var(--dim);cursor:pointer;font-size:11.5px}
-.chip.on{color:var(--fg);background:var(--panel2);border-color:var(--accent)}
-.map{padding:6px 16px;border-bottom:1px solid var(--line);background:var(--panel);
-  overflow-x:auto}
-.lane{display:flex;align-items:center;gap:6px;height:14px}
-.lane .name{width:42px;color:var(--dim);font-size:10px;text-align:right;flex:none}
-.lane .blocks{display:flex;gap:2px}
-.blk{width:9px;height:9px;border-radius:2px;background:#2a3143;cursor:pointer;flex:none}
-.blk.on{outline:1px solid var(--fg)}
-.blk.err{background:var(--err)!important}
-.split{display:flex;flex:1;min-height:0}
-.trace{flex:1;overflow:auto;font-family:var(--mono);font-size:12px}
-.ev{display:flex;gap:10px;padding:3px 12px;border-left:3px solid transparent;
-  cursor:pointer;align-items:baseline}
-.ev:hover{background:var(--panel2)}
-.ev.on{background:#1d2431;border-left-color:var(--accent)}
-.ev .badge{flex:none;width:88px;text-align:center;font-size:9.5px;letter-spacing:.05em;
-  padding:1px 0;border-radius:4px;background:#242a38;color:var(--dim)}
-.ev.k-user .badge{background:#1d3550;color:#9ecbff}
-.ev.k-assistant .badge{background:#2e2445;color:#c3a9ff}
-.ev.k-tool .badge{background:#3b2a17;color:#f0b27a}
-.ev.k-hook .badge{background:#1f3a2c;color:#8fe0b0}
-.ev.k-context .badge,.ev.k-system .badge{background:#242a38;color:#98a2b8}
-.ev .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev .arrow{color:var(--dim);flex:none}
-.ev .p{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev.err .t{color:var(--err)}
-.insp{width:430px;flex:none;border-left:1px solid var(--line);background:var(--panel);
+#app{height:100vh;display:flex;overflow:hidden}
+input[type=search],input[type=text]{background:#fff;border:1px solid var(--line);
+  color:var(--fg);border-radius:7px;padding:5px 9px;font:inherit;min-width:0}
+input:focus{outline:none;border-color:var(--accent)}
+button{background:#fff;border:1px solid var(--line);color:var(--fg);border-radius:7px;
+  padding:5px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:#c9cedb;background:#fafbfc}
+
+/* ---------- sidebar ---------- */
+.side{width:266px;flex:none;background:var(--side);border-right:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0}
-.insp .head{display:flex;align-items:center;gap:8px;padding:8px 12px;
-  border-bottom:1px solid var(--line)}
-.insp .head .badge{font-size:10px;padding:1px 8px;border-radius:4px;background:#242a38}
-.insp .body{overflow:auto;padding:10px 12px;flex:1;min-height:0}
-.kv{display:grid;grid-template-columns:120px 1fr;gap:3px 10px;font-size:12px}
+.side.off{display:none}
+.brand{display:flex;align-items:center;gap:7px;padding:13px 14px 11px}
+.brand .logo{font-weight:700;font-size:15px;letter-spacing:-.02em}
+.brand .tag{font-size:8.5px;font-weight:700;letter-spacing:.09em;background:#15181d;
+  color:#fff;padding:2px 5px;border-radius:4px}
+.brand .fold{margin-left:auto;border:0;background:none;color:var(--faint);padding:2px 4px}
+.newbtn{margin:0 12px 12px;padding:7px 10px;border-radius:9px;width:calc(100% - 24px);
+  display:flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px}
+.sidehead{display:flex;align-items:center;gap:6px;padding:0 14px 6px;color:var(--faint);
+  font-size:11px}
+.sidehead .ic{cursor:pointer;padding:0 2px}
+.sidehead .ic:hover{color:var(--fg)}
+.sidesearch{padding:0 12px 8px;display:flex;gap:6px}
+.sidesearch input{flex:1}
+.hpills{display:flex;gap:4px;padding:0 12px 8px}
+.hp{font-size:10.5px;color:var(--dim);border:1px solid var(--line);background:#fff;
+  border-radius:999px;padding:1px 8px;cursor:pointer}
+.hp.on{color:var(--accent);border-color:var(--accent);background:var(--accbg)}
+.tree{flex:1;overflow:auto;padding:0 8px 10px}
+.wsrow{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:7px;
+  cursor:pointer;color:var(--dim);font-size:12.5px}
+.wsrow:hover{background:#edeff3;color:var(--fg)}
+.wsrow .car{width:10px;color:var(--faint);font-size:9px}
+.wsrow .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsrow .c{color:var(--faint);font-size:11px}
+.ses{display:flex;align-items:center;gap:8px;padding:5px 8px 5px 24px;border-radius:7px;
+  cursor:pointer;font-size:12.5px;color:#3b424e}
+.ses:hover{background:#edeff3}
+.ses.on{background:#e6e9ef;color:var(--fg)}
+.ses .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ses .age{color:var(--faint);font-size:11px;flex:none}
+.ses .dot{width:5px;height:5px;border-radius:50%;flex:none}
+.sidefoot{border-top:1px solid var(--line);padding:9px 14px;color:var(--dim);
+  display:flex;align-items:center;gap:8px;font-size:12px}
+
+/* ---------- main ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.hdr{display:flex;align-items:center;gap:12px;padding:8px 16px 0;border-bottom:1px solid var(--line)}
+.hdr .title{font-weight:600;max-width:38vw;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;padding-bottom:9px}
+.hdr .mode{color:var(--dim);font-size:12px;padding-bottom:9px}
+.hdr .fold{border:0;background:none;color:var(--faint);padding:0 2px 9px}
+.tabs{display:flex;gap:16px;align-self:flex-end}
+.tab{padding:5px 2px 8px;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;
+  font-size:12.5px}
+.tab:hover{color:var(--fg)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.hdr .btn{margin-bottom:8px}
+
+.tbar{display:flex;align-items:center;gap:10px;padding:5px 16px;
+  border-bottom:1px solid var(--line2);color:var(--dim);font-size:12px}
+.tg{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 7px;border-radius:7px;
+  border:1px solid transparent}
+.tg:hover{background:#f2f4f7}
+.tg.on{background:var(--accbg);color:var(--accent);border-color:#cfdcfb}
+.tbar input{width:210px}
+
+.map{padding:5px 16px 6px;border-bottom:1px solid var(--line);background:var(--panel);
+  overflow-x:auto}
+.lane{display:flex;align-items:center;gap:6px;height:13px}
+.lane .name{width:36px;flex:none;text-align:right;color:var(--faint);font-size:9.5px}
+.lane .blocks{display:flex;gap:2px}
+.blk{width:9px;height:8px;border-radius:2px;flex:none;cursor:pointer}
+.blk.on{outline:2px solid #1f2328;outline-offset:1px}
+.blk.err{background:var(--err)!important}
+
+.split{flex:1;display:flex;min-height:0}
+.trace{flex:1;overflow:auto;min-width:0}
+.ev{display:flex;align-items:baseline;gap:9px;padding:3px 12px 3px 0;
+  border-left:3px solid transparent;cursor:pointer;font-family:var(--mono);font-size:11.5px}
+.ev:hover{background:#f5f6f9}
+.ev.on{background:#eef2fd;border-left-color:var(--accent)}
+.ev .gut{width:56px;flex:none;text-align:right;color:var(--faint);font-size:9.5px;
+  font-family:ui-sans-serif,system-ui,sans-serif}
+.ev .badge{width:74px;flex:none;text-align:center;font-size:9px;letter-spacing:.07em;
+  padding:1px 0;border-radius:4px;background:var(--sysbg);color:var(--sys);
+  font-family:ui-sans-serif,system-ui,sans-serif}
+.ev.k-user .badge{background:var(--userbg);color:var(--user)}
+.ev.k-assistant .badge{background:var(--asstbg);color:var(--asst)}
+.ev.k-tool .badge{background:var(--toolbg);color:var(--tool)}
+.ev.k-hook .badge{background:var(--hookbg);color:var(--hook)}
+.ev.k-context .badge{background:var(--ctxbg);color:var(--ctx)}
+.ev .nm{flex:none;font-weight:700;color:var(--fg)}
+.ev .t{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:#3d4450}
+.ev .arrow{flex:none;color:var(--faint)}
+.ev .p{flex:1 1 42%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--dim)}
+.ev.err .t,.ev.err .nm{color:var(--err)}
+.ev.turnstart{border-top:1px solid var(--line2)}
+.ev.prose .t{font-family:ui-sans-serif,system-ui,sans-serif;font-size:12.5px}
+
+.insp{width:424px;flex:none;border-left:1px solid var(--line);display:flex;
+  flex-direction:column;min-height:0;background:var(--bg)}
+.insp .head{display:flex;align-items:center;gap:9px;padding:8px 12px}
+.insp .head .badge{font-size:9px;letter-spacing:.07em;padding:1px 7px;border-radius:4px;
+  background:var(--toolbg);color:var(--tool)}
+.insp .head .sub{color:var(--faint);font-size:11.5px}
+.insp .head .x{border:0;background:none;color:var(--faint);padding:0 4px;font-size:15px}
+.itabs{display:flex;gap:15px;padding:0 12px;border-bottom:1px solid var(--line2)}
+.ibody{flex:1;overflow:auto;padding:10px 13px 24px;min-height:0}
+.kv{display:grid;grid-template-columns:104px 1fr;gap:5px 12px;font-size:12px}
 .kv .k{color:var(--dim)}
-pre{margin:6px 0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);
-  font-size:11.5px;background:var(--panel2);border:1px solid var(--line);
-  border-radius:6px;padding:8px}
-.sec{margin-top:12px}
-.sec h3{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;
-  margin:0 0 4px}
-.foot{display:flex;gap:16px;padding:6px 16px;border-top:1px solid var(--line);
+.sec{margin-top:15px}
+.sec h3{font-size:11.5px;font-weight:600;color:var(--fg);margin:0 0 5px;
+  display:flex;align-items:center;gap:5px}
+.sec h3 .car{color:var(--faint);font-size:9px}
+pre{margin:5px 0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);
+  font-size:11px;line-height:1.5;background:#f7f8fa;border:1px solid var(--line);
+  border-radius:7px;padding:8px 9px;color:#333a45}
+pre.plain{background:none;border:0;padding:0;color:#3d4450}
+
+.foot{display:flex;gap:0;padding:6px 16px;border-top:1px solid var(--line);
   background:var(--panel);color:var(--dim);font-size:11.5px;flex-wrap:wrap}
-.chat .msg{max-width:900px;margin:10px auto;padding:10px 12px;border-radius:8px;
-  border:1px solid var(--line);background:var(--panel)}
-.chat .msg.user{border-color:#26405e}
-.chat .msg .who{font-size:10.5px;color:var(--dim);text-transform:uppercase;
-  letter-spacing:.06em;margin-bottom:4px}
-.chat .msg .txt{white-space:pre-wrap;word-break:break-word}
-.empty{color:var(--dim);padding:18px}
-.ok{color:var(--ok)} .bad{color:var(--err)} .dim{color:var(--dim)}
+.foot span{padding:0 12px;border-right:1px solid var(--line)}
+.foot span:first-child{padding-left:0}
+.foot span:last-child{border-right:0}
+
+.pane{flex:1;overflow:auto;min-height:0}
+.chat{padding:14px 0 40px}
+.msg{max-width:840px;margin:0 auto 14px;padding:0 16px}
+.msg .who{font-size:10px;letter-spacing:.07em;color:var(--faint);margin-bottom:4px}
+.msg .txt{white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px}
+.msg.user .txt{background:#f4f7ff;border-color:#dbe4fb}
+
+.hero{flex:1;overflow:auto;padding:0 0 40px}
+.heroin{max-width:1100px;margin:0 auto;padding:56px 20px 0;text-align:center}
+.heroin h1{font-size:26px;font-weight:600;margin:0 0 6px;letter-spacing:-.02em}
+.heroin .p{color:var(--dim);margin-bottom:26px}
+.badgepv{display:inline-block;font-size:10px;color:var(--accent);background:var(--accbg);
+  border-radius:5px;padding:2px 7px;vertical-align:middle;margin-left:6px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;
+  text-align:left}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .k{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+.tile .v{font-size:20px;font-weight:600;margin-top:2px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;
+  margin-top:12px;text-align:left}
+.card{background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card h2{font-size:11px;margin:0;padding:9px 12px;border-bottom:1px solid var(--line2);
+  color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.card .body{padding:9px 12px}
+.rowbar{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px}
+.rowbar .lbl{width:120px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rowbar .n{width:54px;text-align:right;font-variant-numeric:tabular-nums}
+.rowbar .track{flex:1;background:#eef0f4;border-radius:3px;overflow:hidden}
+.rowbar .fill{height:6px;background:var(--accent)}
+.empty{color:var(--faint);padding:18px;font-size:12.5px}
+.mwrap{padding:14px 16px 40px}
+.sbar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:#eef0f4;
+  margin:4px 0 9px}
+.sbar i{height:100%;display:block}
+.tgrp{margin-bottom:16px}
+.tgrp .hd{display:flex;align-items:baseline;gap:8px;font-size:12px;margin-bottom:2px}
+.tgrp .hd b{font-size:12.5px}
+.tgrp .hd .tot{color:var(--dim);font-variant-numeric:tabular-nums}
+.trow{display:flex;align-items:center;gap:8px;font-size:12px;padding:2.5px 0}
+.trow .sw{width:9px;height:9px;border-radius:2px;flex:none}
+.trow .l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .v{width:78px;text-align:right;font-variant-numeric:tabular-nums}
+.trow .pc{width:52px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+.note{color:var(--faint);font-size:11px;line-height:1.5;margin-top:10px}
+.est{color:var(--faint);font-size:10px;border:1px solid var(--line);border-radius:4px;
+  padding:0 4px;margin-left:5px;vertical-align:1px}
 </style></head>
 <body>
 <div id="app"></div>
 <script>
 const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtTok = n => n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"k" : String(n||0);
 const fmtInt = n => (n||0).toLocaleString();
 const pct = x => Math.round((x||0)*100) + "%";
-const dur = ms => ms == null ? "—" : ms >= 60000 ? (ms/60000).toFixed(1)+" m"
+const dur = ms => ms == null ? "—" : ms >= 60000 ? Math.floor(ms/60000)+"m"+Math.round((ms%60000)/1000)+"s"
   : ms >= 1000 ? (ms/1000).toFixed(1)+" s" : ms+" ms";
-const HS = {claude:"cla", copilot:"cop", pi:"pi"};
+const HS = {claude:"claude", copilot:"copilot", pi:"pi"};
 
-let DATA = null;          // {sessions, dashboard}
-let LIST = {harness:"all", q:"", sort:"date", desc:true};
-let DET = null;           // {session, events, notes}
-let VIEW = {tab:"trajectory", sel:0, q:"", kinds:new Set()};
+let DATA = null;                 // {sessions, dashboard, scope}
+let DET  = null;                 // {session, events, notes}
+let SIDE = {q:"", harness:"all", closed:new Set(), off:false};
+let VIEW = {tab:"trajectory", sel:-1, q:"", dur:false, colTurns:false, colCalls:false};
+let ITAB = "summary";
 
 async function api(path, body) {
   const opt = body ? {method:"POST", body:JSON.stringify(body),
                       headers:{"Content-Type":"application/json"}} : {};
-  const r = await fetch(path, opt);
-  return r.json();
+  return (await fetch(path, opt)).json();
 }
 
-/* ---------------- index view ---------------- */
-function filtered() {
-  const q = LIST.q.toLowerCase();
-  let rows = DATA.sessions.filter(s =>
-    (LIST.harness === "all" || s.harness === LIST.harness) &&
+/* ---------------- sidebar ---------------- */
+function ageOf(day) {
+  const d = Date.parse((day || "") + "T00:00:00");
+  if (isNaN(d)) return "";
+  const n = Math.floor((Date.now() - d) / 86400000);
+  return n <= 0 ? "today" : n + "d";
+}
+
+function sideRows() {
+  const q = SIDE.q.toLowerCase();
+  const rows = DATA.sessions.filter(s =>
+    (SIDE.harness === "all" || s.harness === SIDE.harness) &&
     (!q || (s.title + " " + s.project + " " + s.harness).toLowerCase().includes(q)));
-  const key = LIST.sort;
-  rows = rows.slice().sort((a, b) => {
-    const va = key === "date" ? a.day + a.date : a[key], vb = key === "date" ? b.day + b.date : b[key];
-    return (va > vb ? 1 : va < vb ? -1 : 0) * (LIST.desc ? -1 : 1);
-  });
-  return rows;
-}
-
-function agg(rows) {
-  const a = {n:rows.length, turns:0, tools:0, tokens:0, errs:0, cr:0, cin:0, ga:0, gn:0, mins:0};
+  const groups = new Map();
   for (const s of rows) {
-    a.turns += s.turns; a.tools += s.tools; a.tokens += s.total_tokens;
-    a.errs += s.tool_errors; a.cr += s.cache_read; a.cin += s.input_tokens + s.cache_creation;
-    a.mins += s.duration_min;
-    if (s.goal === "achieved") a.ga++; else if (s.goal === "not_achieved") a.gn++;
+    if (!groups.has(s.project_short)) groups.set(s.project_short, []);
+    groups.get(s.project_short).push(s);
   }
-  return a;
+  for (const list of groups.values())
+    list.sort((a, b) => (a.day + a.date < b.day + b.date ? 1 : -1));
+  return Array.from(groups.entries())
+    .sort((a, b) => (a[1][0].day + a[1][0].date < b[1][0].day + b[1][0].date ? 1 : -1));
 }
 
+const HDOT = {claude:"#6f9bf5", copilot:"#43a86b", pi:"#a17ce0"};
+
+function sidebarHTML() {
+  if (SIDE.off) return "";
+  const groups = DATA ? sideRows() : [];
+  const cur = DET ? DET.session.path : "";
+  const tree = groups.map(([proj, list]) => {
+    const open = !SIDE.closed.has(proj);
+    const kids = open ? list.map(s => `<div class="ses ${s.path===cur?"on":""}"
+      data-p="${esc(s.path)}" title="${esc(s.title)}">
+      <span class="dot" style="background:${HDOT[s.harness]||"#aab"}"></span>
+      <span class="nm">${esc(s.title)}</span><span class="age">${ageOf(s.day)}</span></div>`).join("") : "";
+    return `<div class="wsrow" data-ws="${esc(proj)}"><span class="car">${open?"▾":"▸"}</span>
+      <span class="n">${esc(proj)}</span><span class="c">${list.length}</span></div>${kids}`;
+  }).join("") || '<div class="empty">No sessions in scope.</div>';
+  const pills = ["all", "claude", "copilot", "pi"].map(h =>
+    `<div class="hp ${SIDE.harness===h?"on":""}" data-h="${h}">${h}</div>`).join("");
+  return `<div class="side">
+    <div class="brand"><span class="logo">session</span><span class="tag">ANALYTICS</span>
+      <button class="fold" id="fold" title="Collapse sidebar">◧</button></div>
+    <button class="newbtn" id="rescan">⟳ Rescan transcripts</button>
+    <div class="sidehead"><span>Workspaces</span><div class="spacer"></div>
+      <span class="ic" id="home" title="Overview">⌂</span></div>
+    <div class="sidesearch"><input type="search" id="sq" placeholder="Search sessions…"
+      value="${esc(SIDE.q)}"></div>
+    <div class="hpills">${pills}</div>
+    <div class="tree" id="tree">${tree}</div>
+    <div class="sidefoot"><span>⚙</span><span>${DATA ? DATA.sessions.length : 0} sessions${
+      DATA && DATA.scope && DATA.scope.cwd ? " · scoped" : ""}</span></div>
+  </div>`;
+}
+
+function bindSidebar() {
+  const sq = $("#sq");
+  if (sq) sq.oninput = e => { SIDE.q = e.target.value; const p = e.target.selectionStart;
+    render(); const el = $("#sq"); if (el) { el.focus(); el.setSelectionRange(p, p); } };
+  $$(".hp").forEach(p => p.onclick = () => { SIDE.harness = p.dataset.h; render(); });
+  $$(".wsrow").forEach(w => w.onclick = () => {
+    const k = w.dataset.ws;
+    SIDE.closed.has(k) ? SIDE.closed.delete(k) : SIDE.closed.add(k);
+    render();
+  });
+  $$(".ses").forEach(s => s.onclick = () => { location.hash = "#/s/" + encodeURIComponent(s.dataset.p); });
+  const r = $("#rescan");
+  if (r) r.onclick = async () => { await api("/api/refresh", {}); DATA = await api("/api/sessions"); render(); };
+  const h = $("#home");
+  if (h) h.onclick = () => { location.hash = "#/"; };
+  const f = $("#fold");
+  if (f) f.onclick = () => { SIDE.off = true; render(); };
+}
+
+/* ---------------- overview (no session selected) ---------------- */
 function bars(items, color, fmt) {
   const f = fmt || fmtInt;
   const mx = Math.max(1, ...items.map(i => i[1]));
-  return items.map(([n, c]) => `<div class="rowbar"><div class="lbl">${esc(n)}</div>
+  return items.map(([n, c]) => `<div class="rowbar"><div class="lbl" title="${esc(n)}">${esc(n)}</div>
     <div class="n">${f(c)}</div><div class="track">
     <div class="fill" style="width:${Math.round(100*c/mx)}%;background:${color||"var(--accent)"}"></div>
     </div></div>`).join("");
 }
 
-function renderIndex() {
-  const rows = filtered(), a = agg(rows), d = DATA.dashboard;
-  const tabs = ["all", "claude", "copilot", "pi"].map(h =>
-    `<div class="tab ${LIST.harness===h?"on":""}" data-h="${h}">${h==="all"?"All agents":h}</div>`).join("");
+function heroHTML() {
+  if (!DATA) return '<div class="empty">Scanning transcripts…</div>';
+  const d = DATA.dashboard, rows = DATA.sessions;
+  const a = rows.reduce((o, s) => {
+    o.turns += s.turns; o.tools += s.tools; o.tok += s.total_tokens; o.err += s.tool_errors;
+    o.cr += s.cache_read; o.cin += s.input_tokens + s.cache_creation; o.min += s.duration_min;
+    if (s.goal === "achieved") o.ga++; else if (s.goal === "not_achieved") o.gn++;
+    return o; }, {turns:0, tools:0, tok:0, err:0, cr:0, cin:0, min:0, ga:0, gn:0});
   const tiles = [
-    ["Sessions", a.n], ["User turns", fmtInt(a.turns)], ["Tool calls", fmtInt(a.tools)],
-    ["Tokens", fmtTok(a.tokens)], ["Cache hit", pct(a.cr/((a.cr+a.cin)||1))],
-    ["Tool errors", a.errs], ["Active", a.mins >= 60 ? (a.mins/60).toFixed(1)+" h" : Math.round(a.mins)+" m"],
+    ["Sessions", rows.length], ["User turns", fmtInt(a.turns)], ["Tool calls", fmtInt(a.tools)],
+    ["Tokens", fmtTok(a.tok)], ["Cache hit", pct(a.cr/((a.cr+a.cin)||1))], ["Tool errors", a.err],
+    ["Active", a.min >= 60 ? (a.min/60).toFixed(1)+" h" : Math.round(a.min)+" m"],
     ["GOAL ✓/✗", a.ga + " / " + a.gn],
   ].map(([k, v]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
-
-  const head = [["date","When"],["harness","Agent"],["project_short","Project"],
-    ["turns","Turns"],["tools","Tools"],["tool_errors","Err"],["total_tokens","Tokens"],
-    ["cache_ratio","Cache"],["duration_min","Min"],["goal","Goal"],["title","Title"]]
-    .map(([k, l]) => `<th data-k="${k}">${l}${LIST.sort===k?(LIST.desc?" ↓":" ↑"):""}</th>`).join("");
-
-  const body = rows.map((s, i) => `<tr class="srow" data-i="${i}">
-    <td>${esc(s.date)}</td>
-    <td><span class="pill ${HS[s.harness]||""}">${esc(HS[s.harness]||s.harness)}</span></td>
-    <td title="${esc(s.project)}">${esc(s.project_short)}</td>
-    <td class="num">${s.turns}</td><td class="num">${s.tools}</td>
-    <td class="num ${s.tool_errors?"bad":""}">${s.tool_errors||""}</td>
-    <td class="num">${fmtTok(s.total_tokens)}</td>
-    <td class="num">${pct(s.cache_ratio)}</td>
-    <td class="num">${Math.round(s.duration_min)}</td>
-    <td>${s.goal==="achieved"?'<span class="ok">✓</span>':s.goal==="not_achieved"?'<span class="bad">✗</span>':'<span class="dim">·</span>'}</td>
-    <td title="${esc(s.title)}">${esc(s.title)}</td></tr>`).join("");
-
-  const pats = (d.error_patterns||[]).map(p => `<div class="rowbar">
-    <div class="n">${p.count}×</div><div class="lbl" style="flex:1;width:auto"
-      title="${esc((p.example||{}).cmd||"")}">${esc(p.sig)}</div></div>`).join("")
-    || '<div class="dim">no tool errors in scope 🎉</div>';
-  const days = (d.tokens_by_day||[]).slice(-14);
-
-  $("#app").innerHTML = `
-  <div class="top"><h1>Session Analytics</h1><div class="tabs">${tabs}</div>
-    <div class="spacer"></div>
-    <input type="search" id="q" placeholder="filter project / title / agent" value="${esc(LIST.q)}">
-    <button id="refresh">Rescan</button></div>
-  <div class="wrap">
+  const pats = (d.error_patterns||[]).map(p => `<div class="rowbar"><div class="n">${p.count}×</div>
+    <div class="lbl" style="flex:1;width:auto" title="${esc((p.example||{}).cmd||"")}">${esc(p.sig)}</div>
+    </div>`).join("") || '<div class="dim">no tool errors in scope</div>';
+  return `<div class="hero"><div class="heroin">
+    <h1>Session Analytics<span class="badgepv">Preview</span></h1>
+    <div class="p">Pick a session on the left to replay its trajectory step by step.</div>
     <div class="tiles">${tiles}</div>
     <div class="cols">
-      <div class="card"><h2>Sessions (${rows.length})</h2>
-        <div style="max-height:60vh;overflow:auto"><table><thead><tr>${head}</tr></thead>
-        <tbody>${body || '<tr><td class="empty" colspan="11">No sessions in scope.</td></tr>'}</tbody></table></div></div>
-      <div>
-        <div class="card"><h2>Top tools</h2><div class="body">${bars(d.top_tools||[])}</div></div>
-        <div class="card" style="margin-top:12px"><h2>Busiest projects</h2>
-          <div class="body">${bars(d.by_project||[], "var(--model)")}</div></div>
-        <div class="card" style="margin-top:12px"><h2>Tokens per day</h2>
-          <div class="body">${bars(days, "var(--tool)", fmtTok)}</div></div>
-        <div class="card" style="margin-top:12px"><h2>Recurring error patterns</h2>
-          <div class="body">${pats}</div></div>
-      </div>
+      <div class="card"><h2>Top tools</h2><div class="body">${bars(d.top_tools||[], "var(--tool)")}</div></div>
+      <div class="card"><h2>Busiest projects</h2><div class="body">${bars(d.by_project||[], "var(--asst)")}</div></div>
+      <div class="card"><h2>Tokens per day</h2><div class="body">${bars((d.tokens_by_day||[]).slice(-14), "var(--accent)", fmtTok)}</div></div>
+      <div class="card"><h2>Recurring error patterns</h2><div class="body">${pats}</div></div>
     </div>
-  </div>`;
-
-  $("#q").oninput = e => { LIST.q = e.target.value; const p = e.target.selectionStart;
-    renderIndex(); const el = $("#q"); el.focus(); el.setSelectionRange(p, p); };
-  $("#refresh").onclick = async () => { await api("/api/refresh", {}); await loadIndex(); };
-  document.querySelectorAll(".tab[data-h]").forEach(t =>
-    t.onclick = () => { LIST.harness = t.dataset.h; renderIndex(); });
-  document.querySelectorAll("th[data-k]").forEach(t =>
-    t.onclick = () => { const k = t.dataset.k;
-      if (LIST.sort === k) LIST.desc = !LIST.desc; else { LIST.sort = k; LIST.desc = true; }
-      renderIndex(); });
-  document.querySelectorAll("tr.srow").forEach(tr =>
-    tr.onclick = () => { location.hash = "#/s/" + encodeURIComponent(rows[+tr.dataset.i].path); });
+  </div></div>`;
 }
 
-/* ---------------- session detail ---------------- */
+/* ---------------- session view ---------------- */
 const laneOf = k => k === "assistant" ? "Model" : k === "tool" ? "Tools" : "Input";
+const kColor = k => k === "assistant" ? "#8b5cf6" : k === "tool" ? "#e08a3c"
+  : k === "user" ? "#4e9be6" : k === "hook" ? "#43a86b" : "#c3c9d4";
+
+function decorate(evs) {
+  let req = 0;
+  evs.forEach((e, i) => {
+    if (e.kind === "assistant") req++;
+    e.req = req; e.idx = i;
+  });
+}
+
+function firstOfTurn() {
+  const m = {};
+  DET.events.forEach((e, i) => { if (e.turn && !(e.turn in m)) m[e.turn] = i; });
+  return m;
+}
 
 function visibleEvents() {
   const q = VIEW.q.toLowerCase();
-  return DET.events.map((e, i) => ({e, i})).filter(({e}) =>
-    (!VIEW.kinds.size || VIEW.kinds.has(e.kind)) &&
-    (!q || (e.title + " " + e.preview + " " + e.text).toLowerCase().includes(q)));
+  const ft = firstOfTurn();
+  return DET.events.map((e, i) => ({e, i})).filter(({e, i}) => {
+    if (q && !((e.title + " " + e.preview + " " + e.text).toLowerCase().includes(q))) return false;
+    if (VIEW.colTurns) return ft[e.turn] === i || (!e.turn && e.kind === "system");
+    if (VIEW.colCalls) return e.kind === "user" || e.kind === "assistant";
+    return true;
+  });
 }
 
-function renderDetail() {
+function sessionHTML() {
+  const s = DET.session;
+  const tabs = ["chat", "trajectory", "metrics"].map(t =>
+    `<div class="tab ${VIEW.tab===t?"on":""}" data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</div>`).join("");
+  const head = `<div class="hdr">
+    ${SIDE.off ? '<button class="fold" id="unfold" title="Show sidebar">◧</button>' : ""}
+    <span class="title" title="${esc(s.title)}">${esc(s.title)}</span>
+    <span class="mode">${esc(s.harness)} · ${esc(s.project_short)} · ${esc(s.date)}</span>
+    <div class="spacer"></div>
+    <div class="tabs">${tabs}</div>
+    <button class="btn" id="dl" style="margin-left:14px">Session log ⇩</button>
+  </div>`;
+  const body = VIEW.tab === "trajectory" ? trajectoryHTML()
+             : VIEW.tab === "chat" ? chatHTML() : metricsHTML();
+  return head + body + footHTML();
+}
+
+function trajectoryHTML() {
+  const tg = (k, label, icon) =>
+    `<div class="tg ${VIEW[k]?"on":""}" data-tg="${k}"><span>${icon}</span>${label}</div>`;
+  return `<div class="tbar">
+      ${tg("dur", "Duration", "◷")}${tg("colTurns", "Turns", "⊟")}${tg("colCalls", "Calls", "⊟")}
+      <div class="spacer"></div>
+      <input type="search" id="eq" placeholder="Search trajectory" value="${esc(VIEW.q)}">
+    </div>
+    <div class="map" id="map"></div>
+    <div class="split" id="split"></div>`;
+}
+
+function footHTML() {
   const s = DET.session, evs = DET.events;
   const steps = evs.filter(e => e.kind === "tool" || e.kind === "assistant").length;
   const toolMs = evs.reduce((n, e) => n + (e.dur_ms || 0), 0);
-  const chips = [["user","Turns"],["assistant","Model"],["tool","Calls"],
-                 ["hook","Hooks"],["context","Context"]]
-    .map(([k, l]) => `<div class="chip ${VIEW.kinds.has(k)?"on":""}" data-k="${k}">${l}</div>`).join("");
-  const tabs = ["trajectory", "chat", "metrics"].map(t =>
-    `<div class="tab link ${VIEW.tab===t?"on":""}" data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</div>`).join("");
+  const t = DET.tokens, orows = (t && t.output.rows) || [];
+  const think = orows.find(r => r.label === "Thinking");
+  const cells = [
+    `${s.turns} turns · ${steps} steps`,
+    `Tool call ${dur(toolMs)}${s.tool_errors ? ` · <span class="bad">${s.tool_errors} failed</span>` : ""}`,
+    `Wall ${Math.round(s.duration_min)} min`,
+    think ? `Thinking ${think.pct}% of output` : `Output ${fmtTok(s.output_tokens)}`,
+    `Cache hit ${pct(s.cache_ratio)}`,
+    `Input ${fmtTok(s.input_tokens + s.cache_creation)} tok · Out ${fmtTok(s.output_tokens)} tok`,
+    esc((s.models||[]).join(", ")) || "—",
+  ];
+  return `<div class="foot">${cells.map(c => `<span>${c}</span>`).join("")}</div>`;
+}
 
-  $("#app").innerHTML = `
-  <div class="top"><a href="#/">←</a><h1>${esc(s.title)}</h1>
-    <span class="sub">${esc(s.project_short)} · ${esc(s.date)} · ${esc(s.harness)}</span>
-    <div class="spacer"></div><div class="tabs">${tabs}</div></div>
-  <div class="dwrap">
-    <div class="chips ${VIEW.tab==="trajectory"?"":"hidden"}">${chips}
-      <div class="spacer"></div>
-      <input type="search" id="eq" placeholder="search trajectory" value="${esc(VIEW.q)}"></div>
-    <div class="map ${VIEW.tab==="trajectory"?"":"hidden"}" id="map"></div>
-    <div class="split" id="split"></div>
-    <div class="foot">
-      <span>${s.turns} turns · ${steps} steps</span>
-      <span>${s.tools} tool calls${s.tool_errors?` · <span class="bad">${s.tool_errors} failed</span>`:""}</span>
-      <span>tool time ${dur(toolMs)}</span>
-      <span>${Math.round(s.duration_min)} min wall</span>
-      <span>cache hit ${pct(s.cache_ratio)}</span>
-      <span>in ${fmtTok(s.input_tokens + s.cache_creation)} · out ${fmtTok(s.output_tokens)} · total ${fmtTok(s.total_tokens)}</span>
-      <span>${esc((s.models||[]).join(", "))}</span>
-    </div>
-  </div>`;
-
-  document.querySelectorAll(".tab[data-t]").forEach(t =>
-    t.onclick = () => { VIEW.tab = t.dataset.t; renderDetail(); });
+function bindSession() {
+  $$(".tab[data-t]").forEach(t => t.onclick = () => { VIEW.tab = t.dataset.t; render(); });
+  const u = $("#unfold");
+  if (u) u.onclick = () => { SIDE.off = false; render(); };
+  const dl = $("#dl");
+  if (dl) dl.onclick = () => {
+    const blob = new Blob([JSON.stringify(DET, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (DET.session.session_id || "session") + ".json";
+    a.click(); URL.revokeObjectURL(a.href);
+  };
   if (VIEW.tab === "trajectory") {
-    const vis = visibleEvents();              // keep the selection on screen
-    if (vis.length && !vis.some(v => v.i === VIEW.sel)) VIEW.sel = vis[0].i;
+    $$(".tg").forEach(t => t.onclick = () => { VIEW[t.dataset.tg] = !VIEW[t.dataset.tg]; render(); });
+    const eq = $("#eq");
+    if (eq) eq.oninput = e => { VIEW.q = e.target.value; const p = e.target.selectionStart;
+      render(); const el = $("#eq"); if (el) { el.focus(); el.setSelectionRange(p, p); } };
     renderMap();
     renderTrace();
-  }
-  else if (VIEW.tab === "chat") renderChat();
-  else renderMetrics();
-
-  const eq = $("#eq");
-  if (eq) { eq.oninput = e => { VIEW.q = e.target.value; const p = e.target.selectionStart;
-      renderDetail(); const el = $("#eq"); el.focus(); el.setSelectionRange(p, p); }; }
-  document.querySelectorAll(".chip[data-k]").forEach(c =>
-    c.onclick = () => { const k = c.dataset.k;
-      VIEW.kinds.has(k) ? VIEW.kinds.delete(k) : VIEW.kinds.add(k); renderDetail(); });
+  } else if (VIEW.tab === "metrics") bindMetrics();
 }
 
 function renderMap() {
-  // the map mirrors the trace, so a block always maps to a row you can see.
   const lanes = {Input:[], Model:[], Tools:[]};
   visibleEvents().forEach(({e, i}) => lanes[laneOf(e.kind)].push({e, i}));
-  const color = k => k === "assistant" ? "var(--model)" : k === "tool" ? "var(--tool)"
-    : k === "user" ? "var(--input)" : k === "hook" ? "var(--ok)" : "#39415a";
+  const mx = Math.max(1, ...DET.events.map(e => e.dur_ms || 0));
+  const w = e => VIEW.dur ? Math.max(4, Math.round(9 + 42 * (e.dur_ms || 0) / mx)) : 9;
   $("#map").innerHTML = Object.entries(lanes).map(([name, items]) =>
     `<div class="lane"><div class="name">${name}</div><div class="blocks">` +
     items.map(({e, i}) => `<div class="blk ${e.error?"err":""} ${VIEW.sel===i?"on":""}"
-      data-i="${i}" style="background:${color(e.kind)}"
+      data-i="${i}" style="background:${kColor(e.kind)};width:${w(e)}px"
       title="${esc(e.badge + " · " + e.title)}"></div>`).join("") +
     `</div></div>`).join("");
-  document.querySelectorAll(".blk").forEach(b =>
-    b.onclick = () => select(+b.dataset.i, true));
+  $$(".blk").forEach(b => b.onclick = () => select(+b.dataset.i, true));
 }
 
 function renderTrace() {
-  const rows = visibleEvents().map(({e, i}) => `<div class="ev k-${e.kind} ${e.error?"err":""}
-    ${VIEW.sel===i?"on":""}" data-i="${i}" id="ev${i}">
-    <span class="badge">${esc(e.badge)}</span>
-    <span class="t">${esc(e.title)}</span>
-    ${e.preview ? `<span class="arrow">→</span><span class="p">${esc(e.preview)}</span>` : ""}
-  </div>`).join("");
+  const ft = firstOfTurn();
+  const rows = visibleEvents().map(({e, i}) => {
+    const gut = ft[e.turn] === i ? `Turn ${e.turn}` : e.kind === "assistant" ? `#${e.req}` : "";
+    const isMsg = e.kind === "user" || e.kind === "assistant" || e.kind === "context";
+    const label = e.tool
+      ? `<span class="nm">${esc(e.tool.name)}</span><span class="t">${esc(argsOf(e))}</span>`
+      : `<span class="t">${esc(e.title)}</span>`;
+    return `<div class="ev k-${e.kind} ${e.error?"err":""} ${isMsg?"prose":""}
+      ${ft[e.turn]===i?"turnstart":""} ${VIEW.sel===i?"on":""}" data-i="${i}" id="ev${i}">
+      <span class="gut">${esc(gut)}</span>
+      <span class="badge">${esc(e.badge)}</span>${label}
+      ${e.preview ? `<span class="arrow">→</span><span class="p">${esc(e.preview)}</span>` : ""}
+    </div>`;
+  }).join("");
   $("#split").innerHTML = `<div class="trace" id="trace">${rows ||
     '<div class="empty">Nothing matches this filter.</div>'}</div>
     <div class="insp" id="insp"></div>`;
-  document.querySelectorAll(".ev").forEach(r => r.onclick = () => select(+r.dataset.i));
+  $$(".ev").forEach(r => r.onclick = () => select(+r.dataset.i));
   renderInspector();
+}
+
+function argsOf(e) {
+  const a = (e.tool && e.tool.args) || "";
+  return a.length > 220 ? a.slice(0, 219) + "…" : a;
 }
 
 function select(i, scroll) {
   VIEW.sel = i;
-  document.querySelectorAll(".ev").forEach(r => r.classList.toggle("on", +r.dataset.i === i));
-  document.querySelectorAll(".blk").forEach(b => b.classList.toggle("on", +b.dataset.i === i));
+  $$(".ev").forEach(r => r.classList.toggle("on", +r.dataset.i === i));
+  $$(".blk").forEach(b => b.classList.toggle("on", +b.dataset.i === i));
   if (scroll) { const el = $("#ev" + i); if (el) el.scrollIntoView({block:"center"}); }
   renderInspector();
 }
 
-let ITAB = "summary";
+/* ---------------- inspector ---------------- */
+const ITABS = ["summary", "payload", "result", "schema", "timing", "raw"];
+
+function inspSections(e) {
+  const payload = e.tool ? e.tool.args : (e.text || e.title);
+  const result  = e.tool ? e.tool.result : "";
+  return {payload, result};
+}
+
+function schemaOf(e) {
+  if (!e.tool) return "";
+  let keys = [];
+  try {
+    const o = JSON.parse(e.tool.args);
+    keys = Object.entries(o).map(([k, v]) =>
+      `  ${k}: ${Array.isArray(v) ? "array" : v === null ? "null" : typeof v}`);
+  } catch (_) { keys = []; }
+  return `${e.tool.name}\n\nTranscripts do not record the tool's declared schema.\n` +
+    (keys.length ? `Argument keys observed in this call:\n${keys.join("\n")}`
+                 : "No structured arguments in this call.");
+}
+
 function renderInspector() {
-  const e = DET.events[VIEW.sel];
   const box = $("#insp");
   if (!box) return;
-  if (!e) { box.innerHTML = '<div class="empty">Select a step.</div>'; return; }
-  const t = e.tokens || {}, tot = (t.input||0)+(t.output||0)+(t.cache_read||0)+(t.cache_create||0);
-  const kv = [
-    ["Kind", e.badge], ["Turn / step", `${e.turn||0} · ${e.step||0}`],
-    ["Status", e.error ? '<span class="bad">failed</span>' : '<span class="ok">completed</span>'],
-    ["Started", e.ts ? new Date(e.ts).toLocaleString() : "—"],
-    ["Duration", dur(e.dur_ms)],
-    e.model ? ["Model", e.model] : null,
-    e.tool ? ["Tool", e.tool.name] : null,
-    tot ? ["Tokens", fmtInt(tot)] : null,
-    t.output ? ["  output", fmtInt(t.output)] : null,
-    t.input ? ["  input", fmtInt(t.input)] : null,
-    t.cache_read ? ["  cache read", fmtInt(t.cache_read)] : null,
-    t.cache_create ? ["  cache write", fmtInt(t.cache_create)] : null,
-    e.thinking ? ["Thinking", fmtInt(e.thinking.length) + " chars"] : null,
-  ].filter(Boolean).map(([k, v]) => `<div class="k">${esc(k)}</div><div>${v}</div>`).join("");
+  const e = VIEW.sel >= 0 ? DET.events[VIEW.sel] : null;
+  if (!e) {
+    box.innerHTML = `<div class="head"><span class="badge" style="background:var(--sysbg);color:var(--sys)">DETAILS</span>
+      <div class="spacer"></div></div>
+      <div class="empty">Click a tool row in the message flow to view its details</div>`;
+    return;
+  }
+  const {payload, result} = inspSections(e);
+  const t = e.tokens || {};
+  const tot = (t.input||0)+(t.output||0)+(t.cache_read||0)+(t.cache_create||0);
+  const sec = (h, body, cls) => (body && body.trim()) ?
+    `<div class="sec"><h3><span class="car">▾</span>${h}</h3>
+    <pre class="${cls||""}">${esc(body)}</pre></div>` : "";
+  const kv = pairs => `<div class="kv">${pairs.filter(Boolean)
+    .map(([k, v]) => `<div class="k">${esc(k)}</div><div>${v}</div>`).join("")}</div>`;
 
-  const sec = (h, body) => body ? `<div class="sec"><h3>${h}</h3><pre>${esc(body)}</pre></div>` : "";
+  const est = e.est || {};
+  const parts = est.out_parts || {};
+  const partTxt = Object.entries(parts).filter(([, v]) => v > 0)
+    .map(([k, v]) => `${k.toLowerCase()} ${fmtInt(v)}`).join(" · ");
+  const summary =
+    kv([
+      ["Hierarchy", `Turn ${e.turn||0} › Request #${e.req||0} › Step ${e.step||0}`],
+      ["Status", e.error ? '<span class="bad">Failed</span>' : '<span class="ok">Completed</span>'],
+      e.tool ? ["Tool", esc(e.tool.name)] : null,
+      e.model ? ["Model", esc(e.model)] : null,
+      tot ? ["Tokens", fmtInt(tot)] : null,
+      est.out ? ["Generated", `${fmtInt(est.out)}<span class="est">est</span>${
+        partTxt ? `<div class="dim" style="font-size:11px">${esc(partTxt)}</div>` : ""}`] : null,
+      est.think ? ["  of it thinking", `${fmtInt(est.think)}<span class="est">est</span>`] : null,
+      est.ctx ? ["Added to context", `${fmtInt(est.ctx)}<span class="est">est</span>`] : null,
+    ]) +
+    sec("Payload", (payload || "").slice(0, 1400)) +
+    sec("Result", (result || "").slice(0, 1400)) +
+    (e.tool ? sec("Schema", schemaOf(e).slice(0, 900), "plain") : "") +
+    `<div class="sec"><h3><span class="car">▾</span>Timing</h3>${kv([
+      ["Started", e.ts ? esc(new Date(e.ts).toLocaleString()) : "—"],
+      ["Duration", dur(e.dur_ms)],
+      ["Timing source", "Session timestamps"],
+    ])}</div>`;
+
   const panes = {
-    summary: `<div class="kv">${kv}</div>` +
-      sec("Preview", (e.text || e.title).slice(0, 1200)) +
-      (e.tool ? sec("Arguments", (e.tool.args || "").slice(0, 1200)) : ""),
-    preview: sec("Text", e.text) + sec("Thinking", e.thinking) +
-      (e.tool ? sec("Arguments", e.tool.args) + sec("Result", e.tool.result) : ""),
-    raw: sec("Raw event", e.raw),
+    summary,
+    payload: sec("Payload", payload) || '<div class="empty">No payload.</div>',
+    result: sec("Result", result) + sec("Thinking", e.thinking) ||
+            '<div class="empty">No result recorded.</div>',
+    schema: sec("Schema", schemaOf(e), "plain") ||
+            '<div class="empty">Schemas are not recorded for this event.</div>',
+    timing: kv([
+      ["Started", e.ts ? esc(new Date(e.ts).toLocaleString()) : "—"],
+      ["Duration", dur(e.dur_ms)],
+      ["Turn / step", `${e.turn||0} · ${e.step||0}`],
+      ["Timing source", "Session timestamps"],
+      tot ? ["Tokens", fmtInt(tot)] : null,
+      t.output ? ["output", fmtInt(t.output)] : null,
+      t.input ? ["input", fmtInt(t.input)] : null,
+      t.cache_read ? ["cache read", fmtInt(t.cache_read)] : null,
+      t.cache_create ? ["cache write", fmtInt(t.cache_create)] : null,
+    ]),
+    raw: sec("Raw event", e.raw) || '<div class="empty">No raw record.</div>',
   };
-  box.innerHTML = `<div class="head"><span class="badge">${esc(e.badge)}</span>
-    <span class="sub">Turn ${e.turn||0} · Step ${e.step||0}</span><div class="spacer"></div>
-    <div class="tabs">${["summary","preview","raw"].map(t =>
-      `<div class="tab link ${ITAB===t?"on":""}" data-it="${t}">${t}</div>`).join("")}</div></div>
-    <div class="body">${panes[ITAB] || panes.summary}</div>`;
-  document.querySelectorAll("[data-it]").forEach(t =>
-    t.onclick = () => { ITAB = t.dataset.it; renderInspector(); });
+  box.innerHTML = `<div class="head">
+      <span class="badge">${esc(e.badge)}</span>
+      <span class="sub">Turn ${e.turn||0} · Step ${e.step||0}</span>
+      <div class="spacer"></div><button class="x" id="ix">×</button></div>
+    <div class="itabs">${ITABS.map(t =>
+      `<div class="tab ${ITAB===t?"on":""}" data-it="${t}">${t[0].toUpperCase()+t.slice(1)}</div>`).join("")}</div>
+    <div class="ibody">${panes[ITAB] || panes.summary}</div>`;
+  $$("[data-it]").forEach(t => t.onclick = () => { ITAB = t.dataset.it; renderInspector(); });
+  $("#ix").onclick = () => { VIEW.sel = -1; renderTrace(); renderMap(); };
 }
 
-function renderChat() {
+/* ---------------- chat + metrics ---------------- */
+function chatHTML() {
   const msgs = DET.events.filter(e => (e.kind === "user" || e.kind === "assistant") && e.text);
-  $("#split").innerHTML = `<div class="trace chat" style="padding:8px 16px">${
-    msgs.map(e => `<div class="msg ${e.kind}"><div class="who">${esc(e.badge)}
-      ${e.model ? "· " + esc(e.model) : ""}</div>
-      <div class="txt">${esc(e.text)}</div></div>`).join("") ||
-    '<div class="empty">No message text captured.</div>'}</div>`;
+  return `<div class="pane"><div class="chat">${msgs.map(e =>
+    `<div class="msg ${e.kind}"><div class="who">${esc(e.badge)}${
+      e.model ? " · " + esc(e.model) : ""}</div><div class="txt">${esc(e.text)}</div></div>`).join("") ||
+    '<div class="empty">No message text captured.</div>'}</div></div>`;
 }
 
-function renderMetrics() {
+/* ---- token attribution ---- */
+const TOKC = {
+  "Thinking":"#7c4dd6", "Reply text":"#2563eb", "Tool calls":"#c2691b",
+  "Tool results":"#c2691b", "Context injections":"#0f766e", "User prompts":"#2563eb",
+  "Hook output":"#1a7f4b", "Model turns re-read":"#7c4dd6",
+  "System prompt & tools":"#5b6472", "Not in the transcript":"#b9bfc9",
+};
+const tokc = l => TOKC[l] || "#8b93a7";
+
+function tokGroup(title, total, rows, note) {
+  if (!rows.length) return "";
+  return `<div class="tgrp">
+    <div class="hd"><b>${esc(title)}</b><span class="tot">${fmtInt(total)} tokens</span>
+      ${note ? `<span class="dim" style="font-size:11px">${esc(note)}</span>` : ""}</div>
+    <div class="sbar">${rows.map(r =>
+      `<i style="width:${r.pct}%;background:${tokc(r.label)}" title="${esc(r.label)} ${r.pct}%"></i>`).join("")}</div>
+    ${rows.map(r => `<div class="trow"><span class="sw" style="background:${tokc(r.label)}"></span>
+      <span class="l">${esc(r.label)}</span><span class="v">${fmtInt(r.tokens)}</span>
+      <span class="pc">${r.pct}%</span></div>`).join("")}
+  </div>`;
+}
+
+function tokensHTML() {
+  const t = DET.tokens;
+  if (!t || (!t.output.total && !t.context.total))
+    return `<div class="card"><h2>Where the tokens went</h2>
+      <div class="body"><div class="dim">This harness records no token usage.</div></div></div>`;
+  const r = t.reads;
+  const tools = (t.by_tool || []).map(x => [x.label, x.tokens]);
+  return `<div class="card"><h2>Where the tokens went</h2><div class="body">
+    ${tokGroup("Generated (output)", t.output.total, t.output.rows,
+               t.exact ? "" : "no usage recorded — sizes estimated from text")}
+    ${tokGroup("Context ingested (unique)", t.context.total, t.context.rows)}
+    <div class="tgrp"><div class="hd"><b>Context read per request</b>
+      <span class="tot">${fmtTok(r.context_reads)} over ${r.requests} requests</span></div>
+      <div class="trow"><span class="l">Same context re-sent each request</span>
+        <span class="v">×${r.reread}</span><span class="pc"></span></div>
+      <div class="trow"><span class="l">Served from cache</span>
+        <span class="v">${fmtTok(r.cache_read)}</span>
+        <span class="pc">${pct(r.cache_read/(r.context_reads||1))}</span></div>
+    </div>
+    ${tools.length ? `<div class="tgrp"><div class="hd"><b>Biggest context producers</b>
+      <span class="tot">tool output only</span></div>${bars(tools, "var(--tool)", fmtInt)}</div>` : ""}
+    <div class="note">Totals are exact. The slices are estimates: each response's real
+    token count is divided by character share at ${t.ratio} chars/token, calibrated on
+    this session's own responses. Thinking is the residual — Claude writes reasoning
+    blocks with the text stripped, so it is measured as tokens billed minus tokens the
+    visible text explains. "Not in the transcript" is context growth the log never
+    spells out: tool schemas loaded mid-session, skill bodies, per-turn reminders.</div>
+  </div></div>`;
+}
+
+function metricsHTML() {
   const s = DET.session;
   const files = f => f.length ? f.map(p => `<div>${esc(p)}</div>`).join("") : '<div class="dim">none</div>';
   const errs = (s.errors||[]).map(e => `<div class="sec"><div class="bad">✗ ${esc(e.tool)}: ${esc(e.cmd)}</div>
@@ -1001,13 +1519,14 @@ function renderMetrics() {
   const notes = (DET.notes||[]).map(n => `<div class="rowbar"><div class="lbl" style="flex:1;width:auto">
     <span class="dim">[${esc((n.ts||"").slice(0,16))}]</span> ${esc(n.note)}</div></div>`).join("")
     || '<div class="dim">none yet</div>';
-  $("#split").innerHTML = `<div class="trace" style="padding:12px 16px">
+  return `<div class="pane"><div class="mwrap">
     <div class="tiles">${[
       ["Turns", s.turns], ["Assistant msgs", s.assistant_msgs], ["Tool calls", s.tools],
       ["Tool errors", s.tool_errors], ["Tokens", fmtTok(s.total_tokens)],
       ["Cache hit", pct(s.cache_ratio)], ["Duration", Math.round(s.duration_min)+" min"],
       ["GOAL", s.goal || "not recorded"],
     ].map(([k, v]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+    <div style="margin-top:12px">${tokensHTML()}</div>
     <div class="cols">
       <div class="card"><h2>Tool mix</h2><div class="body">${bars(s.tool_mix||[], "var(--tool)")}</div></div>
       <div class="card"><h2>Hook fires</h2><div class="body">${bars(s.hook_fires||[], "var(--ok)")
@@ -1023,42 +1542,58 @@ function renderMetrics() {
         <button id="addnote">Save</button></div></div></div>
     </div>
     <div class="card" style="margin-top:12px"><h2>Tool errors</h2><div class="body">${errs}</div></div>
-  </div>`;
+  </div></div>`;
+}
+
+function bindMetrics() {
   const btn = $("#addnote");
-  if (btn) btn.onclick = async () => {
+  if (!btn) return;
+  btn.onclick = async () => {
     const v = $("#note").value.trim();
     if (!v) return;
     const r = await api("/api/note", {path: DET.session.path, note: v});
-    if (r.note) { DET.notes.unshift(r.note); renderDetail(); }
+    if (r.note) { DET.notes.unshift(r.note); render(); }
   };
 }
 
-/* ---------------- routing ---------------- */
+/* ---------------- shell + routing ---------------- */
+function render() {
+  $("#app").innerHTML = sidebarHTML() +
+    `<div class="main">${DET ? sessionHTML() : heroHTML()}</div>`;
+  bindSidebar();
+  if (DET) bindSession();
+}
+
 async function loadIndex() {
   $("#app").innerHTML = '<div class="empty">Scanning transcripts…</div>';
   DATA = await api("/api/sessions");
-  renderIndex();
 }
 
 async function route() {
+  if (!DATA) await loadIndex();
   const h = location.hash || "#/";
   if (h.startsWith("#/s/")) {
     const path = decodeURIComponent(h.slice(4));
-    $("#app").innerHTML = '<div class="empty">Loading session…</div>';
-    DET = await api("/api/session?path=" + encodeURIComponent(path));
-    if (DET.error) { location.hash = "#/"; return; }
-    VIEW = {tab:"trajectory", sel:0, q:"", kinds:new Set()};
-    renderDetail();
-    return;
-  }
-  if (!DATA) await loadIndex(); else renderIndex();
+    if (!DET || DET.session.path !== path) {
+      DET = await api("/api/session?path=" + encodeURIComponent(path));
+      if (DET.error) { DET = null; location.hash = "#/"; return; }
+      decorate(DET.events);
+      VIEW = {tab:"trajectory", sel:-1, q:"", dur:false, colTurns:false, colCalls:false};
+    }
+  } else DET = null;
+  render();
 }
 
 window.addEventListener("hashchange", route);
 window.addEventListener("keydown", e => {
   if (!DET || VIEW.tab !== "trajectory" || /input/i.test(e.target.tagName)) return;
-  if (e.key === "j" || e.key === "ArrowDown") { select(Math.min(VIEW.sel+1, DET.events.length-1), true); e.preventDefault(); }
-  if (e.key === "k" || e.key === "ArrowUp") { select(Math.max(VIEW.sel-1, 0), true); e.preventDefault(); }
+  const vis = visibleEvents().map(v => v.i);
+  if (!vis.length) return;
+  const at = vis.indexOf(VIEW.sel);
+  if (e.key === "j" || e.key === "ArrowDown") {
+    select(vis[Math.min(at + 1, vis.length - 1)] ?? vis[0], true); e.preventDefault(); }
+  if (e.key === "k" || e.key === "ArrowUp") {
+    select(vis[Math.max(at - 1, 0)] ?? vis[0], true); e.preventDefault(); }
   if (e.key === "Escape") location.hash = "#/";
 });
 route();
@@ -1070,10 +1605,14 @@ def _load_analytics():
     """Import session-analytics.py from next to this file (hyphens block a
     normal import), so `python3 session-web.py` works standalone."""
     import importlib.util
+    import sys
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "session-analytics.py")
     spec = importlib.util.spec_from_file_location("session_analytics", path)
     mod = importlib.util.module_from_spec(spec)
+    # @dataclass resolves its own module through sys.modules, so register the
+    # module before executing it or every dataclass in there raises.
+    sys.modules["session_analytics"] = mod
     spec.loader.exec_module(mod)
     return mod
 
