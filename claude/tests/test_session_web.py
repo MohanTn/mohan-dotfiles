@@ -244,10 +244,106 @@ class ScopeTest(unittest.TestCase):
             scope.sessions[0].harness = "claude"
             scope.by_path = {path: scope.sessions[0]}
 
-            evs = scope.events(path)
+            evs, rep = scope.events(path)
             self.assertEqual(_kinds(evs), ["user", "assistant"])
-            self.assertIs(scope.events(path), evs)      # cached, same object
-            self.assertIsNone(scope.events("/nope.jsonl"))
+            self.assertIs(scope.events(path)[0], evs)   # cached, same object
+            self.assertIs(scope.events(path)[1], rep)
+            self.assertEqual(scope.events("/nope.jsonl"), (None, None))
+
+
+def _response(mid, out, ctx, blocks, ts="2026-07-24T10:00:00.000Z"):
+    """One assistant row: ctx is what the model read, out what it wrote."""
+    return {"type": "assistant", "timestamp": ts,
+            "message": {"id": mid, "model": "m", "content": blocks,
+                        "usage": {"input_tokens": ctx, "output_tokens": out,
+                                  "cache_read_input_tokens": 0,
+                                  "cache_creation_input_tokens": 0}}}
+
+
+class TokenReportTest(unittest.TestCase):
+    def test_output_total_matches_usage_and_splits_by_share(self):
+        rows = [_response("m1", 300, 100, [
+            {"type": "text", "text": "a" * 300},
+            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"x": "b" * 87}},
+        ])]
+        rep = web.token_report(web.extract_events(rows, "claude"))
+        self.assertEqual(rep["output"]["total"], 300)      # exact, never inflated
+        by = {r["label"]: r["tokens"] for r in rep["output"]["rows"]}
+        self.assertGreater(by["Reply text"], by["Tool calls"])
+        self.assertNotIn("Thinking", by)                   # nothing hidden here
+        self.assertEqual(sum(by.values()), 300)
+
+    def test_usage_counted_once_per_response_across_split_rows(self):
+        # Claude writes one response as several rows sharing message.id, each
+        # repeating the usage; counting them all would double the totals.
+        rows = [
+            _response("m1", 500, 100, [{"type": "thinking", "thinking": "",
+                                        "signature": "sig"}]),
+            _response("m1", 500, 100, [{"type": "tool_use", "id": "t1",
+                                        "name": "Bash", "input": {"c": "x" * 40}}]),
+        ]
+        rep = web.token_report(web.extract_events(rows, "claude"))
+        self.assertEqual(rep["output"]["total"], 500)
+
+    def test_stripped_thinking_becomes_the_residual(self):
+        # A response billed far beyond what its visible text explains, carrying a
+        # thinking block whose text the transcript dropped: the gap is thinking.
+        rows = [
+            _response("m1", 100, 100, [{"type": "text", "text": "z" * 400}]),
+            _response("m2", 900, 200, [
+                {"type": "thinking", "thinking": "", "signature": "sig"},
+                {"type": "text", "text": "z" * 400},
+            ]),
+        ]
+        evs = web.extract_events(rows, "claude")
+        rep = web.token_report(evs)
+        by = {r["label"]: r["tokens"] for r in rep["output"]["rows"]}
+        self.assertEqual(rep["output"]["total"], 1000)
+        # first response calibrates 4 chars/token, so the second's 400 visible
+        # chars explain ~100 of its 900 tokens and the other ~800 are thinking.
+        self.assertGreater(by["Thinking"], 700)
+        self.assertTrue(any(e["est"].get("think") for e in evs))
+
+    def test_context_growth_lands_on_what_arrived_between_requests(self):
+        rows = [
+            _response("m1", 10, 1000, [{"type": "tool_use", "id": "t1",
+                                        "name": "Read", "input": {"file_path": "f"}}]),
+            {"type": "user", "timestamp": "2026-07-24T10:00:02.000Z",
+             "message": {"content": [{"type": "tool_result", "tool_use_id": "t1",
+                                      "content": "R" * 4000}]}},
+            _response("m2", 10, 2000, [{"type": "text", "text": "done"}]),
+        ]
+        rep = web.token_report(web.extract_events(rows, "claude"))
+        by = {r["label"]: r["tokens"] for r in rep["context"]["rows"]}
+        # the 1000-token jump is the 4000-character Read result
+        self.assertGreater(by["Tool results"], 700)
+        self.assertEqual(by["System prompt & tools"], 1000)   # the first request
+        self.assertEqual(rep["by_tool"][0]["label"], "Read")
+        self.assertEqual(rep["reads"]["requests"], 2)
+        self.assertEqual(rep["reads"]["context_reads"], 3000)
+
+    def test_percentages_of_every_group_add_up(self):
+        rows = [_response("m1", 400, 500, [
+            {"type": "thinking", "thinking": "", "signature": "s"},
+            {"type": "text", "text": "hello there"},
+            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"c": "ls"}},
+        ])]
+        rep = web.token_report(web.extract_events(rows, "claude"))
+        for group in ("output", "context"):
+            pcts = sum(r["pct"] for r in rep[group]["rows"])
+            self.assertAlmostEqual(pcts, 100.0, delta=0.3)
+            self.assertEqual(sum(r["tokens"] for r in rep[group]["rows"]),
+                             rep[group]["total"])
+
+    def test_harness_without_usage_is_marked_estimated(self):
+        rows = [
+            {"type": "message", "timestamp": "2026-07-24T10:00:00.000Z",
+             "message": {"role": "assistant", "id": "m1", "model": "m",
+                         "content": [{"type": "text", "text": "y" * 400}]}},
+        ]
+        rep = web.token_report(web.extract_events(rows, "pi"))
+        self.assertFalse(rep["exact"])
+        self.assertEqual(rep["output"]["total"], 100)   # 400 chars / 4
 
 
 if __name__ == "__main__":
