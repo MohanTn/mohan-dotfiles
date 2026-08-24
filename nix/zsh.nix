@@ -226,11 +226,6 @@
       # so brew's bin lands behind them, never shadowing the base toolchain.
       source ${../zsh/homebrew.zsh}
 
-      # `docker ps`/`ollama ps` render as bordered tables via tidy-viewer
-      # (nix/packages.nix); every other docker/ollama subcommand passes
-      # through untouched.
-      source ${../zsh/table-view.zsh}
-
       # `fkill`: fuzzy-pick a listening port/service/PID from lsof and kill -9 it.
       source ${../zsh/fkill.zsh}
 
