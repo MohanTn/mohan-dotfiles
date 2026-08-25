@@ -19,27 +19,17 @@
   home.file.".copilot/copilot-instructions.md".text =
     builtins.readFile ../agents/AGENTS.md;
 
-  # Scaffold MCP server for Copilot CLI: ~/.copilot/mcp-config.json is
-  # runtime-writable (Copilot's /mcp command edits it), so like settings.json
-  # it can't be a store symlink — the scaffold entry is merged in only when
-  # missing, leaving any user-added servers untouched. node (not bash+jq) does
-  # the merge to keep quoting sane inside this activation snippet.
-  home.activation.copilotScaffoldMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  # The scaffold MCP server (agents/boilerplats) has been removed; deregister
+  # any stale entry a prior switch left in ~/.copilot/mcp-config.json, leaving
+  # any user-added servers untouched.
+  home.activation.removeCopilotScaffoldMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     run ${pkgs.nodejs}/bin/node -e '
       const fs = require("fs");
-      const dir = process.env.HOME + "/.copilot";
-      const p = dir + "/mcp-config.json";
+      const p = process.env.HOME + "/.copilot/mcp-config.json";
       let cfg = {};
       try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
-      cfg.mcpServers = cfg.mcpServers || {};
-      if (!cfg.mcpServers.scaffold) {
-        cfg.mcpServers.scaffold = {
-          type: "local",
-          command: "node",
-          args: [process.env.HOME + "/.agents/boilerplats/mcp-server.js"],
-          tools: ["*"],
-        };
-        fs.mkdirSync(dir, { recursive: true });
+      if (cfg.mcpServers && cfg.mcpServers.scaffold) {
+        delete cfg.mcpServers.scaffold;
         fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
       }
     '

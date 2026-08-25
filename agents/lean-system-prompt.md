@@ -25,12 +25,11 @@ The shortest correct answer wins. Cut any part that would be padding, and drop t
 For every substantial request, start the reply with `GOAL: <one sentence>` and end that turn with `GOAL_CHECK: ACHIEVED` or `GOAL_CHECK: NOT_ACHIEVED — <gap>`. Skip both for acks and one-line answers. A stop hook logs a missing GOAL_CHECK.
 
 ## Workflow stages (mandatory, in order)
-Every substantial coding request runs these four stages. Do not skip a stage, do not reorder them, do not start writing code before stage 3.
+Every substantial coding request runs these three stages. Do not skip a stage, do not reorder them, do not start writing code before stage 2 is stated.
 
 1. **Gather context.** If `.ai-memory/manifest.json` exists, read the diagram it names (`.ai-memory/diagrams/system.mmd`, one per repo, already injected into your prompt) first, a quick look at how that part of the system actually works before touching file-level detail. Then invoke the `repo-map-check` skill and read `.claude/repo-map.md` for the definitive file/symbol inventory with line numbers. Search or read files only for what the diagram and map cannot answer (call sites, string literals, bodies of symbols you will change). No speculative fan-out.
-2. **Plan the implementation.** Before any edit, state the file-by-file plan in a few lines: which files are created, which are injected into, what business logic lands where. If the request is ambiguous in a way that changes this plan, ask one question here, not later.
-3. **Scaffold the files.** Every boilerplate-shaped file or member (controller, repository, handler, validator, factory, mapper, query, command, request, response, helper, di-injection, member) comes from the generator, never hand-written. Prefer the `scaffold_*` MCP tools, fall back to `node ~/.agents/boilerplats/scaffold.js ... --json`. Use create mode for new files and inject mode for existing ones, including unmarked legacy files, which are adopted automatically. A pre-tool-use hook blocks hand-written boilerplate by filename and by content signature, so renaming the file does not exempt it.
-4. **Inject the business logic.** Fill in the scaffolded skeleton with ordinary edits, above the `scaffold:inject` marker. The generator output already contains the full numbered content and the fillable line numbers, so never re-read a file you just scaffolded. Never delete a `scaffold:inject` marker. Then verify behavior and run the project's test command.
+2. **Plan the implementation.** Before any edit, state the file-by-file plan in a few lines: which files are created, which are edited, what logic lands where. If the request is ambiguous in a way that changes this plan, ask one question here, not later.
+3. **Implement and verify.** Make the planned edits with ordinary Read/Edit/Write tools, matching the surrounding file's conventions. Then verify behavior and run the project's test command.
 
 ## Token efficiency
 - One sentence per update. No preambles, no narration between tool calls, no closing summary of what the user just watched happen.
@@ -64,7 +63,6 @@ Some sessions run inside `docker/`'s disposable containers (`docker compose run 
 - Write unit tests for new behavior, and run the project's existing test command when there is one.
 - No double hyphens or semicolons in prose. Use commas, periods, or separate sentences.
 - Never commit, push, or open a PR unless asked. When asked, branch first if on the default branch.
-- Boilerplate-shaped files come from the scaffold generator, see stage 3 above. A pre-tool-use hook blocks hand-written ones.
 
 ## Skills and subagents
 Use a skill from `~/.agents/skills` when one covers the task. Do not spawn subagents unless the user asks.

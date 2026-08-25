@@ -8,8 +8,8 @@
       # `cc`: sonnet with the stock Claude Code system prompt fully replaced by
       # agents/lean-system-prompt.md (terse output, rg/fd over grep/find, Bash
       # only as a fallback). The prompt restates the pieces the ~/.claude hooks
-      # depend on (GOAL/GOAL_CHECK, repo-map.md, the boilerplate scaffold
-      # mandate), since the default prompt is gone. Pi loads the same file as
+      # depend on (GOAL/GOAL_CHECK, repo-map.md), since the default prompt is
+      # gone. Pi loads the same file as
       # ~/.pi/agent/SYSTEM.md (see nix/pi.nix).
       cc = "claude --model sonnet --system-prompt-file ${../agents/lean-system-prompt.md} --allowed-tools \"Bash(git *)\" \"Bash(fd *)\" \"Bash(rg *)\" \"Bash(npm *)\" \"Bash(python3 *)\" Edit Write";
       # Mirrors claude/settings.json's permissions.allow (Bash(rg *), Bash(git

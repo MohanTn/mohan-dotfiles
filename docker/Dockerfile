@@ -39,25 +39,9 @@ COPY --chown=agent:agent agents/AGENTS.md /opt/agent-config/agents/AGENTS.md
 # AGENT_TOOL's config dir and wires it in as that tool's actual system prompt.
 COPY --chown=agent:agent agents/lean-system-prompt.md /opt/agent-config/agents/lean-system-prompt.md
 COPY --chown=agent:agent agents/skills /opt/agent-config/agents/skills
-# boilerplats ships to every stage: all three tools run boilerplate-guard.sh
-# (Claude via settings.json, Copilot via pre-tool-use.sh, Pi via index.ts),
-# which hard-blocks hand-written boilerplate and directs the model to
-# ~/.agents/boilerplats/scaffold.js. Without the generator here that block is a
-# dead end with no way out. node_modules/ is gitignored so it never arrives via
-# COPY; baking `npm ci` in at build time (rather than leaving it to the
-# ~/.cache/boilerplats fallback nix/agents.nix populates) means scaffold.js's
-# plain `require('handlebars')` resolves from its own directory and containers
-# never need the registry at run time.
-COPY --chown=agent:agent agents/boilerplats /opt/agent-config/agents/boilerplats
 COPY --chown=agent:agent docker/entrypoint.sh /opt/agent-config/entrypoint.sh
 USER root
-# npm_config_cache is redirected because this RUN is root while HOME is still
-# the agent user's — the default cache would leave root-owned files in
-# /home/agent/.npm that later agent-user npm calls can't write through.
-RUN chmod +x /opt/agent-config/entrypoint.sh \
-    && npm_config_cache=/tmp/npm-cache \
-       npm ci --prefix /opt/agent-config/agents/boilerplats --no-fund --no-audit \
-    && rm -rf /tmp/npm-cache
+RUN chmod +x /opt/agent-config/entrypoint.sh
 USER agent
 
 # ---- claude ----

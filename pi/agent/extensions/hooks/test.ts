@@ -187,25 +187,6 @@ async function main() {
     }
   }
 
-  // Same reasoning as the no-op case above: asserting on bash-write-guard.sh's
-  // own wording proves Pi actually shells out to the shared guard rather than
-  // leaving the shell write-around of the boilerplate mandate open on Pi.
-  {
-    // The writer here is deliberately allowlisted (`node`, not `cat`) so the
-    // command clears bash-allowlist-guard.sh and this really exercises the
-    // write guard behind it.
-    const desc = "tool_call blocks a shell write into a code file via the shared bash guard";
-    const result = (await handlers.get("tool_call")!(
-      { toolName: "bash", input: { command: "node gen.js > src/OrdersRequest.ts" } },
-      ctx,
-    )) as { block?: boolean; reason?: string } | undefined;
-    if (result?.block && result.reason?.includes("shell redirection")) {
-      ok(desc);
-    } else {
-      no(desc, `got ${JSON.stringify(result)}`);
-    }
-  }
-
   // Allowlist-only shell policy, again asserted on bash-allowlist-guard.sh's
   // own wording so a local stand-in check could not satisfy it.
   {

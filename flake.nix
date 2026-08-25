@@ -96,7 +96,6 @@
           ''
             set -euo pipefail
             dockerfile=${./docker/Dockerfile}
-            entrypoint=${./docker/entrypoint.sh}
             fail=0
 
             # Every script mohan-hooks.json registers must be COPY'd in.
@@ -126,15 +125,6 @@
               fi
             done
 
-            # boilerplate-guard.sh sends the model to this path on all three
-            # tools, so the container has to actually have it.
-            if ! grep -q 'agents/boilerplats' "$entrypoint"; then
-              echo "MISSING: entrypoint.sh does not sync agents/boilerplats" >&2
-              fail=1
-            else
-              echo "ok: entrypoint.sh syncs agents/boilerplats"
-            fi
-
             [ "$fail" -eq 0 ] || exit 1
             echo "docker hook parity ok" > "$out"
           '';
@@ -157,8 +147,7 @@
           '';
 
         # feature-plan skill's injector suite. Pure node: built-ins, no npm
-        # deps, so it runs hermetically here. (agents/boilerplats' suite needs
-        # handlebars from the registry and runs in the CI node-tests job.)
+        # deps, so it runs hermetically here.
         feature-plan-tests = pkgs.runCommand "feature-plan-tests"
           { nativeBuildInputs = [ pkgs.nodejs_22 ]; }
           ''

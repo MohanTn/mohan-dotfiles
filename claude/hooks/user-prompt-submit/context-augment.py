@@ -201,7 +201,7 @@ def find_files(paths: list[str], symbols: list[str], root: str) -> list[str]:
         for hit in fuzzy_filter(sym, file_list(), root, limit=3):
             add(hit)
 
-    # 2b. directory names fuzzy-matching a symbol (boilerplates ~ agents/boilerplats/)
+    # 2b. directory names fuzzy-matching a symbol (handlers ~ src/handlers/)
     for sym in symbols:
         if expired() or len(ranked) >= MAX_FILES:
             break
@@ -354,7 +354,7 @@ def should_inject_repo_map_hint(prompt: str, paths: list[str], symbols: list[str
     """Detect if prompt is about file discovery in tracked directories."""
     # Keywords that suggest file-discovery queries
     discovery_keywords = {
-        "boilerplate", "scaffold", "template", "controller", "repository",
+        "template", "controller", "repository",
         "handler", "validator", "mapper", "hooks", "agents", "ls", "find",
         "structure", "layout", "what file", "which file", "list", "inventory"
     }
@@ -363,7 +363,7 @@ def should_inject_repo_map_hint(prompt: str, paths: list[str], symbols: list[str
         if kw in prompt_lower:
             return True
     # Or if querying paths that are in tracked dirs
-    tracked_dirs = {"agents/boilerplats", "claude/hooks", "agents/skills"}
+    tracked_dirs = {"claude/hooks", "agents/skills"}
     for p in paths:
         for td in tracked_dirs:
             if td in p:
