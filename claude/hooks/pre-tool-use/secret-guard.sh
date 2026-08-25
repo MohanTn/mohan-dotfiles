@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# PreToolUse (*) — invoke-time guardrail. boilerplate-guard.sh and
-# bash-write-guard.sh gate HOW code files get written (bake time); this gates
-# WHAT gets executed or written regardless of tool (invoke time), enforcing
-# AGENTS.md's "secrets never enter this repo" rule at the moment a secret
-# would actually flow through a tool call rather than only at review time.
+# PreToolUse (*) — invoke-time guardrail. pre-tool-use-edit-guard.sh gates HOW
+# code files get written (bake time); this gates WHAT gets executed or
+# written regardless of tool (invoke time), enforcing AGENTS.md's "secrets
+# never enter this repo" rule at the moment a secret would actually flow
+# through a tool call rather than only at review time.
 # Reused as-is by the Copilot and Pi hook adapters, like bash-write-guard.sh.
 input=$(cat)
 export HOOK_INPUT="$input"

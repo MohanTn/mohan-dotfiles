@@ -84,9 +84,8 @@ Aliases of note: `cc` (Claude with the lean system prompt + tool allowlist),
 | Thing | Where | Role |
 | --- | --- | --- |
 | `agents/AGENTS.md`, `agents/lean-system-prompt.md` | agents.nix | Tool-agnostic instructions shared by all three agents |
-| `agents/boilerplats` (`scaffold.js`, `mcp-server.js`, hbs templates for 7 languages) | agents.nix + claude.nix | Boilerplate generator, registered as the user-scope `scaffold` MCP server |
 | `agents/skills/` (`chrome-devtools-axi`, `feature-plan`, `frontend-design`, `graphify`, `repo-map-check`, `resolve-ai-notes`, `sketch-design`) | agents.nix | Discovered by Claude (`~/.claude/skills`), Copilot, and Pi (`~/.agents/skills`) |
-| `claude/hooks/` (18 scripts, one folder per hook event: `session-start/`, `user-prompt-submit/`, `pre-tool-use/`, `post-tool-use/`, `pre-compact/`, `session-end/`, plus `tools/` and `lib/`) | claude.nix | Guardrails: secret-guard, boilerplate guards, goal capture, loop breaker, session start/end, context augment |
+| `claude/hooks/` (15 scripts, one folder per hook event: `session-start/`, `user-prompt-submit/`, `pre-tool-use/`, `post-tool-use/`, `pre-compact/`, `session-end/`, plus `tools/` and `lib/`) | claude.nix | Guardrails: secret-guard, goal capture, loop breaker, session start/end, context augment |
 | `copilot/hooks/`, `pi/agent/extensions/hooks` | copilot.nix, pi.nix | Ports of the same policy to the other two harnesses |
 
 ## 9. System, ops, misc
@@ -149,7 +148,6 @@ Ranked by how directly they serve work this repo already does.
 
 | Tool | Use case here |
 | --- | --- |
-| `ast-grep` | Structural code search/rewrite. Would let `boilerplate-signatures.grep` become a real AST rule instead of a regex list. |
 | `act` | Run `ci.yml` locally in Docker before pushing; you already have the Docker opt-in and a sandbox image. |
 | `lazydocker` | Only worth it once `enableDocker` is on and containers are long-lived. |
 | `hyperfine` | Benchmark hook latency — relevant because every hook runs on the prompt path. |

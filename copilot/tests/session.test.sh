@@ -6,9 +6,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 sid="copilot-selftest-session"
 rm -rf "${STATE_HOME:?}/$sid"
 
-expect_out "session-start emits the boilerplate-generator hint" session-start.sh \
+expect_out "session-start emits the project digest" session-start.sh \
   "$(jq -n --arg sid "$sid" '{sessionId:$sid, cwd:"/tmp", source:"startup"}')" \
-  '.additionalContext | contains("scaffold.js")'
+  '.additionalContext | contains("Project digest")'
 
 # user-prompt-submit is state-reset only: no decision, no context, exit 0.
 expect_silent "user-prompt-submit exits 0 with no output" user-prompt-submit.sh \

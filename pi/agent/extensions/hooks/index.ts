@@ -1,8 +1,8 @@
 // TypeScript port of claude/hooks for the Pi coding agent. Every gate shells
 // out to the existing claude/hooks/*.sh (and *.py) scripts via lib.ts's
 // runClaudeHook — the same reuse pattern copilot/hooks uses — so there is one
-// authored copy of each gate's logic and policy (edit no-op guard, boilerplate
-// mandate, secret/credential guardrail, loop breaker, digest generation,
+// authored copy of each gate's logic and policy (edit no-op guard,
+// secret/credential guardrail, loop breaker, digest generation,
 // context augmentation, the import/type-check/build + lint/test chain,
 // session audit) shared across all three tools. Pi must not reimplement its
 // own policy on top of these.
@@ -87,12 +87,6 @@ export default function (pi: ExtensionAPI) {
       parts.push(memoryResult.stdout.trim());
     }
 
-    // No boilerplate-hint.sh call here: on Pi the same AGENT-HINT.md is already
-    // permanently in the system prompt via ~/.pi/agent/APPEND_SYSTEM.md (see
-    // nix/pi.nix), so running the keyword-gated hook as well just paid for the
-    // text twice on boilerplate-flavored turns. Claude has no APPEND_SYSTEM
-    // equivalent, which is why the hook remains its delivery path.
-
     // Emitted by session_compact below, flushed into the first turn after a
     // compaction — Pi's compaction handlers have no way to inject a message
     // themselves, so this is the same channel the session digest uses.
@@ -142,15 +136,6 @@ export default function (pi: ExtensionAPI) {
         if (noop.exitCode === 2) {
           return { block: true, reason: noop.stderr.trim() };
         }
-        const guard = runClaudeHook("pre-tool-use/boilerplate-guard.sh", {
-          session_id: sessionId,
-          cwd: ctx.cwd,
-          tool_name: "Edit",
-          tool_input: { file_path: input.path, old_string: e.oldText, new_string: e.newText },
-        });
-        if (guard.exitCode === 2) {
-          return { block: true, reason: guard.stderr.trim() };
-        }
       }
     }
 
@@ -164,15 +149,6 @@ export default function (pi: ExtensionAPI) {
       });
       if (guard.exitCode === 2) {
         return { block: true, reason: guard.stderr.trim() };
-      }
-      const boilerplate = runClaudeHook("pre-tool-use/boilerplate-guard.sh", {
-        session_id: sessionId,
-        cwd: ctx.cwd,
-        tool_name: "Write",
-        tool_input: { file_path: input.path, content: input.content },
-      });
-      if (boilerplate.exitCode === 2) {
-        return { block: true, reason: boilerplate.stderr.trim() };
       }
     }
 
@@ -188,18 +164,6 @@ export default function (pi: ExtensionAPI) {
       });
       if (allowlist.exitCode === 2) {
         return { block: true, reason: allowlist.stderr.trim() };
-      }
-
-      // Closes the shell write-around of the boilerplate mandate, same
-      // authored copy as Claude/Copilot (see bash-write-guard.sh header).
-      const bashGuard = runClaudeHook("pre-tool-use/bash-write-guard.sh", {
-        session_id: sessionId,
-        cwd: ctx.cwd,
-        tool_name: "Bash",
-        tool_input: event.input,
-      });
-      if (bashGuard.exitCode === 2) {
-        return { block: true, reason: bashGuard.stderr.trim() };
       }
     }
 

@@ -19,19 +19,14 @@ mkdir -p "$HOME/.claude"
 rm -rf "$HOME/.claude/hooks"
 cp -r /opt/agent-config/claude/hooks "$HOME/.claude/hooks"
 
-# Mirrors nix/agents.nix's ~/.agents layer. Runs for every AGENT_TOOL, not just
-# the ones that read AGENTS.md/skills from here: boilerplate-guard.sh fires on
-# all three tools and points at ~/.agents/boilerplats/scaffold.js, and
-# session-start.sh reads ~/.agents/boilerplats/AGENT-HINT.md.
+# Mirrors nix/agents.nix's ~/.agents layer. Runs for every AGENT_TOOL, not
+# just the ones that read AGENTS.md/skills from here.
 sync_agents_layer() {
   mkdir -p "$HOME/.agents"
   cp -f /opt/agent-config/agents/AGENTS.md "$HOME/.agents/AGENTS.md"
   cp -f /opt/agent-config/agents/lean-system-prompt.md "$HOME/.agents/lean-system-prompt.md"
   rm -rf "$HOME/.agents/skills"
   cp -r /opt/agent-config/agents/skills "$HOME/.agents/skills"
-  # includes node_modules/, baked by the Dockerfile's npm ci
-  rm -rf "$HOME/.agents/boilerplats"
-  cp -r /opt/agent-config/agents/boilerplats "$HOME/.agents/boilerplats"
 }
 
 case "${AGENT_TOOL:-}" in
@@ -51,20 +46,10 @@ case "${AGENT_TOOL:-}" in
     cp -f /opt/agent-config/claude/statusline-usage.py "$HOME/.claude/statusline-usage.py"
     rm -rf "$HOME/.claude/skills"
     cp -r /opt/agent-config/agents/skills "$HOME/.claude/skills"
-    # Scaffold MCP server, the container counterpart of nix/claude.nix's
-    # scaffoldMcp activation. Registered here rather than baked into
-    # settings.json because Claude Code keeps user-scope MCP servers in
-    # ~/.claude.json (a file it rewrites at runtime, and one this script
-    # deliberately never overwrites — it holds session state too).
-    if ! claude mcp get scaffold >/dev/null 2>&1; then
-      claude mcp add --scope user scaffold -- node "$HOME/.agents/boilerplats/mcp-server.js" || \
-        echo "entrypoint.sh: could not register the scaffold MCP server, falling back to scaffold.js" >&2
-    fi
     ;;
   copilot)
     # Copilot reads its instructions from copilot-instructions.md rather than
-    # ~/.agents/AGENTS.md and isn't wired for skills (matching nix/copilot.nix),
-    # but it still needs the agents layer for the boilerplate generator.
+    # ~/.agents/AGENTS.md and isn't wired for skills (matching nix/copilot.nix).
     sync_agents_layer
     # $HOME/.copilot is pre-created in the image only for the agent user, and
     # this stage runs as root — it used to be created as a side effect of an
@@ -77,24 +62,6 @@ case "${AGENT_TOOL:-}" in
     cp -f /opt/agent-config/agents/lean-system-prompt.md "$HOME/.copilot/copilot-instructions.md"
     rm -rf "$HOME/.copilot/hooks"
     cp -r /opt/agent-config/copilot/hooks "$HOME/.copilot/hooks"
-    # Scaffold MCP server, mirroring nix/copilot.nix: merged in only when
-    # absent so a user-edited mcp-config.json survives.
-    node -e '
-      const fs = require("fs");
-      const p = process.env.HOME + "/.copilot/mcp-config.json";
-      let cfg = {};
-      try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
-      cfg.mcpServers = cfg.mcpServers || {};
-      if (!cfg.mcpServers.scaffold) {
-        cfg.mcpServers.scaffold = {
-          type: "local",
-          command: "node",
-          args: [process.env.HOME + "/.agents/boilerplats/mcp-server.js"],
-          tools: ["*"],
-        };
-        fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
-      }
-    ' || echo "entrypoint.sh: could not register the scaffold MCP server for Copilot" >&2
     ;;
   pi)
     sync_agents_layer

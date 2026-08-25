@@ -86,8 +86,8 @@ Follow all of them, for the starter file and for every later expansion of it.
 - **Anchor nodes to code, and name the mechanism in the node.** Real path in
   the label, line number when it is the decision point, and the "how" in
   parentheses: `Verifier (tsc --noEmit on the diff)` beats `Verifier`,
-  `Guard[boilerplate-guard.sh:42 — blocks hand-written boilerplate by
-  content signature]` beats `Guard`.
+  `Guard[secret-guard.sh:42 — blocks a tool call whose input looks like a
+  live secret]` beats `Guard`.
 - **Say what a node decides, not just its name.** The label carries the
   explanation so the agent does not need a follow-up read.
 - **Use simple English in every label.** Write labels a non-expert teammate

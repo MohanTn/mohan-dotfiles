@@ -7,7 +7,7 @@ flowchart TD
 
   subgraph P1["1. Source of truth — this repo is the ONLY place you edit"]
     Nix["nix/*.nix — one module per tool — in: edit nix/zsh.nix -> out: a new generated ~/.zshrc"]
-    Agents["agents/ — AGENTS.md, skills/, boilerplats/, style/ — one shared payload for all three harnesses"]
+    Agents["agents/ — AGENTS.md, skills/, style/ — one shared payload for all three harnesses"]
     Hooks["claude/hooks, copilot/hooks, pi/agent/extensions — the scripts that gate prompts and tool calls. claude/hooks is split one folder per hook event (session-start/, user-prompt-submit/, pre-tool-use/, post-tool-use/, pre-compact/, session-end/), plus lib/common.sh and tools/ for scripts no event fires — so every caller spells the subfolder: $HOME/.claude/hooks/pre-tool-use/secret-guard.sh"]
     Mem[".ai-memory/ — manifest.json plus THIS single diagram"]
   end
@@ -29,19 +29,20 @@ flowchart TD
     SS["SessionStart, once per session: session-start.sh --no-claude-md runs repo-map.sh, which regenerates .claude/repo-map.md from scratch every session by design — in: tracked files -> out: folder/file/symbol index with line numbers, so the agent skips an fd+rg orientation pass"]
     U1["UserPromptSubmit 1: user-prompt-submit.sh — clears per-turn state, injects the MCP reader hint"]
     U2["UserPromptSubmit 2: context-augment.py — in: 'why is nix flake check failing' -> out: keywords plus abstracted excerpts of the files those keywords hit"]
-    U3["UserPromptSubmit 3: boilerplate-hint.sh — fires ONLY when the prompt looks boilerplate-shaped, e.g. 'add a repository for orders' -> out: use the scaffold generator"]
-    U4["UserPromptSubmit 4: inject-memory.sh — in: .ai-memory/manifest.json -> out: this whole file wrapped in a relevant_system_map block"]
-    SS --> U1 --> U2 --> U3 --> U4
+    U3["UserPromptSubmit 3: inject-memory.sh — in: .ai-memory/manifest.json -> out: this whole file wrapped in a relevant_system_map block"]
+    SS --> U1 --> U2 --> U3
   end
 
   Claude -->|"6. in claude/settings.json order"| P2
-  Mem -->|"7. read by"| U4
-  U4 -->|"8. turn runs; every tool call goes through section 3"| P3
+  Mem -->|"7. read by"| U3
+  U3 -->|"8. turn runs; every tool call goes through section 3"| P3
 
   Router["ai_memory_match_route in claude/hooks/lib/common.sh — if manifest.json has a top-level 'diagram' key it returns that ONE file for EVERY prompt, no keyword matching at all. The older 'routes' + keywords schema still works for other repos: case-insensitive substring, highest priority wins, exactly one file"]
-  U4 -.-> Router
+  U3 -.-> Router
   Note1["CORRECTION: earlier versions of this map described a Stop hook pair, remember-memory.sh and stop-goal-check.sh, that grew the diagrams automatically and stashed a nudge for the next turn. Neither script exists any more and claude/settings.json has NO Stop hook. Growing this file is now a deliberate act by the agent or by you"]
-  U4 -.-> Note1
+  U3 -.-> Note1
+  Note2["CORRECTION: earlier versions of this map described a section 4, 'Scaffold a file', a boilerplate-shape mandate (agents/boilerplats/scaffold.js + mcp-server.js, boilerplate-hint.sh, boilerplate-guard.sh, bash-write-guard.sh, the scaffold:inject marker). The whole subsystem was removed as counterproductive: it cost more tokens in agents working around the block than it ever saved. Edit/Write files directly with ordinary tools; there is no generator, no marker, and no mandate any more"]
+  U3 -.-> Note2
 
   subgraph P3["3. Tool-call gauntlet — PreToolUse, matcher * runs first for EVERY tool"]
     Secret["secret-guard.sh — gates WHAT is read or leaked, e.g. a credential file. Two independent pattern families in lib/common.sh: LEAK_VALUE_PATTERNS (a live secret VALUE, e.g. AKIA..., a private-key block) and LEAK_ENV_READ_PATTERNS (CODE or a command that reads a secret-NAMED var out — $AWS_SECRET_KEY, os.environ['...TOKEN...'], process.env.X — closing the workaround of only ever handling the secret's NAME, never its literal value)"]
@@ -50,41 +51,15 @@ flowchart TD
     Secret --> Loop --> Which
   end
 
-  Which -->|"Edit or Write"| BP["boilerplate-guard.sh — rename-proof: matches the filename AND the file content signature against the boilerplats kinds — in: hand-written OrderRepository.cs -> out: blocked"]
-  BP -->|"9a. boilerplate-shaped"| Blocked["BLOCKED — generate it instead, see section 4"]
-  BP -->|"9b. clean"| NoOp["pre-tool-use-edit-guard.sh — rejects an edit that changes nothing"]
+  Which -->|"Edit or Write"| NoOp["pre-tool-use-edit-guard.sh — rejects an edit that changes nothing"]
   NoOp -->|"10. edit lands"| Post["PostToolUse, matcher Edit|Write: post-tool-use-edit.sh — sets the dirty flag and checks the symbol exists. Deliberately does NOT compile the whole project"]
 
   Which -->|"Bash"| Allow["bash-allowlist-guard.sh — allowlist-only, and it checks EVERY command position: pipeline stages, chained segments, command substitutions, subshells. Shell keywords count too — in: 'for f in *.mmd; do cat $f; done' -> out: blocked, 'for' is not on the list"]
   Allow -->|"11a. unlisted binary or shell keyword"| BlockedSh["BLOCKED, exit 2 with exactly TWO stderr lines the agent reads, bash-allowlist-guard.sh:97-102 — in: 'for f in *.mmd; do cat $f; done' -> out: line 1 'Blocked: for is not on the Bash allowlist', line 2 'Use one of the allowed commands:' plus the full sorted list (machine-wide plus project, merged). DELIBERATELY does NOT suggest extending the allowlist: widening the shell policy is the user's call, made by hand in claude/bash-allowlist"]
-  Allow -->|"11b. allowed"| WriteG["bash-write-guard.sh — closes the write-around: heredoc redirects, tee, sed -i"]
-  WriteG -->|"12a. writes a boilerplate file through the shell"| Blocked
-  WriteG -->|"12b. clean"| Run["command runs"]
+  Allow -->|"11b. allowed"| Run["command runs"]
   Which -->|"Read"| Run
 
   Run -->|"13. result exists now"| SecretPost["PostToolUse, matcher Bash|Read: secret-post-guard.sh — second layer, scans the RESULT (tool_response) for a LEAK_VALUE_PATTERNS match. Closes what secret-guard.sh structurally cannot see because it only ever sees the call BEFORE it runs: cat of a real secret file, or an obfuscated env-var name that evaded the NAME-based check but still prints a VALUE-shaped secret. Detection-and-warn, not prevention: the result already exists in this turn's transcript by the time this fires, so the block message tells the model to disregard/not repeat the value, it does not erase it. Still pattern-based like Secret above, so an unknown-shaped or deliberately transformed (base64, split, reversed) secret still passes — this closes a real gap, it does not make leaking impossible. As of writing this is wired into claude/settings.json only, not yet ported to the Copilot/Pi adapters (their PostToolUse tool-result payload shape needs confirming first, unlike secret-guard.sh's payload translation which was already proven via claude_payload())"]
-
-  subgraph P4["4. Scaffold a file — the only sanctioned way to create boilerplate"]
-    E1["scaffold_* MCP tools — agents/boilerplats/mcp-server.js, PREFERRED"]
-    E2["node ~/.agents/boilerplats/scaffold.js ... --json — fallback"]
-    Parse["scaffold.js parseArgs + loadData, then lib/core.js validateData checks kind, language, required fields"]
-    Meta["lib/template-meta.js markerFor/listLanguages/listTemplates picks boilerplats/LANG/*.hbs — csharp, go, javascript, typescript, python, and sh which only has function, helper, member, script, validator"]
-    Mode{"what does --out point at"}
-    Create["scaffoldCreate — new file, written WITH a scaffold:inject marker"]
-    Inject["scaffoldInject — existing marked file, new member inserted ABOVE the marker"]
-    Adopt["scaffoldAdopt — existing UNMARKED legacy file, adopted automatically; lib/anchor.js resolveAnchor picks the spot, braceAnchor for C-like, pythonAnchor, shAnchor"]
-    Out["every mode returns numberedLines + scanFillable: the full numbered content and the fillable line numbers — so NEVER re-read a file you just scaffolded"]
-    E1 --> Parse
-    E2 --> Parse
-    Parse --> Meta --> Mode
-    Mode -->|"13a"| Create --> Out
-    Mode -->|"13b"| Inject --> Out
-    Mode -->|"13c"| Adopt --> Inject
-    Out -->|"14. fill business logic ABOVE the marker, never delete the marker"| DoneS["ordinary Edit calls, then run the tests"]
-  end
-
-  Blocked -.->|"the guard points here"| E1
-  U3 -.->|"suggests this before you start"| E1
 
   subgraph P5["5. Interactive zsh startup — the whole rc body is GENERATED by nix/zsh.nix initExtra, never hand-edit ~/.zshrc"]
     Z1["history hooks: __hist_pending_cmd plus precmd _hist_drop_failed — a command that exits non-zero is written and then dropped back out of HISTFILE"]
@@ -106,7 +81,6 @@ flowchart TD
     T2["context-augment.py -> python3 claude/tests/test_context_augment.py"]
     T3["claude/session-analytics.py -> python3 claude/tests/test_session_analytics.py; claude/session-web.py -> python3 claude/tests/test_session_web.py"]
     T4["copilot/hooks/*.sh -> copilot/tests/test-hook.sh selftest, which runs every copilot/tests/*.test.sh (one per area: pre-tool-use, post-tool-use, session, prompt-context, memory, pre-compact) and sums their tallies. Each file is runnable alone and sources tests/lib.sh for run_hook / expect_out / expect_silent / payload_tool / summary"]
-    T5["agents/boilerplats -> npm test there — node --test over core.test.js, scaffold.test.js, mcp-server.test.js"]
     T6["pi/agent/extensions -> hooks/test.ts and sandbox/test.ts — pi's own test.ts convention"]
     T7["any .nix file, or ANY new file -> nix flake check, after git add"]
   end
@@ -116,7 +90,7 @@ flowchart TD
   subgraph P7["7. Failure modes — named by SYMPTOM, because the symptom is what you will type"]
     F1["setup.sh or nix flake check fails right after adding or renaming a file — CAUSE: nix flakes only see git-tracked files, so an untracked file does not exist inside the sandboxed build. FIX: git status --short, then git add it. Do NOT reach for nix log, --rebuild or --keep-failed until this is ruled out"]
     F2["'Blocked: X is not on the Bash allowlist' — CAUSE: bash-allowlist-guard.sh is allowlist-only and inspects every command position, so shell keywords like for and while are refused too. FIX: rebuild the command from the 'Use one of the allowed commands:' list in the block message, or reach for the Read/Edit/Write/search tools. Do NOT add the binary to claude/bash-allowlist yourself, ask the user"]
-    F3["PreToolUse refused an Edit or Write — CAUSE: boilerplate-guard.sh matched a content signature, and renaming the file does not exempt it; or pre-tool-use-edit-guard.sh saw an edit that changes nothing. FIX: generate it with scaffold_*, then fill logic above the scaffold:inject marker"]
+    F3["PreToolUse refused an Edit or Write — CAUSE: pre-tool-use-edit-guard.sh saw an edit or write that changes nothing (a true no-op). FIX: check the diff actually changes content; a no-op edit/write is a bug in the calling logic, not a guard to work around"]
     F4["an edit under $HOME vanished, or came back as NAME.hm-backup — CAUSE: managed files are read-only nix store symlinks and every apply forcibly relinks them. FIX: make the change in this repo, run ./setup.sh, confirm with ./setup.sh doctor"]
     F5["escape-sequence garbage in the terminal under WSL — CAUSE: extended-keys mode corrupts output on WSL, fixed in commit fe6ae64. FIX: detect WSL and skip extended-keys, rather than changing the terminal"]
     F6["a nerd font icon renders off-center or overlapping in Alacritty or VTE — CAUSE: PUA glyphs carry Unicode Ambiguous width, so the cell advance is wrong. FIX: A/B the same slot with a plain ASCII character to prove it is width and not the font, then adjust the width setting"]

@@ -126,7 +126,6 @@ nix/                  one Home Manager module per concern (packages, zsh, git,
 agents/               shared agent layer → ~/.agents
                         AGENTS.md    global instructions, used by all 3 agents
                         skills/      reusable agent skills
-                        boilerplats/ scaffold.js code generator + templates
 claude/               → ~/.claude (settings, hooks, statusline)
 copilot/              → ~/.copilot (hooks, generated instructions)
 pi/                   → ~/.pi (hook extension, sandbox extension)
@@ -135,7 +134,7 @@ zsh/                  prompt theme + shell helpers sourced by nix/zsh.nix
 docker/               containerized workspace for each agent
 ```
 
-**The agent layer is the interesting part.** `agents/AGENTS.md` is the single authored system prompt: Claude imports it, while Copilot's and Pi's instruction files are generated from it at build time so they can't drift. The safety hooks — blocking no-op edits, breaking retry loops, verifying new imports resolve, mandating the scaffold generator for boilerplate, replaying context across a compaction — are authored once in `claude/hooks/` and reused by all three. Copilot and Pi shell out to those same scripts through thin adapters rather than reimplementing them, so there is exactly one copy of each rule.
+**The agent layer is the interesting part.** `agents/AGENTS.md` is the single authored system prompt: Claude imports it, while Copilot's and Pi's instruction files are generated from it at build time so they can't drift. The safety hooks — blocking no-op edits, breaking retry loops, verifying new imports resolve, replaying context across a compaction — are authored once in `claude/hooks/` and reused by all three. Copilot and Pi shell out to those same scripts through thin adapters rather than reimplementing them, so there is exactly one copy of each rule.
 
 ### Containers
 
@@ -160,7 +159,7 @@ Credentials and session history persist in named volumes across runs.
 nix flake check --impure    # everything CI runs
 ```
 
-Eight checks: the full home configuration evaluates; `setup.sh` is shellchecked and its drift audit exercised against a synthetic profile; the Claude, Copilot, and Pi hook suites run; `context-augment.py` and the feature-plan injector run their unit tests; and a parity check asserts the container images ship every hook the configs actually register. The boilerplate generator's suite needs the npm registry, so it runs as a separate CI job rather than inside the offline Nix sandbox.
+Eight checks: the full home configuration evaluates; `setup.sh` is shellchecked and its drift audit exercised against a synthetic profile; the Claude, Copilot, and Pi hook suites run; `context-augment.py` and the feature-plan injector run their unit tests; and a parity check asserts the container images ship every hook the configs actually register.
 
 Tests live beside the hooks they cover, never inside the deployed tree: `claude/tests/` and `copilot/tests/`. Individual hooks can be driven by hand:
 

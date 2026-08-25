@@ -20,32 +20,10 @@
   # harness-neutral, so it names no tool only one of them has.
   home.file.".pi/agent/SYSTEM.md".text = builtins.readFile ../agents/lean-system-prompt.md;
 
-  # Boilerplate-generator hint (see agents/boilerplats/AGENT-HINT.md): on
-  # Claude Code it's a keyword-gated UserPromptSubmit hook
-  # (claude/hooks/user-prompt-submit/boilerplate-hint.sh) and on Copilot it's appended to
-  # session-start.sh's once-per-session additionalContext, since neither of
-  # Pi's own per-turn hook events can rewrite the system prompt outside an
-  # extension. APPEND_SYSTEM.md is Pi's native, documented mechanism for a
-  # permanent system-prompt addition (docs/usage.md's "System Prompt Files"),
-  # so it's used directly here instead of porting the hook logic — it's
-  # always present, including after context compaction, unlike an injected
-  # session message.
-  home.file.".pi/agent/APPEND_SYSTEM.md".text =
-    builtins.readFile ../agents/boilerplats/AGENT-HINT.md;
-
   # TypeScript port of claude/hooks (see pi/agent/extensions/hooks/index.ts for
   # the event-mapping rationale). Pure node:* built-ins, no npm deps, so a
   # plain read-only store symlink is enough — same role as .claude/hooks.
   home.file.".pi/agent/extensions/hooks".source = ../pi/agent/extensions/hooks;
-
-  # Scaffold MCP server: none here by design. Pi ships no MCP client at all —
-  # docs/usage.md states it "intentionally does not include built-in MCP,
-  # sub-agents, permission popups, plan mode, to-dos, or background bash", so
-  # on Pi the scaffold path stays the CLI (`scaffold.js --json`, same
-  # engine and structured output as the MCP tools) via the APPEND_SYSTEM.md
-  # hint above, and the write-around guards run through hooks/index.ts's
-  # bash-write-guard.sh + boilerplate-guard.sh calls — policy parity with
-  # Claude/Copilot even without the MCP transport.
 
   # Skills: agents/skills/ is already linked to ~/.agents by agents.nix, and
   # Pi natively auto-discovers ~/.agents/skills/*/SKILL.md (confirmed against
