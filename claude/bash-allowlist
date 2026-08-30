@@ -47,3 +47,4 @@ seq
 # follows it is still parsed as its own command position, so
 # `cd /x && rm -rf y` still blocks on rm.
 cd
+python3

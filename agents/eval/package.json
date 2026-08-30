@@ -1,0 +1,11 @@
+{
+  "name": "lean-system-prompt-eval",
+  "private": true,
+  "description": "promptfoo eval validating agents/lean-system-prompt.md's goal/goal-check protocol",
+  "scripts": {
+    "eval": "promptfoo eval -c promptfooconfig.yaml"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.118.0"
+  }
+}

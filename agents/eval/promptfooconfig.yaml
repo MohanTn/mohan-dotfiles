@@ -1,0 +1,46 @@
+# Regression eval for agents/lean-system-prompt.md's goal protocol:
+# every substantial reply must start with "GOAL: <sentence>" and end with
+# "GOAL_CHECK: ACHIEVED" or "GOAL_CHECK: NOT_ACHIEVED — <gap>"; acks and
+# one-line answers must skip both. Run with: npm run eval (from this dir).
+#
+# This calls the model directly with lean-system-prompt.md as the system
+# prompt — it checks prompt compliance on a bare single-turn call, not the
+# harness's stop hook that also enforces this at runtime (see the prompt's
+# "Goal protocol (hook-enforced)" section).
+
+description: lean-system-prompt.md goal-protocol eval
+
+prompts:
+  - |
+    [{"role": "system", "content": {{ systemPrompt | dump | safe }}}, {"role": "user", "content": {{ userMessage | dump | safe }}}]
+
+providers:
+  - anthropic:messages:claude-opus-5
+
+defaultTest:
+  vars:
+    systemPrompt: file://../lean-system-prompt.md
+
+tests:
+  - description: a substantial coding request states GOAL then GOAL_CHECK
+    vars:
+      userMessage: 'Add a function to src/utils.ts that validates an email address, with a unit test.'
+    assert:
+      - type: regex
+        value: 'GOAL: .+'
+      - type: regex
+        value: 'GOAL_CHECK: (ACHIEVED|NOT_ACHIEVED)'
+
+  - description: a one-line ack skips the goal protocol entirely
+    vars:
+      userMessage: 'Thanks, that works!'
+    assert:
+      - type: javascript
+        value: "!output.includes('GOAL:') && !output.includes('GOAL_CHECK:')"
+
+  - description: a one-line factual question skips the goal protocol entirely
+    vars:
+      userMessage: 'What does YAGNI stand for?'
+    assert:
+      - type: javascript
+        value: "!output.includes('GOAL:') && !output.includes('GOAL_CHECK:')"
