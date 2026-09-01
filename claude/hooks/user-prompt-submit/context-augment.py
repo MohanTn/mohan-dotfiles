@@ -20,9 +20,11 @@ Always exits 0; failures degrade to no augmentation rather than blocking submit.
 from __future__ import annotations
 
 import ast
+import contextlib
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -39,6 +41,16 @@ SEARCH_TIMEOUT = 2       # seconds per rg/fd call
 SEARCH_DEADLINE = 4      # seconds total wall-clock budget for all searches
 MAX_CANDIDATES = 20000   # cap the fd file/dir list so fzf stays fast on monorepos
 MIN_WORD_LEN = 8         # bare lowercase words shorter than this are prose, not symbols
+
+# --- hybrid-retrieval integration ----------------------------------------------
+# A resident daemon (see that repo's CLAUDE.md) indexes opted-in repos and ranks files by
+# BM25 + dense vectors + import graph, which beats this file's own fzf/rg heuristics on
+# vague natural-language prompts that have no path- or symbol-shaped tokens to search for.
+# Only fires for repos that carry a .retrieval/ index; every other repo pays one cheap stat.
+HYBRID_RETRIEVAL_ROOT = os.environ.get(
+    "HYBRID_RETRIEVAL_ROOT", os.path.expanduser("~/REPO/hybrid-retrieval-pipeline")
+)
+HYBRID_TIMEOUT = 1.5     # seconds; fails open well inside this hook's own 10s budget
 
 # per-language single-line comment prefix, for safe whitespace-only minify
 LINE_COMMENT = {
@@ -225,6 +237,64 @@ def find_files(paths: list[str], symbols: list[str], root: str) -> list[str]:
     return ranked[:MAX_FILES]
 
 
+def hybrid_socket_path() -> str:
+    override = os.environ.get("HYBRID_RETRIEVAL_SOCKET")
+    if override:
+        return os.path.expanduser(override)
+    cache = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    return os.path.join(cache, "hybrid-retrieval", "daemon.sock")
+
+
+def hybrid_autostart() -> None:
+    """Launch the daemon detached so the *next* prompt gets results; this one gets none.
+
+    Singleton-locked on the daemon side, so a racing autostart from another repo's hook is
+    harmless. Only ever spawns the one known install, never something arbitrary.
+    """
+    python = os.path.join(HYBRID_RETRIEVAL_ROOT, ".venv", "bin", "python")
+    if not os.path.exists(python):
+        return
+    with contextlib.suppress(OSError):
+        subprocess.Popen(
+            [python, "-m", "hybrid_retrieval.cli", "serve"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+            start_new_session=True, cwd=HYBRID_RETRIEVAL_ROOT,
+        )
+
+
+def hybrid_retrieval_files(root: str, prompt: str) -> list[str]:
+    """Ranked paths from the hybrid-retrieval daemon for this repo, or [] if unavailable.
+
+    Gated on a .retrieval/ index existing, so repos that never opted in pay one stat call.
+    Asks for paths only (assemble=False): this hook renders files itself, so a full context
+    string from the daemon would be built and thrown away.
+    """
+    if not os.path.isdir(os.path.join(root, ".retrieval")):
+        return []
+    payload = {"op": "retrieve", "repo": root, "prompt": prompt, "assemble": False}
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(HYBRID_TIMEOUT)
+            sock.connect(hybrid_socket_path())
+            sock.sendall((json.dumps(payload) + "\n").encode())
+            chunks: list[bytes] = []
+            while not (chunks and chunks[-1].endswith(b"\n")):
+                block = sock.recv(65536)
+                if not block:
+                    break
+                chunks.append(block)
+    except OSError:
+        hybrid_autostart()
+        return []
+    try:
+        response = json.loads(b"".join(chunks).decode("utf-8", "replace") or "{}")
+    except ValueError:
+        return []
+    if not response.get("ok"):
+        return []
+    return response.get("paths") or []
+
+
 def abstract_python(src: str) -> str:
     """Emit imports + class/function signatures with first docstring line."""
     try:
@@ -382,12 +452,19 @@ def main() -> int:
     if len(prompt.split()) < MIN_WORDS:
         return 0
 
-    paths, symbols = extract_keywords(prompt)
-    if not paths and not symbols:
-        return 0
-
     root = repo_root(cwd)
-    files = find_files(paths, symbols, root)
+
+    # Hybrid retrieval first: it needs no path/symbol-shaped tokens, so it covers vague
+    # natural-language prompts the fzf/rg keyword search below has nothing to search for.
+    files = list(dict.fromkeys(hybrid_retrieval_files(root, prompt)))[:MAX_FILES]
+
+    paths, symbols = extract_keywords(prompt)
+    if len(files) < MAX_FILES and (paths or symbols):
+        for rel in find_files(paths, symbols, root):
+            if rel not in files:
+                files.append(rel)
+                if len(files) >= MAX_FILES:
+                    break
     if not files:
         return 0
 

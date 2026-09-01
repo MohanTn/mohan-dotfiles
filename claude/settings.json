@@ -1,9 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(rg *)",
-      "Bash(git diff *)"
-    ],
+    "allow": ["Bash(rg *)", "Bash(git diff *)"],
     "defaultMode": "auto"
   },
   "hooks": {
@@ -140,10 +137,20 @@
     "command": "python3 \"$HOME/.claude/statusline-usage.py\""
   },
   "tui": "fullscreen",
-  "skipDangerousModePermissionPrompt": true,
+  "skipDangerousModePermissionPrompt": false,
   "theme": "dark",
-  "model": "claude-fable-5[1m]",
+  "model": "claude-opus-5",
   "sandbox": {
     "enabled": false
-  }
+  },
+  "awaySummaryEnabled": false,
+  "remoteControlAtStartup": false,
+  "telemetry": false,
+  "autoApproveCommands": false,
+  "agentPushNotifEnabled": false,
+  "autoInstallIdeExtension": false,
+  "autoMemoryEnabled": false,
+  "autoScrollEnabled": false,
+  "enableArtifact": false,
+  "disableDeepLinkRegistration": "disable"
 }
