@@ -48,6 +48,12 @@ seq
 # `cd /x && rm -rf y` still blocks on rm.
 cd
 python3
+if
+fi
+test
+sed
+grep
+bwrap
 
 docker
 docker compose
