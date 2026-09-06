@@ -77,7 +77,7 @@ Aliases of note: `cc` (Claude with the lean system prompt + tool allowlist),
 | Pi | pi.nix | npm installer; `AGENTS.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, TS hook port, sandbox extension |
 | GitHub Copilot CLI | optional-packages.nix (`enableGitHubCopilot`) | npm installer; hooks in `copilot/hooks` |
 | little-coder + `llama-cpp` | little-coder.nix (`enableLittleCoder`) | Local Gemma GGUF via `llama-server`; Vulkan build under `littleCoderGpu` |
-| `bubblewrap`, `socat` | packages.nix | Claude Code Bash sandbox and its network relay |
+| `socat` | packages.nix | Network relay the Claude Code Bash sandbox proxy depends on. `bubblewrap` is deliberately *not* installed here — the distro's `/usr/bin/bwrap` is used instead, since a nix-profile bwrap shadows it and breaks flatpak/GNOME-portal icon and wallpaper rendering |
 
 ## 8. Agent support layer (repo-local, not packages)
 
