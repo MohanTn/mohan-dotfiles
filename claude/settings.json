@@ -141,7 +141,7 @@
   "theme": "dark",
   "model": "claude-opus-5",
   "sandbox": {
-    "enabled": false
+    "enabled": true
   },
   "awaySummaryEnabled": false,
   "remoteControlAtStartup": false,

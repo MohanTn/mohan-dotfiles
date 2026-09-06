@@ -21,7 +21,13 @@
     gnumake
     curl
     oh-my-posh # zsh prompt, catppuccin_mocha theme (nix/zsh.nix)
-    bubblewrap # Claude Code's Bash sandbox (claude/settings.json sandbox.enabled)
+    # No bubblewrap here on purpose. Claude Code's Bash sandbox
+    # (claude/settings.json sandbox.enabled) does need bwrap, but the distro
+    # already ships a properly privileged /usr/bin/bwrap. Installing nix's
+    # build put an unprivileged bwrap in ~/.nix-profile/bin, ahead of the
+    # system one on PATH, which broke every desktop component that shells out
+    # to bwrap (flatpak, the GNOME portals) and showed up as missing icons and
+    # a wallpaper that never rendered. Let the system one win.
     socat # network relay the Claude Code sandbox proxy depends on
 
     # Nerd Font glyphs for tmux (catppuccin status bar) and terminal icons.
