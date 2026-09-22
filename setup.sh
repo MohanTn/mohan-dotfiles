@@ -47,6 +47,9 @@ HM_FLAKE="home-manager/release-25.05"
 HM_FILES="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager/home-files"
 
 PACKAGES_CONFIG="$HOME/.config/mohan-dotfiles/packages-config.nix"
+# Overridable so the flake check can exercise the login-shell helpers against a
+# scratch file instead of the real one.
+SHELLS_FILE="${SHELLS_FILE:-/etc/shells}"
 
 log()  { echo "> $*"; }
 info() { echo "= $*"; }
@@ -190,20 +193,58 @@ ensure_google_chrome() {
   rm -rf "$tmpdir"
 }
 
+# Which path to record as the login shell. chsh only accepts a shell listed in
+# /etc/shells, so prefer the distro's own binary (/bin/zsh, /bin/bash), which
+# every distro already lists. A machine where zsh comes only from Nix — a fresh
+# WSL Ubuntu, typically — falls back to the PATH entry, which is
+# ~/.nix-profile/bin/zsh: a stable symlink that survives generation changes,
+# unlike the /nix/store path it points at.
+login_shell_path() {
+  local want="$1" candidate
+  for candidate in "/bin/$want" "/usr/bin/$want"; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  command -v "$want" 2>/dev/null
+}
+
+# chsh refuses any shell missing from /etc/shells, and adding the line needs
+# root. Best effort: a failure here downgrades to a manual instruction instead
+# of aborting the apply.
+register_login_shell() {
+  local shell_path="$1"
+  if grep -qxF "$shell_path" "$SHELLS_FILE" 2>/dev/null; then
+    return 0
+  fi
+  log "registering $shell_path in $SHELLS_FILE (may prompt for your password)"
+  echo "$shell_path" | sudo tee -a "$SHELLS_FILE" >/dev/null
+}
+
 ensure_login_shell() {
   local want shell_path current_shell
   want="$(selected_shell)"
-  # For bash, prefer the distro's /bin/bash over a Nix-profile one: chsh only
-  # accepts a shell listed in /etc/shells, and the store path never is.
-  if [ "$want" = "bash" ] && [ -x /bin/bash ]; then
-    shell_path=/bin/bash
-  else
-    shell_path="$(command -v "$want")"
+  shell_path="$(login_shell_path "$want")"
+  if [ -z "$shell_path" ]; then
+    warn "no $want binary found; leaving the login shell unchanged"
+    return 0
   fi
-  current_shell="$(getent passwd "$USER" | cut -d: -f7)"
-  if [ "$(basename "$current_shell")" != "$want" ]; then
-    log "setting login shell to $want (may prompt for your password)"
-    chsh -s "$shell_path" || warn "chsh failed; run manually: chsh -s $shell_path"
+  # $USER is not set by every login path (cron, a bare `su`, a nix build);
+  # id -un always answers.
+  current_shell="$(getent passwd "${USER:-$(id -un)}" | cut -d: -f7)"
+  if [ "$(basename "$current_shell")" = "$want" ]; then
+    return 0
+  fi
+  if ! register_login_shell "$shell_path"; then
+    warn "could not add $shell_path to $SHELLS_FILE; set it manually: chsh -s $shell_path"
+    return 0
+  fi
+  log "setting login shell to $want (may prompt for your password)"
+  if chsh -s "$shell_path"; then
+    info "login shell is now $shell_path; open a new terminal to use it (on WSL, run 'wsl.exe --shutdown' from Windows first)"
+  else
+    warn "chsh failed; run manually: chsh -s $shell_path"
   fi
 }
 

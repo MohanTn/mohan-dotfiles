@@ -43,7 +43,7 @@ Then **open a new terminal** — the login shell changes to zsh, and the current
 1. Installs Nix via the Determinate Systems installer, if missing.
 2. Activates the Home Manager configuration. Existing files that would be overwritten are preserved as `*.hm-backup` — nothing of yours is destroyed.
 3. Folds any hand-written `~/.zshrc` into `~/.zshrc.local` so your existing customizations survive (`~/.bashrc` → `~/.bashrc.local` if you chose bash).
-4. Switches your login shell to whichever shell you picked in `setup-packages.sh` — zsh by default, bash if you answered no to prompt 10.
+4. Switches your login shell to whichever shell you picked in `setup-packages.sh` — zsh by default, bash if you answered no to prompt 10. It prefers the distro's own binary (`/bin/zsh`), and on a machine where zsh comes only from Nix it registers `~/.nix-profile/bin/zsh` in `/etc/shells` first, since `chsh` refuses anything not listed there.
 5. Installs Google Chrome if missing (apt machines only — the `axi` browser bridge looks for Chrome at `/opt/google/chrome`; without it, `axi` falls back to a debug Chromium).
 6. Runs a drift audit and prints a summary.
 
@@ -60,7 +60,7 @@ Exit code 0 and "all checks passed" means you're done. Open a new terminal and y
 | Symptom | Fix |
 | --- | --- |
 | `error: ... does not exist` right after you added or renamed a file | Nix only sees git-tracked files. Run `git add` on the new file (staging is enough, no commit needed) and retry. This is the single most common confusion — check it before anything else. |
-| Shell still isn't zsh | Open a *new* terminal. If it persists, log out and back in; the login shell change needs a fresh session. |
+| Shell still isn't zsh | Open a *new* terminal. On WSL, run `wsl.exe --shutdown` from Windows first — an already-running distro keeps the old login shell. If it persists, check `grep "^$USER:" /etc/passwd`; `setup.sh` prints a `chsh -s ...` line to run by hand when it could not do it for you. |
 | `No space left on device` while building | `/nix` is full. `nix-collect-garbage --delete-older-than 7d` (and the same with `sudo`), delete stale `result` symlinks — they are GC roots — then `nix store optimise`. The daily `tools-maintenance` timer does the first part for you once a switch has succeeded. |
 | little-coder ignores the GPU | `littleCoderGpu` must be on (prompt 7a), and the wrapper needs an NVIDIA Vulkan ICD in `/usr/share/vulkan/icd.d`. Check `~/.cache/little-coder/llama-server.log` for `-ngl` and a Vulkan device line; `rm -rf ~/.cache/little-coder/gpu-libs` forces the driver-library farm to rebuild after a driver upgrade. |
 | `setup.sh doctor` reports drift | Something edited a managed file by hand. Re-run `./setup.sh` to restore it; your edited copy is kept as `*.hm-backup`. |
