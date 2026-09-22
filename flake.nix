@@ -69,6 +69,42 @@
           echo "${builtins.unsafeDiscardOutputDependency self.homeConfigurations.${username}.activationPackage.drvPath}" > "$out"
         '';
 
+        # The `home` check above only ever evaluates one answer to
+        # ./setup-packages.sh's shell/tmux questions — whatever the machine
+        # running it happens to have in packages-config.nix. The other three
+        # combinations (bash instead of zsh, tmux off, both) go through
+        # entirely different module branches: nix/bash.nix's initExtra,
+        # nix/tmux.nix's mkIf, and shell-common.nix dropping the auto-start
+        # block. A typo in any of them would only surface on the machine that
+        # picked that combination, so all four are instantiated here.
+        # mkForce, because home.nix already imported the real config file and
+        # a plain value would collide with it.
+        shell-variants =
+          let
+            variantDrv = enableZsh: enableTmux:
+              builtins.unsafeDiscardOutputDependency
+                (home-manager.lib.homeManagerConfiguration {
+                  inherit pkgs;
+                  extraSpecialArgs = { inherit username; };
+                  modules = [
+                    ./nix/home.nix
+                    {
+                      customPackages.enableZsh = pkgs.lib.mkForce enableZsh;
+                      customPackages.enableTmux = pkgs.lib.mkForce enableTmux;
+                    }
+                  ];
+                }).activationPackage.drvPath;
+          in
+          pkgs.runCommand "shell-variants" { } ''
+            {
+              echo "zsh+tmux:  ${variantDrv true true}"
+              echo "zsh-only:  ${variantDrv true false}"
+              echo "bash+tmux: ${variantDrv false true}"
+              echo "bash-only: ${variantDrv false false}"
+            } > "$out"
+            cat "$out"
+          '';
+
         # The hooks' own regression suite, run in a sandbox HOME exactly the
         # way Claude Code invokes them (JSON payload on stdin).
         # universal-ctags backs repo-map.sh's symbol pass and python3 backs
@@ -471,6 +507,50 @@
             cat "$out"
           '';
 
+        # Bash is a first-class shell here (./setup-packages.sh -> enableZsh
+        # = false picks nix/bash.nix), and both shells source the same
+        # zsh/*.zsh function libraries via nix/shell-common.nix. Nothing else
+        # notices when a zsh-only construct creeps into one of them — the
+        # bash user just gets a syntax error on every new terminal — so every
+        # shared file is parsed under *both* shells here. Also pins the
+        # single-source-of-truth wiring: if either shell module stops
+        # importing shell-common.nix, the two rc files start drifting.
+        shell-parity = pkgs.runCommand "shell-parity"
+          { nativeBuildInputs = [ pkgs.bash pkgs.zsh pkgs.shellcheck ]; }
+          ''
+            set -euo pipefail
+
+            for f in ${./zsh/chrome-devtools-axi.zsh} \
+                     ${./zsh/agent-containers.zsh} \
+                     ${./zsh/little-coder.zsh} \
+                     ${./zsh/homebrew.zsh} \
+                     ${./zsh/fkill.zsh}; do
+              echo "-- $f: parses under bash and zsh"
+              bash -n "$f"
+              zsh -n "$f"
+              shellcheck --shell=bash "$f"
+            done
+
+            # zsh's background-and-disown operator, as an operator: anchored to
+            # end-of-line so the prose explaining it in the file itself is not
+            # what trips this.
+            echo "-- no zsh-only background operator in the shared files"
+            if grep -nE '&![[:space:]]*$' ${./zsh/chrome-devtools-axi.zsh}; then
+              echo "that operator is zsh-only; use '& disown' so bash can source this" >&2
+              exit 1
+            fi
+
+            echo "-- both shell modules take their shared half from shell-common.nix"
+            grep -q 'shell-common.nix' ${./nix/zsh.nix}
+            grep -q 'shell-common.nix' ${./nix/bash.nix}
+
+            echo "-- the tmux auto-start block is gated on enableTmux"
+            grep -q 'optionalString cfg.enableTmux' ${./nix/shell-common.nix}
+
+            echo "all shell parity checks passed" > "$out"
+            cat "$out"
+          '';
+
         # setup.sh: lint it, then exercise the doctor drift audit against a
         # synthetic Home Manager profile (clean, hand-edited, deleted).
         setup-script = pkgs.runCommand "setup-script"
@@ -541,6 +621,31 @@
             ln -s "$hf/.zshrc" "$HOME/.zshrc"
             migrate_pre_nix_dotfiles
             [ ! -e "$HOME/.zshrc.local" ]
+
+            # ./setup-packages.sh writes enableZsh into the generated config,
+            # and setup.sh has to agree with it: the login shell it sets and
+            # the rc files it rescues on first adoption both follow from this
+            # one answer. A disagreement leaves a bash user logged into zsh
+            # with an unmanaged rc, so pin both directions.
+            echo "-- selected_shell: zsh when no config exists"
+            [ "$(PACKAGES_CONFIG="$TMPDIR/absent.nix" selected_shell)" = "zsh" ]
+
+            echo "-- selected_shell: zsh when the config opted in"
+            printf '  customPackages = {\n    enableZsh = true;\n  };\n' > "$TMPDIR/pkg-zsh.nix"
+            [ "$(PACKAGES_CONFIG="$TMPDIR/pkg-zsh.nix" selected_shell)" = "zsh" ]
+
+            echo "-- selected_shell: bash when the config opted out"
+            printf '  customPackages = {\n    enableZsh = false;\n  };\n' > "$TMPDIR/pkg-bash.nix"
+            [ "$(PACKAGES_CONFIG="$TMPDIR/pkg-bash.nix" selected_shell)" = "bash" ]
+
+            echo "-- migrate_pre_nix_dotfiles: bash selection rescues .bashrc, not .zshrc"
+            export PACKAGES_CONFIG="$TMPDIR/pkg-bash.nix"
+            rm -f "$HOME/.bashrc.local" "$HOME/.zshrc.local"
+            echo 'export TOKEN=bash-side-secret' > "$HOME/.bashrc"
+            migrate_pre_nix_dotfiles
+            grep -qF 'bash-side-secret' "$HOME/.bashrc.local"
+            [ ! -e "$HOME/.zshrc.local" ]
+            unset PACKAGES_CONFIG
 
             echo "-- ensure_google_chrome: skips cleanly without apt-get"
             out_msg="$(ensure_google_chrome)"

@@ -1,4 +1,9 @@
-# chrome-devtools-axi browser wiring (sourced by nix/zsh.nix).
+# chrome-devtools-axi browser wiring (sourced by nix/shell-common.nix, so it
+# lands in whichever shell is configured).
+#
+# Kept bash-compatible on purpose: nix/bash.nix sources the same file when
+# customPackages.enableZsh is false, and the shell-parity flake check parses
+# it under both shells.
 #
 # The bridge discovers Google Chrome only at its native stable-channel
 # location, /opt/google/chrome/chrome; setup.sh installs it there on apt
@@ -33,7 +38,10 @@ axi() {
     # snap cannot write to (snap confinement blocks hidden top-level dirs).
     "$bin" --headless=new --remote-debugging-port=9222 \
       --user-data-dir="/tmp/chrome-devtools-axi-chromium-$USER" \
-      --no-first-run --disable-gpu about:blank >/dev/null 2>&1 &!
+      --no-first-run --disable-gpu about:blank >/dev/null 2>&1 &
+    # zsh's `&!` (background + disown in one operator) is zsh-only; this is
+    # the portable spelling, and disown is absent in some bash builds.
+    disown 2>/dev/null || true
     local _i
     for _i in {1..20}; do
       _axi_debug_up && break

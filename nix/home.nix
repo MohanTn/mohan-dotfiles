@@ -13,7 +13,11 @@ in
     ./nix-conf.nix
     ./homebrew.nix
     ./maintenance.nix
+    # Exactly one of these configures the interactive shell, chosen by
+    # customPackages.enableZsh; both pull their shared half from
+    # ./shell-common.nix.
     ./zsh.nix
+    ./bash.nix
     ./alacritty.nix
     ./ptyxis.nix
     ./git.nix
