@@ -67,10 +67,17 @@ in
       # oh-my-posh prompt, based on its bundled Catppuccin Mocha theme
       # (matches tmux's @catppuccin_flavor in nix/tmux.nix and nvim's
       # colorscheme). Vendored locally, rather than read straight from the
-      # Nix store copy, to add a right-aligned execution-time segment and a
-      # transient prompt (collapses to just the closer glyph once a command
-      # is submitted, keeping a dotted divider + last execution time on the
-      # right, like p10k's transient prompt).
+      # Nix store copy, to add a transient prompt (collapses to just the
+      # closer glyph once a command is submitted, like p10k's).
+      # Deliberately a single left-aligned block: a right-aligned block with
+      # a filler pads PS1 with printable characters out to the full terminal
+      # width, which zsh's line editor counts as prompt width. It then places
+      # the cursor wrongly when redrawing a wrapped multi-line buffer, so
+      # recalling and editing a multi-line command in a narrow tmux split
+      # scrambled the display. If an execution-time readout is ever wanted
+      # back, use a "type": "rprompt" block (zsh's native RPROMPT, which zsh
+      # measures itself and hides on multi-line edits), never an
+      # "alignment": "right" prompt block.
       # This, and the zinit stack below, are the only parts of this file with
       # no bash counterpart; see the header comment in nix/bash.nix.
       eval "$(oh-my-posh init zsh --config ${../zsh/oh-my-posh-catppuccin-mocha.omp.json})"
@@ -81,9 +88,9 @@ in
       export COLUMNS
 
       # oh-my-posh bakes PS1 into a literal string in precmd, so a resize
-      # leaves the on-screen prompt (and the right-aligned dotted filler)
-      # stale until the next command. Re-render it on SIGWINCH while the
-      # line editor is active so the path shortens as you drag the edge.
+      # leaves the on-screen prompt stale until the next command. Re-render
+      # it on SIGWINCH while the line editor is active so the path shortens
+      # as you drag the edge.
       TRAPWINCH() {
         if (( $+functions[_omp_get_prompt] )) && zle; then
           eval "$(_omp_get_prompt primary --eval)"
