@@ -65,23 +65,6 @@
         }
       ],
       "type": "prompt"
-    },
-    {
-      "alignment": "right",
-      "filler": ".",
-      "segments": [
-        {
-          "foreground": "p:os",
-          "style": "plain",
-          "template": "{{ .FormattedMs }}",
-          "type": "executiontime",
-          "options": {
-            "style": "round",
-            "always_enabled": true
-          }
-        }
-      ],
-      "type": "prompt"
     }
   ],
   "final_space": true,
