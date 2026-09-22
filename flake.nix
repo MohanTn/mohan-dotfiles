@@ -647,6 +647,56 @@
             [ ! -e "$HOME/.zshrc.local" ]
             unset PACKAGES_CONFIG
 
+            # The login shell only actually changes if chsh accepts the path,
+            # and chsh only accepts a path listed in /etc/shells. A Nix-only
+            # zsh (fresh WSL Ubuntu) is not listed, which is the case that used
+            # to fail silently and leave the user in bash.
+            echo "-- login_shell_path: prefers the distro binary over the PATH one"
+            mkdir -p "$TMPDIR/fakebin"
+            printf '#!/bin/sh\n' > "$TMPDIR/fakebin/sh"
+            chmod +x "$TMPDIR/fakebin/sh"
+            [ "$(PATH="$TMPDIR/fakebin:$PATH" login_shell_path sh)" = "/bin/sh" ]
+
+            echo "-- login_shell_path: falls back to the PATH entry (Nix-only shell)"
+            printf '#!/bin/sh\n' > "$TMPDIR/fakebin/nixonly"
+            chmod +x "$TMPDIR/fakebin/nixonly"
+            [ "$(PATH="$TMPDIR/fakebin:$PATH" login_shell_path nixonly)" \
+              = "$TMPDIR/fakebin/nixonly" ]
+
+            echo "-- login_shell_path: empty when the shell is nowhere"
+            [ -z "$(login_shell_path definitely-not-a-shell)" ]
+
+            echo "-- register_login_shell: no sudo when the path is already listed"
+            export SHELLS_FILE="$TMPDIR/shells"
+            printf '/bin/sh\n%s\n' "$TMPDIR/fakebin/nixonly" > "$SHELLS_FILE"
+            register_login_shell "$TMPDIR/fakebin/nixonly"
+
+            # Stubs keep this off the build machine's real passwd/chsh, and a
+            # shell name no distro ships pins which path is chosen.
+            selected_shell() { echo nixonly; }
+            chsh() { echo "chsh called with $*"; }
+
+            echo "-- ensure_login_shell: no chsh when the shell already matches"
+            getent() { echo "u:x:1:1::/h:/usr/bin/nixonly"; }
+            out_msg="$(PATH="$TMPDIR/fakebin:$PATH" ensure_login_shell)"
+            case "$out_msg" in
+              *"chsh called"*) echo "chsh ran on an already-correct shell" >&2; exit 1 ;;
+            esac
+
+            echo "-- ensure_login_shell: chsh to the registered path when it differs"
+            getent() { echo "u:x:1:1::/h:/bin/sh"; }
+            out_msg="$(PATH="$TMPDIR/fakebin:$PATH" ensure_login_shell)"
+            case "$out_msg" in
+              *"chsh called with -s $TMPDIR/fakebin/nixonly"*) ;;
+              *) echo "expected chsh on the registered path, got: $out_msg" >&2; exit 1 ;;
+            esac
+            case "$out_msg" in
+              *"wsl.exe --shutdown"*) ;;
+              *) echo "expected the new-terminal/WSL hint, got: $out_msg" >&2; exit 1 ;;
+            esac
+            unset -f getent chsh selected_shell
+            unset SHELLS_FILE
+
             echo "-- ensure_google_chrome: skips cleanly without apt-get"
             out_msg="$(ensure_google_chrome)"
             case "$out_msg" in
