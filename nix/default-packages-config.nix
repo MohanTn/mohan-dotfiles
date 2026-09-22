@@ -16,5 +16,9 @@
     littleCoderGpu = false;
     enableHomebrew = false;
     brewPackages = [ ];
+    # Opt-out, not opt-in: this is the terminal setup the repo is built
+    # around, so the packaged default keeps it on.
+    enableZsh = true;
+    enableTmux = true;
   };
 }

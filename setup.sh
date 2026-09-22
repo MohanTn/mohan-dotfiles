@@ -3,14 +3,16 @@
 #
 #   ./setup.sh          set up a new machine OR apply config changes:
 #                       installs Nix if missing, activates the Home Manager
-#                       flake, sets the login shell to zsh, installs Google
-#                       Chrome if missing (apt machines; used by the
-#                       chrome-devtools-axi browser bridge), then audits for
-#                       drift. Files changed outside Nix are reverted (the
-#                       edited copy is kept next to them as *.hm-backup). On
-#                       first adoption, any pre-existing ~/.zshrc or
-#                       ~/.zshenv content is also folded into
-#                       ~/.zshrc.local so it stays sourced, not just backed up.
+#                       flake, sets the login shell to the one selected in
+#                       ./setup-packages.sh (zsh by default, bash if you
+#                       answered no), installs Google Chrome if missing (apt
+#                       machines; used by the chrome-devtools-axi browser
+#                       bridge), then audits for drift. Files changed outside
+#                       Nix are reverted (the edited copy is kept next to them
+#                       as *.hm-backup). On first adoption, any pre-existing
+#                       rc content for that shell is also folded into
+#                       ~/.zshrc.local (or ~/.bashrc.local) so it stays
+#                       sourced, not just backed up.
 #   ./setup.sh doctor   audit only: verify every managed config is still
 #                       served from the Nix store. Exits 1 on drift,
 #                       changes nothing.
@@ -44,6 +46,8 @@ EXPECTED_DIR="$HOME/REPO/mohan-dotfiles"
 HM_FLAKE="home-manager/release-25.05"
 HM_FILES="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager/home-files"
 
+PACKAGES_CONFIG="$HOME/.config/mohan-dotfiles/packages-config.nix"
+
 log()  { echo "> $*"; }
 info() { echo "= $*"; }
 warn() { echo "! $*" >&2; }
@@ -54,9 +58,10 @@ usage: ${0##*/} [command]
 
   (no command)  set up a new machine or apply config changes: installs Nix
                 if missing, activates the Home Manager flake, sets the login
-                shell to zsh, installs Google Chrome if missing (apt
-                machines), then audits for drift. Files changed outside
-                Nix are reverted (edited copy kept as *.hm-backup).
+                shell to the one ./setup-packages.sh selected (zsh or bash),
+                installs Google Chrome if missing (apt machines), then audits
+                for drift. Files changed outside Nix are reverted (edited
+                copy kept as *.hm-backup).
   doctor        audit only: verify every managed config is still served from
                 the Nix store. Exits 1 on drift, changes nothing.
   upgrade       update the pinned inputs (nixpkgs, home-manager) in
@@ -100,18 +105,39 @@ switch() {
   fi
 }
 
-# On first adoption ~/.zshrc and ~/.zshenv are still hand-written files; Home
-# Manager's own -b hm-backup only saves them as *.hm-backup once it replaces
-# them with a store symlink, which is easy to miss. Fold their content into
-# ~/.zshrc.local first, since that file is untracked, never overwritten by an
-# apply, and already sourced by nix/zsh.nix, so nothing (PATH exports,
-# credentials) goes missing even if the .hm-backup is never noticed. A
-# symlink means Home Manager already owns the file, so this is a no-op on
-# every run after the first.
+# Which interactive shell ./setup-packages.sh selected. That generated file is
+# the only place the answer lives, and it is plain Nix, so a grep is enough —
+# `nix eval` would need the whole flake to evaluate first, which is exactly
+# what has not happened yet on a fresh machine. Absent or unanswered means
+# zsh, matching nix/optional-packages.nix's enableZsh default.
+selected_shell() {
+  if [ -f "$PACKAGES_CONFIG" ] && grep -qE '^[[:space:]]*enableZsh[[:space:]]*=[[:space:]]*false;' "$PACKAGES_CONFIG"; then
+    echo bash
+  else
+    echo zsh
+  fi
+}
+
+# On first adoption the selected shell's rc files (~/.zshrc + ~/.zshenv, or
+# ~/.bashrc + ~/.bash_profile) are still hand-written; Home Manager's own
+# -b hm-backup only saves them as *.hm-backup once it replaces them with a
+# store symlink, which is easy to miss. Fold their content into the matching
+# ~/.<shell>rc.local first, since that file is untracked, never overwritten by
+# an apply, and already sourced by nix/zsh.nix or nix/bash.nix, so nothing
+# (PATH exports, credentials) goes missing even if the .hm-backup is never
+# noticed. A symlink means Home Manager already owns the file, so this is a
+# no-op on every run after the first.
 migrate_pre_nix_dotfiles() {
-  local marker f rel local_file
-  local_file="$HOME/.zshrc.local"
-  for f in "$HOME/.zshrc" "$HOME/.zshenv"; do
+  local marker f rel local_file shell
+  shell="$(selected_shell)"
+  if [ "$shell" = "bash" ]; then
+    local_file="$HOME/.bashrc.local"
+    set -- "$HOME/.bashrc" "$HOME/.bash_profile"
+  else
+    local_file="$HOME/.zshrc.local"
+    set -- "$HOME/.zshrc" "$HOME/.zshenv"
+  fi
+  for f in "$@"; do
     if [ ! -f "$f" ] || [ -L "$f" ]; then
       continue
     fi
@@ -120,12 +146,12 @@ migrate_pre_nix_dotfiles() {
     if [ -f "$local_file" ] && grep -qF "$marker" "$local_file"; then
       continue
     fi
-    log "found a hand-written $rel; folding its content into ~/.zshrc.local so nothing is lost"
+    log "found a hand-written $rel; folding its content into ${local_file/#$HOME/\~} so nothing is lost"
     {
       echo ""
       echo "$marker"
       echo "# Migrated on $(date -Iseconds), before Home Manager took over $rel."
-      echo "# Check for exports duplicated by nix/zsh.nix and prune this block."
+      echo "# Check for exports duplicated by the managed rc and prune this block."
       cat "$f"
     } >> "$local_file"
   done
@@ -165,12 +191,19 @@ ensure_google_chrome() {
 }
 
 ensure_login_shell() {
-  local zsh_path current_shell
-  zsh_path="$(command -v zsh)"
+  local want shell_path current_shell
+  want="$(selected_shell)"
+  # For bash, prefer the distro's /bin/bash over a Nix-profile one: chsh only
+  # accepts a shell listed in /etc/shells, and the store path never is.
+  if [ "$want" = "bash" ] && [ -x /bin/bash ]; then
+    shell_path=/bin/bash
+  else
+    shell_path="$(command -v "$want")"
+  fi
   current_shell="$(getent passwd "$USER" | cut -d: -f7)"
-  if [ "$(basename "$current_shell")" != "zsh" ]; then
-    log "setting login shell to zsh (may prompt for your password)"
-    chsh -s "$zsh_path" || warn "chsh failed; run manually: chsh -s $zsh_path"
+  if [ "$(basename "$current_shell")" != "$want" ]; then
+    log "setting login shell to $want (may prompt for your password)"
+    chsh -s "$shell_path" || warn "chsh failed; run manually: chsh -s $shell_path"
   fi
 }
 
@@ -221,23 +254,26 @@ doctor() {
 }
 
 reminders() {
-  cat <<'EOF'
+  local shell rc
+  shell="$(selected_shell)"
+  if [ "$shell" = "bash" ]; then rc=".bashrc"; else rc=".zshrc"; fi
+  cat <<EOF
 
-Done. Reminders:
+Done. Reminders (shell: $shell; run ./setup-packages.sh to change it):
   * Every config change goes through this repo: edit here, re-run ./setup.sh,
-    commit once 'nix flake check --impure' passes. Hand edits under $HOME are reverted
+    commit once 'nix flake check --impure' passes. Hand edits under \$HOME are reverted
     on the next apply. 'setup.sh doctor' audits for such drift any time.
-  * Secrets are NOT managed by this repo. Create ~/.zshrc.local with, e.g.:
+  * Secrets are NOT managed by this repo. Create ~/$rc.local with, e.g.:
       export PIPELINE_WORKER_GITHUB_TOKEN="..."
-  * On first adoption, any pre-existing ~/.zshrc or ~/.zshenv content is
-    folded into ~/.zshrc.local automatically; review it there and prune
-    what's now redundant with nix/zsh.nix.
+  * On first adoption, any pre-existing ~/$rc content is folded into
+    ~/$rc.local automatically; review it there and prune what's now
+    redundant with nix/$shell.nix.
   * ~/.config/nix/nix.conf is managed (it enables nix-command + flakes for
     every shell). Machine-local Nix settings - substituters, access-tokens -
     go in ~/.config/nix/nix.conf.local, which it includes when present.
   * Docker (the daemon) is a system service and stays a manual install:
       https://docs.docker.com/engine/install/
-  * Open a new terminal (or run 'exec zsh') to pick up the new environment.
+  * Open a new terminal (or run 'exec $shell') to pick up the new environment.
 EOF
 }
 

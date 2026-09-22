@@ -1,30 +1,19 @@
-{ config, pkgs, ... }:
+# zsh configuration, active unless ./setup-packages.sh was answered with "no"
+# to the zsh question (customPackages.enableZsh = false), in which case
+# nix/bash.nix takes over instead. Everything the two shells share lives in
+# nix/shell-common.nix; what stays here is the zsh-only half: the oh-my-posh
+# prompt, the zinit plugin stack, and zsh's history/completion hooks.
+{ config, pkgs, lib, ... }:
 
+let
+  cfg = config.customPackages;
+  shared = import ./shell-common.nix { inherit config lib; };
+in
 {
-  programs.zsh = {
+  programs.zsh = lib.mkIf cfg.enableZsh {
     enable = true;
 
-    shellAliases = {
-      # `cc`: sonnet with the stock Claude Code system prompt fully replaced by
-      # agents/lean-system-prompt.md (terse output, rg/fd over grep/find, Bash
-      # only as a fallback). The prompt restates the pieces the ~/.claude hooks
-      # depend on (GOAL/GOAL_CHECK, repo-map.md), since the default prompt is
-      # gone. Pi loads the same file as
-      # ~/.pi/agent/SYSTEM.md (see nix/pi.nix).
-      cc = "claude --model sonnet --system-prompt-file ${../agents/lean-system-prompt.md} --allowed-tools \"Bash(git *)\" \"Bash(fd *)\" \"Bash(rg *)\" \"Bash(npm *)\" \"Bash(python3 *)\" Edit Write";
-      # Mirrors claude/settings.json's permissions.allow (Bash(rg *), Bash(git
-      # diff *)) for Copilot CLI, which has no persisted settings.json
-      # equivalent of that allowlist (only the --allow-tool flag, confirmed
-      # against `copilot help permissions`), so this self-referential alias is
-      # the only reproducible way to carry it over. Pi needs no counterpart:
-      # it has no default tool-confirmation prompt at all (docs/security.md),
-      # so rg/git diff already run unprompted there.
-      copilot = "copilot --allow-tool 'shell(rg:*)' --allow-tool 'shell(git diff:*)'";
-      repo = "cd $HOME/REPO";
-      # eza (nix/packages.nix): -la renders as a headered table instead of
-      # GNU ls's bare column list; plain `ls`/other flags behave the same.
-      ls = "eza --color=auto --header";
-    };
+    shellAliases = shared.aliases;
 
     history = {
       size = 50000;
@@ -40,21 +29,7 @@
     };
 
     initContent = ''
-      # Auto-start tmux for real interactive terminals. Runs first and uses
-      # exec so the outer zsh is replaced before plugins/completions load,
-      # instead of paying that cost twice. No -A/-s here: each new terminal
-      # window gets its own fresh, independently-named session instead of
-      # every window piling into one shared session. Guards, in order:
-      # interactive shell, attached to a tty, not already inside tmux (nvim
-      # :terminal, nested shells), tmux on PATH, and an opt-out for
-      # editor/agent shells that drive zsh programmatically and would break
-      # if swallowed by a TUI.
-      if [[ $- == *i* ]] && [[ -t 1 ]] && [[ -z $TMUX ]] \
-        && [[ -z $NO_TMUX ]] && [[ -z $CLAUDECODE ]] && [[ -z $INSIDE_EMACS ]] \
-        && [[ $TERM_PROGRAM != "vscode" ]] && [[ $TERM != "dumb" ]] \
-        && command -v tmux > /dev/null; then
-        exec tmux new-session
-      fi
+      ${shared.tmuxAutostart}
 
       setopt CORRECT
 
@@ -96,6 +71,8 @@
       # transient prompt (collapses to just the closer glyph once a command
       # is submitted, keeping a dotted divider + last execution time on the
       # right, like p10k's transient prompt).
+      # This, and the zinit stack below, are the only parts of this file with
+      # no bash counterpart; see the header comment in nix/bash.nix.
       eval "$(oh-my-posh init zsh --config ${../zsh/oh-my-posh-catppuccin-mocha.omp.json})"
 
       # Width-aware path segment. The theme's path max_width is a template
@@ -147,12 +124,7 @@
       # widget zinit installs above it, per the plugin's own requirement.
       zinit light zsh-users/zsh-syntax-highlighting
 
-      # nvim as editor (plain vim over SSH)
-      if [[ -n $SSH_CONNECTION ]]; then
-        export EDITOR='vim'
-      else
-        export EDITOR='nvim'
-      fi
+      ${shared.editor}
 
       # Ctrl-X Ctrl-E: edit the current command buffer in $EDITOR, replacing
       # the line with whatever's saved on exit.
@@ -189,46 +161,15 @@
       add-zsh-hook chpwd _auto_activate_venv
       _auto_activate_venv
 
-      # Legacy per-machine installs, kept working where they exist.
-      # Fresh machines get dotnet and node from Nix instead.
-      if [ -d "$HOME/.dotnet" ]; then
-        export DOTNET_ROOT="$HOME/.dotnet"
-        export PATH="$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools"
-      fi
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      ${shared.legacyToolchains}
 
-      # Default `ls` directory blue (di=01;34) is too dark to read on a dark
-      # background; override to a brighter cyan, keep everything else default.
-      command -v dircolors >/dev/null 2>&1 && eval "$(dircolors -b)"
-      export LS_COLORS="''${LS_COLORS}:di=01;36"
+      ${shared.lsColors}
 
       # Color the completion menu (file/dir listings, e.g. `ls <TAB>`) the
       # same way `ls --color` does, using the LS_COLORS set above.
       zstyle ':completion:*' list-colors "''${(s.:.)LS_COLORS}"
 
-      # `axi` wrapper for chrome-devtools-axi: uses Google Chrome when
-      # installed (setup.sh handles that on apt machines), otherwise starts a
-      # debug Chromium and points the bridge at it.
-      source ${../zsh/chrome-devtools-axi.zsh}
-
-      # `agent-box`/`claude-box`/`copilot-box`/`pi-box`: run an agent CLI
-      # fully containerized against the current directory (see docker/).
-      source ${../zsh/agent-containers.zsh}
-
-      # `gcm`/`mri`: local-model commit-message and MR-intent helpers backed
-      # by little-coder + llama.cpp (install is opt-in via
-      # nix/little-coder.nix's enableLittleCoder; the functions error
-      # helpfully when it's off).
-      source ${../zsh/little-coder.zsh}
-
-      # Homebrew on PATH when installed (opt-in via nix/homebrew.nix's
-      # enableHomebrew); no-op otherwise. Sourced after the Nix paths are set
-      # so brew's bin lands behind them, never shadowing the base toolchain.
-      source ${../zsh/homebrew.zsh}
-
-      # `fkill`: fuzzy-pick a listening port/service/PID from lsof and kill -9 it.
-      source ${../zsh/fkill.zsh}
+      ${shared.helperSources}
 
       # Machine-local secrets and overrides, never committed.
       # PIPELINE_WORKER_GITHUB_TOKEN and similar live here.
@@ -236,14 +177,13 @@
     '';
   };
 
-  # fuzzy history (ctrl-r) and file search (ctrl-t), wired into zsh
+  # Shell-agnostic: home-manager wires each integration only into the shell
+  # module that is actually enabled, so these serve zsh or bash unchanged.
+  # fuzzy history (ctrl-r) and file search (ctrl-t)
   programs.fzf.enable = true;
 
   # `z <query>` jumps to frecency-ranked directories; `zi` for interactive pick
-  programs.zoxide = {
-    enable = true;
-    enableZshIntegration = true;
-  };
+  programs.zoxide.enable = true;
 
   home.sessionVariables = {
     LANG = "en_US.UTF-8";
@@ -263,5 +203,6 @@
     PIPELINE_WORKER_CLEANUP_EARLY = "true";
     PIPELINE_WORKER_UPDATE_CHANGELOG = "true";
     # PIPELINE_WORKER_GITHUB_TOKEN is a secret: set it in ~/.zshrc.local
+    # (or ~/.bashrc.local when bash is the selected shell)
   };
 }

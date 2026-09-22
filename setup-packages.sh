@@ -76,6 +76,13 @@ if [ "$HOMEBREW" = "true" ]; then
   done
 fi
 
+# Terminal setup. Unlike everything above these default to YES: they describe
+# the shell/multiplexer this repo is built around, so the answer you give by
+# pressing Enter is the setup the rest of the config assumes.
+echo ""
+ZSH=$(ask_yes_no "10. Use zsh as your shell? (n = configure bash instead)" "y")
+TMUX=$(ask_yes_no "11. Use tmux? (auto-starts a session in each new terminal)" "y")
+
 echo ""
 echo "Generating configuration file..."
 
@@ -101,6 +108,8 @@ cat > "$CONFIG_FILE" << EOF
     littleCoderOllamaModel = "${LITTLE_CODER_OLLAMA_MODEL}";
     enableHomebrew = ${HOMEBREW};
     brewPackages = [${BREW_LIST} ];
+    enableZsh = ${ZSH};
+    enableTmux = ${TMUX};
   };
 }
 EOF
@@ -122,6 +131,13 @@ echo "Selected packages:"
   && echo "    ↳ backend: local Gemma GGUF via llama.cpp"
 [ "$LITTLE_CODER_GPU" = "true" ] && echo "    ↳ GPU offload (Vulkan llama.cpp)"
 [ "$HOMEBREW" = "true" ] && echo "  ✓ Homebrew${BREW_LIST:+ (formulae:${BREW_LIST//\"/})}"
+if [ "$ZSH" = "true" ]; then
+  echo "  ✓ zsh (oh-my-posh prompt, zinit plugins)"
+else
+  echo "  ✓ bash (same aliases, helpers and environment; no oh-my-posh prompt or zinit plugins)"
+fi
+[ "$TMUX" = "true" ] && echo "  ✓ tmux (auto-starts in each new terminal)"
+[ "$TMUX" = "false" ] && echo "  · tmux off (new terminals open a plain shell)"
 echo ""
 echo "Next, run:"
 echo "  nix flake check --impure && ./setup.sh"

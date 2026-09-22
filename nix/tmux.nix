@@ -1,6 +1,9 @@
-{ config, pkgs, ... }:
+# tmux, opt-out via ./setup-packages.sh (customPackages.enableTmux). When it
+# is off nothing here is installed and nix/shell-common.nix drops the
+# auto-start block from the rc file, so a new terminal is a plain shell.
+{ config, pkgs, lib, ... }:
 
-{
+lib.mkIf config.customPackages.enableTmux {
   # tmux-nerd-font-window-name defaults to showing only the icon; this
   # turns on the "<icon> name" display seen in the target screenshot.
   home.file.".config/tmux/tmux-nerd-font-window-name.yml".text = ''

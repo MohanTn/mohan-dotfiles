@@ -2,7 +2,7 @@
 
 Set up a whole Linux or WSL machine with one command. This repo is a Nix flake that installs and configures the shell, editor, git, and three AI coding agents, pinned so every machine you run it on ends up identical.
 
-**What you get:** zsh (zinit plugins, oh-my-posh prompt, fzf-tab, autosuggestions) · Neovim (kickstart.nvim, LSP for C#/TypeScript) · tmux · git · Claude Code, GitHub Copilot CLI, and Pi, all sharing one set of instructions, skills, and safety hooks · Alacritty · ripgrep, fd, fzf, jq, and the rest of the CLI toolkit.
+**What you get:** zsh (zinit plugins, oh-my-posh prompt, fzf-tab, autosuggestions) — or bash, if you'd rather · Neovim (kickstart.nvim, LSP for C#/TypeScript) · tmux · git · Claude Code, GitHub Copilot CLI, and Pi, all sharing one set of instructions, skills, and safety hooks · Alacritty · ripgrep, fd, fzf, jq, and the rest of the CLI toolkit.
 
 ---
 
@@ -42,8 +42,8 @@ Then **open a new terminal** — the login shell changes to zsh, and the current
 
 1. Installs Nix via the Determinate Systems installer, if missing.
 2. Activates the Home Manager configuration. Existing files that would be overwritten are preserved as `*.hm-backup` — nothing of yours is destroyed.
-3. Folds any hand-written `~/.zshrc` into `~/.zshrc.local` so your existing customizations survive.
-4. Switches your login shell to zsh.
+3. Folds any hand-written `~/.zshrc` into `~/.zshrc.local` so your existing customizations survive (`~/.bashrc` → `~/.bashrc.local` if you chose bash).
+4. Switches your login shell to whichever shell you picked in `setup-packages.sh` — zsh by default, bash if you answered no to prompt 10.
 5. Installs Google Chrome if missing (apt machines only — the `axi` browser bridge looks for Chrome at `/opt/google/chrome`; without it, `axi` falls back to a debug Chromium).
 6. Runs a drift audit and prints a summary.
 
@@ -94,18 +94,19 @@ Because the live files under `$HOME` are store symlinks, editing them directly d
 | What | Where | Committed? |
 | --- | --- | --- |
 | Which optional packages are installed | `setup-packages.sh` → `~/.config/mohan-dotfiles/packages-config.nix` | No — machine-local |
-| Shell: aliases, plugins, prompt | `nix/zsh.nix` | Yes |
+| Shell: aliases, plugins, prompt | `nix/zsh.nix` (or `nix/bash.nix`); the half they share is `nix/shell-common.nix` | Yes |
+| Which shell, and whether tmux is set up | Prompts 10 and 11 in `setup-packages.sh` (`enableZsh`, `enableTmux`) | No — machine-local |
 | Prompt theme | `zsh/oh-my-posh-catppuccin-mocha.omp.json` | Yes |
 | Neovim | `nvim/init.lua`, `nvim/lua/custom/plugins/` | Yes |
 | Non-secret env vars | `home.sessionVariables` in `nix/zsh.nix` | Yes |
-| **Secrets** | `~/.zshrc.local` | **No — never commit these** |
+| **Secrets** | `~/.zshrc.local` (bash: `~/.bashrc.local`) | **No — never commit these** |
 | Git identity | Answer yes to prompt 6 in `setup-packages.sh`, or edit `nix/optional-packages.nix` | Config yes, your answer no |
 | Homebrew formulae | `brewPackages` in `~/.config/mohan-dotfiles/packages-config.nix` (prompt 8 of `setup-packages.sh`) | No — machine-local |
 | Nix's own settings | `nix/nix-conf.nix` (managed) + `~/.config/nix/nix.conf.local` (machine-local) | Config yes, local file no |
 
 ### Secrets
 
-Never put a real secret in a `.nix` file — they're world-readable in the Nix store. Put them in `~/.zshrc.local`, which the managed zshrc sources last:
+Never put a real secret in a `.nix` file — they're world-readable in the Nix store. Put them in `~/.zshrc.local` (or `~/.bashrc.local` on bash), which the managed rc sources last:
 
 ```bash
 export PIPELINE_WORKER_GITHUB_TOKEN="github_pat_..."
@@ -119,10 +120,10 @@ That file isn't managed by Nix, so no `setup.sh` run is needed — just open a n
 
 ```
 setup.sh              one entry point: install, apply, doctor, upgrade
-setup-packages.sh     interactive optional-package picker
+setup-packages.sh     interactive picker: optional packages, shell (zsh/bash), tmux
 flake.nix             pinned inputs + all CI checks
-nix/                  one Home Manager module per concern (packages, zsh, git,
-                      nvim, tmux, alacritty, and one per agent)
+nix/                  one Home Manager module per concern (packages, zsh/bash,
+                      shell-common, git, nvim, tmux, alacritty, one per agent)
 agents/               shared agent layer → ~/.agents
                         AGENTS.md    global instructions, used by all 3 agents
                         skills/      reusable agent skills

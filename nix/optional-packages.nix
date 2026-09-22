@@ -14,6 +14,30 @@ in
     enableLocalScribe = mkEnableOption "LocalScribe (from GitHub releases)";
     enableGitConfig = mkEnableOption "Git configuration (userName and userEmail)";
     enableGcloud = mkEnableOption "Google Cloud SDK (gcloud)";
+
+    # These two are opt-*out*, unlike everything above: they describe the
+    # terminal this repo is built around, so a config file that predates them
+    # (or the packaged default) keeps the behaviour it already had.
+    enableZsh = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Use zsh as the interactive shell (nix/zsh.nix: oh-my-posh prompt,
+        zinit plugin stack). When false, nix/bash.nix configures bash with
+        the same aliases, helpers and environment instead, minus the prompt
+        and plugin stack, which have no bash counterpart.
+      '';
+    };
+
+    enableTmux = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Install and configure tmux (nix/tmux.nix) and auto-start a session in
+        each new interactive terminal. When false, neither the tmux config
+        nor the auto-start block in the shell rc is generated.
+      '';
+    };
   };
 
   config.home.packages = with pkgs;
