@@ -52,7 +52,7 @@
   # to (and did) run this before piSandboxExtensionFiles had copied
   # package.json into place, so `npm install --prefix` failed with ENOENT.
   home.activation.installPi = lib.hm.dag.entryAfter [ "installPackages" "piSandboxExtensionFiles" ] ''
-    export PATH="${pkgs.nodejs_22}/bin:$PATH"
+    export PATH="${pkgs.nodejs_24}/bin:$PATH"
     export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 
     if ! command -v pi >/dev/null 2>&1; then

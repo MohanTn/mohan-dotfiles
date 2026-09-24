@@ -13,7 +13,7 @@
       Type = "oneshot";
       ExecStart = "${pkgs.writeShellScript "tools-maintenance" ''
         set -e
-        export PATH="${pkgs.nodejs_22}/bin:${pkgs.curl}/bin:$PATH"
+        export PATH="${pkgs.nodejs_24}/bin:${pkgs.curl}/bin:$PATH"
         export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 
         echo "[$(date)] Starting tools maintenance..."

@@ -23,7 +23,7 @@
   # any stale entry a prior switch left in ~/.copilot/mcp-config.json, leaving
   # any user-added servers untouched.
   home.activation.removeCopilotScaffoldMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    run ${pkgs.nodejs}/bin/node -e '
+    run ${pkgs.nodejs_24}/bin/node -e '
       const fs = require("fs");
       const p = process.env.HOME + "/.copilot/mcp-config.json";
       let cfg = {};

@@ -185,7 +185,7 @@
         # feature-plan skill's injector suite. Pure node: built-ins, no npm
         # deps, so it runs hermetically here.
         feature-plan-tests = pkgs.runCommand "feature-plan-tests"
-          { nativeBuildInputs = [ pkgs.nodejs_22 ]; }
+          { nativeBuildInputs = [ pkgs.nodejs_24 ]; }
           ''
             cp -r ${./agents/skills/feature-plan} feature-plan
             chmod -R u+w feature-plan
@@ -222,7 +222,7 @@
         pi-hooks-selftest = pkgs.runCommand "pi-hooks-selftest"
           # bash/jq/git back the shelled-out gates the handler tests now drive
           # (pre-tool-use-edit-guard.sh, pre-compact.sh and its git diffstat).
-          { nativeBuildInputs = [ pkgs.nodejs_22 pkgs.esbuild pkgs.bash pkgs.jq pkgs.git ];
+          { nativeBuildInputs = [ pkgs.nodejs_24 pkgs.esbuild pkgs.bash pkgs.jq pkgs.git ];
             piHooksDir = ./pi/agent/extensions/hooks;
           }
           ''
