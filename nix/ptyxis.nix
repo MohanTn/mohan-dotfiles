@@ -1,6 +1,8 @@
-{ ... }:
+{ config, lib, ... }:
 
-{
+# Guarded by dconf.enable (home-manager defaults it to isLinux) so this is a
+# no-op on a machine without dconf instead of failing activation.
+lib.mkIf config.dconf.enable {
   # Ptyxis is the terminal actually in use on this machine (Alacritty needs
   # nixGL to launch), so its font has to be pinned here or nothing else in
   # the stack can render Nerd Font glyphs correctly.
