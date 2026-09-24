@@ -56,7 +56,14 @@
           "template": "{{ .HEAD }} ",
           "style": "plain",
           "type": "git"
-        },
+        }
+      ],
+      "type": "prompt"
+    },
+    {
+      "alignment": "left",
+      "newline": true,
+      "segments": [
         {
           "style": "plain",
           "foreground": "p:closer",
