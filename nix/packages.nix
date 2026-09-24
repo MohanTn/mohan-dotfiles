@@ -15,7 +15,7 @@
     universal-ctags # session-start.sh's repo map (folder -> file -> symbol)
     python3 # statusline-usage.py
     uv # fast Python package/project manager
-    nodejs_22 # LazyVim LSP extras, pi extensions, npm global CLIs
+    nodejs_24 # LazyVim LSP extras, pi extensions, npm global CLIs
     pnpm # for enriched_planning
     gcc # Treesitter parser builds
     gnumake
@@ -62,7 +62,7 @@
 
   # hunkdiff: interactive hunk-by-hunk diff review, used for code review
   home.activation.installHunkdiff = lib.hm.dag.entryAfter [ "installPackages" ] ''
-    export PATH="${pkgs.nodejs_22}/bin:$PATH"
+    export PATH="${pkgs.nodejs_24}/bin:$PATH"
     export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 
     if ! command -v hunkdiff >/dev/null 2>&1; then

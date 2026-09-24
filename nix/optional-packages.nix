@@ -69,7 +69,7 @@ in
 
   config.home.activation = {
     installPipelineWorker = mkIf cfg.enablePipelineWorker (hm.dag.entryAfter [ "installPackages" ] ''
-      export PATH="${pkgs.nodejs_22}/bin:$PATH"
+      export PATH="${pkgs.nodejs_24}/bin:$PATH"
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 
       $DRY_RUN_CMD mkdir -p "$NPM_CONFIG_PREFIX"
@@ -78,7 +78,7 @@ in
     '');
 
     installCopilot = mkIf cfg.enableGitHubCopilot (hm.dag.entryAfter [ "installPackages" ] ''
-      export PATH="${pkgs.nodejs_22}/bin:$PATH"
+      export PATH="${pkgs.nodejs_24}/bin:$PATH"
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"
       echo "Installing GitHub Copilot CLI via npm..."
       ($DRY_RUN_CMD npm install -g @github/copilot) || echo "Warning: GitHub Copilot CLI installation failed, continuing" >&2

@@ -69,7 +69,7 @@ let
     # trying to download browsers inside the sandbox.
     dontNpmBuild = true;
     npmFlags = [ "--ignore-scripts" ];
-    nodejs = pkgs.nodejs_22;
+    nodejs = pkgs.nodejs_24;
   };
 
   modelDir = "${config.home.homeDirectory}/.cache/models";
