@@ -116,6 +116,10 @@ in
       export PATH="$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools"
     fi
     export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    # Do not let an old NVM-selected Node shadow the declarative Nix
+    # toolchain. NVM remains available on machines that have no Node on PATH.
+    if [ -s "$NVM_DIR/nvm.sh" ] && ! command -v node >/dev/null 2>&1; then
+      . "$NVM_DIR/nvm.sh"
+    fi
   '';
 }

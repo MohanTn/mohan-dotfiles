@@ -46,6 +46,15 @@ in
   # Ubuntu/WSL (non-NixOS) integration: session vars, locale archive, XDG.
   targets.genericLinux.enable = true;
 
+  # dconf activation needs a live D-Bus user session. Headless shells,
+  # containers, and restricted WSL sessions may expose neither the session bus
+  # nor its runtime directory, so skip dconf rather than failing the switch.
+  dconf.enable = lib.mkDefault (
+    builtins.getEnv "DBUS_SESSION_BUS_ADDRESS" != ""
+    && builtins.getEnv "XDG_RUNTIME_DIR" != ""
+    && builtins.pathExists (builtins.getEnv "XDG_RUNTIME_DIR")
+  );
+
   home.sessionPath = [
     "$HOME/.npm-global/bin"
     "$HOME/.local/bin"
