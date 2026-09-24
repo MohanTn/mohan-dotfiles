@@ -78,6 +78,9 @@ in
       # back, use a "type": "rprompt" block (zsh's native RPROMPT, which zsh
       # measures itself and hides on multi-line edits), never an
       # "alignment": "right" prompt block.
+      # The theme's second block uses "newline": true so the closer glyph
+      # (and the command entry after it) always starts on its own line below
+      # the context segments, instead of trailing them on the same line.
       # This, and the zinit stack below, are the only parts of this file with
       # no bash counterpart; see the header comment in nix/bash.nix.
       eval "$(oh-my-posh init zsh --config ${../zsh/oh-my-posh-catppuccin-mocha.omp.json})"
