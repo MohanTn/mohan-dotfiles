@@ -13,7 +13,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { entriesToClaudeTranscript, extractText, toClaudeToolName, type MessageEntryLike } from "./lib.js";
@@ -169,6 +169,32 @@ async function main() {
   }
 
   const ctx = { cwd: tmpdir() };
+
+  // hybrid-retrieval warm-up: a fake binary on PATH answers `ensure` with
+  // "indexing", and session_start must surface retrieval-warm.sh's line as a
+  // UI notification. Absolute shebang: the nix check sandbox has no /usr/bin/env.
+  {
+    const desc = "session_start notifies the user while hybrid-retrieval indexes";
+    const fakeBin = mkdtempSync(join(tmpdir(), "fake-hr-"));
+    const bash = execFileSync("sh", ["-c", "command -v bash"], { encoding: "utf8" }).trim();
+    writeFileSync(join(fakeBin, "hybrid-retrieval"), `#!${bash}\necho indexing\n`);
+    chmodSync(join(fakeBin, "hybrid-retrieval"), 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${fakeBin}:${savedPath}`;
+    const notes: string[] = [];
+    try {
+      await handlers.get("session_start")!(
+        { reason: "startup" },
+        { cwd: tmpdir(), hasUI: true, ui: { notify: (m: string) => notes.push(m) } },
+      );
+    } finally {
+      process.env.PATH = savedPath;
+      rmSync(fakeBin, { recursive: true, force: true });
+    }
+    notes.some((m) => m.includes("used starting next session"))
+      ? ok(desc)
+      : no(desc, `got ${JSON.stringify(notes)}`);
+  }
 
   // The no-op rule is no longer reimplemented in TypeScript — it comes from
   // pre-tool-use-edit-guard.sh. Asserting on that script's wording

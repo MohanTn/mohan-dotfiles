@@ -48,12 +48,14 @@ TEST_SESSION_ID="manual-test"
 # hook basename -> "event_name::one-line purpose"
 declare -A HOOK_INFO=(
   [session-start.sh]="SessionStart::regenerate .claude/repo-map.md (via repo-map.sh) + print the digest that points at it"
+  [retrieval-warm.sh]="SessionStart::hybrid-retrieval ensure, index the repo in the background and tell the user when indexing just started"
   [user-prompt-submit.sh]="UserPromptSubmit::clear prior loop state"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
   [bash-allowlist-guard.sh]="PreToolUse (Bash)::deny any command whose binaries are not on the shared Bash allowlist (allowlist-only shell policy)"
   [secret-guard.sh]="PreToolUse (*)::block tool calls whose input looks like a live secret/credential (invoke-time guardrail)"
   [pre-tool-use-loop-breaker.sh]="PreToolUse (*)::block 3rd consecutive identical tool call"
   [post-tool-use-edit.sh]="PostToolUse (Edit/Write)::resolve new relative imports after edits"
+  [circuit-score.sh]="PostToolUse (Edit/Write)::score the diff against the turn's GOAL: line via the circuit-1.7b judge, log to circuit_scores.jsonl, warn (exit 2) on a low score"
   [secret-post-guard.sh]="PostToolUse (Bash/Read)::block a tool RESULT that looks like a live secret/credential, the second layer catching what secret-guard.sh's pre-execution scan structurally cannot see"
   [pre-compact.sh]="PreCompact::replay goal + files edited + diffstat across a compaction"
   [inject-memory.sh]="UserPromptSubmit::inject the diagram matching .ai-memory/manifest.json"
@@ -64,7 +66,7 @@ declare -A HOOK_INFO=(
 default_payload() {
   local hook="$1" cwd="$PWD"
   case "$hook" in
-    session-start.sh)
+    session-start.sh | retrieval-warm.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"SessionStart", source:"startup"}'
       ;;
@@ -96,6 +98,11 @@ default_payload() {
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"PostToolUse", tool_name:"Edit",
           tool_input:{file_path:"/tmp/example.md"}}'
+      ;;
+    circuit-score.sh)
+      jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
+        '{session_id:$sid, cwd:$cwd, hook_event_name:"PostToolUse", tool_name:"Edit",
+          tool_input:{file_path:"/tmp/example.py"}, transcript_path:"/nonexistent/transcript.jsonl"}'
       ;;
     secret-post-guard.sh)
       # split literal on purpose: written whole, this trips secret-guard.sh on
@@ -316,6 +323,32 @@ cmd_selftest() {
     "/tmp/two.ts"
   rm -rf "$pc_dir"
 
+  # retrieval-warm: a fake hybrid-retrieval on PATH answers `ensure` with
+  # whatever $FAKE_STATE says, so each branch runs without a real daemon.
+  local fake_bin warm_payload
+  fake_bin=$(mktemp -d)
+  # absolute shebang: the nix check sandbox has no /usr/bin/env
+  printf '#!%s\necho "$FAKE_STATE"\n' "$(command -v bash)" > "$fake_bin/hybrid-retrieval"
+  chmod +x "$fake_bin/hybrid-retrieval"
+  warm_payload=$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, hook_event_name:"SessionStart"}')
+  PATH="$fake_bin:$PATH" FAKE_STATE=ready expect_empty "retrieval-warm stays silent once the repo is indexed" \
+    retrieval-warm.sh "$warm_payload"
+  PATH="$fake_bin:$PATH" FAKE_STATE=indexing expect_contains "retrieval-warm announces background indexing" \
+    retrieval-warm.sh "$warm_payload" "used starting next session"
+  PATH="$fake_bin:$PATH" FAKE_STATE=indexing expect_contains "retrieval-warm --claude shows the line to the user" \
+    retrieval-warm.sh "$warm_payload" '"systemMessage"' --claude
+  # missing binary: a PATH with jq/git but no hybrid-retrieval
+  local bare_bin
+  bare_bin=$(mktemp -d)
+  for tool in bash grep jq git basename tail timeout cat; do
+    ln -s "$(command -v "$tool")" "$bare_bin/$tool"
+  done
+  PATH="$bare_bin" IS_SANDBOX= expect_contains "retrieval-warm reports a missing install" \
+    retrieval-warm.sh "$warm_payload" "not installed"
+  PATH="$bare_bin" IS_SANDBOX=1 expect_empty "retrieval-warm stays silent in the docker sandbox" \
+    retrieval-warm.sh "$warm_payload"
+  rm -rf "$fake_bin" "$bare_bin"
+
   # .ai-memory: inject-memory (see llm-memory repo for the reference
   # .ai-memory/ layout it reads).
   # A manifest-free dir, NOT $PWD: this repo has its own .ai-memory/, and its
@@ -511,6 +544,29 @@ cmd_selftest() {
   expect_cond "post-tool-use-edit advances the edit generation counter" \
     test -s "$STATE_HOME/selftest-postedit/edit_gen"
   rm -rf "$pte_dir" "${STATE_HOME:?}/selftest-postedit"
+
+  # ---- circuit-score.sh ----
+  # No real circuit service in this sandbox, and CIRCUIT_REPO_DIR points at a
+  # path that doesn't exist so the background circuit-daemon.sh it fires stays
+  # a safe no-op instead of actually trying to launch the real service (which
+  # does exist on this machine at CIRCUIT_REPO_DIR's real default). CIRCUIT_URL
+  # points at a port nothing listens on so circuit_healthy fails fast and
+  # deterministically, exercising the "cold" no-block path every environment
+  # must take safely.
+  export CIRCUIT_URL="http://127.0.0.1:1" CIRCUIT_REPO_DIR="/nonexistent-circuit-repo"
+  expect_exit "circuit-score no-ops with no file_path" \
+    circuit-score.sh \
+    "$(jq -n '{session_id:"selftest-circuit", cwd:"/tmp", tool_name:"Edit", tool_input:{}}')" \
+    0
+
+  expect_exit "circuit-score never blocks when circuit is unreachable" \
+    circuit-score.sh \
+    "$(jq -n '{session_id:"selftest-circuit", cwd:"/tmp", tool_name:"Edit", tool_input:{file_path:"/tmp/example.py"}, transcript_path:"/nonexistent/transcript.jsonl"}')" \
+    0
+  expect_cond "circuit-score logs a cold row when unreachable" \
+    grep -q '"status":"cold"' "$STATE_HOME/selftest-circuit/circuit_scores.jsonl"
+  rm -rf "${STATE_HOME:?}/selftest-circuit"
+  unset CIRCUIT_URL CIRCUIT_REPO_DIR
 
   # ---- user-prompt-submit.sh ----
   expect_empty "user-prompt-submit stays silent (state reset only, no stdout)" \

@@ -26,6 +26,13 @@ proj_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 claude_md="$proj_cwd/CLAUDE.md"
 map_path=$(bash "$HOOKS_HOME/session-start/repo-map.sh" "$proj_cwd" 2>/dev/null)
 
+# circuit-confidence-check: pre-warm the circuit-1.7b judge in the background
+# so it is (hopefully) already loaded by the time the first Edit/Write lands.
+# Never waited on here — a cold model must not add wall-clock time to session
+# start; circuit-score.sh's own health check is what decides whether to skip.
+bash "$HOOKS_HOME/tools/circuit-daemon.sh" >/dev/null 2>&1 &
+disown
+
 echo "## Project digest for: $proj_cwd"
 
 if [ -n "$map_path" ]; then

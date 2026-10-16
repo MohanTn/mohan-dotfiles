@@ -45,6 +45,20 @@ export default function (pi: ExtensionAPI) {
       source: event.reason,
     });
     digest = result.stdout.trim();
+
+    // hybrid-retrieval warm-up: indexes this repo in the background and
+    // returns a line only when indexing just started or the tool is missing.
+    // Shown to the user as a notification, and carried in the digest so the
+    // agent knows retrieval is not active for this session yet.
+    const warm = runClaudeHook("session-start/retrieval-warm.sh", {
+      session_id: sessionId,
+      cwd: ctx.cwd,
+      hook_event_name: "SessionStart",
+    }).stdout.trim();
+    if (warm) {
+      if (ctx.hasUI) ctx.ui.notify(warm, "info");
+      digest = digest ? `${digest}\n\n${warm}` : warm;
+    }
   });
 
   pi.on("before_agent_start", async (event, ctx) => {

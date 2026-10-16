@@ -682,6 +682,9 @@ def session_row(s):
         "tool_mix": s.tools.most_common(12),
         "hook_fires": s.hook_fires.most_common(12),
         "errors": s.errors[:50],
+        "circuit_scores": s.circuit_scores,
+        "circuit_mean": round(s.circuit_mean, 4) if s.circuit_mean is not None else None,
+        "circuit_low": s.circuit_low_count(),
     }
 
 
@@ -714,6 +717,9 @@ def dashboard_payload(sa, sessions):
             for sig, c in a.error_patterns.most_common(12)
         ],
         "tokens_by_day": sorted(a.tokens_by_day.items()),
+        "circuit_scored": a.circuit_scored,
+        "circuit_low": a.circuit_low,
+        "circuit_mean": round(a.circuit_mean, 4) if a.circuit_mean is not None else None,
     }
 
 

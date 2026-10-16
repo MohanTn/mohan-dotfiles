@@ -96,3 +96,22 @@ LEAK_ENV_READ_PATTERNS=(
   "os\\.Getenv\\(\\s*\\\\?\"${LEAK_ENV_NAME_RX}"                             # go
   "Environment\\.GetEnvironmentVariable\\(\\s*\\\\?\"${LEAK_ENV_NAME_RX}"    # csharp
 )
+
+# --- circuit (System-One judge, see /home/mohan/REPO/circuit) --------------
+# Local self-hosted circuit-1.7b (per feature-plan decision q-1: local, not
+# Modal — no per-call cost, and circuit-daemon.sh can pre-warm it). service.py
+# accepts any non-empty bearer token when S1_API_KEY is unset server-side, so
+# there is no key to manage for a local run — callers just send "local".
+CIRCUIT_REPO_DIR="${CIRCUIT_REPO_DIR:-$HOME/REPO/circuit}"
+CIRCUIT_MODEL="${CIRCUIT_MODEL:-lora:runs/circuit-1.7b}"
+CIRCUIT_URL="${CIRCUIT_URL:-http://localhost:8901}"
+
+# circuit_healthy [timeout_s=1] — true (exit 0) iff /healthz answers 200
+# within the budget. Callers must treat a "no" here as "skip, don't wait" —
+# never retry-loop on it, that's exactly the blocking behavior this exists to
+# avoid (see circuit-score.sh).
+circuit_healthy() {
+  local code
+  code=$(curl -s -m "${1:-1}" -o /dev/null -w '%{http_code}' "$CIRCUIT_URL/healthz" 2>/dev/null)
+  [ "$code" = "200" ]
+}

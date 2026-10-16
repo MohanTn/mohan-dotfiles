@@ -61,6 +61,14 @@ HARNESS_ROOTS = {
 }
 HARNESS_SHORT = {"claude": "cla", "copilot": "cop", "pi": "pi"}
 NOTES_PATH = os.path.join(HOME, ".claude", "session-notes.jsonl")
+# circuit-confidence-check: same per-session state dir the hooks themselves use
+# (claude/hooks/lib/common.sh's $HOOKS_STATE_HOME/$session_id), keyed by
+# Session.session_id — which parse_session already derives from the
+# transcript's own filename, so no extra bookkeeping is needed to find it.
+HOOKS_STATE_HOME = os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local", "state")),
+    "claude-hooks",
+)
 _MIN_TS = datetime(1900, 1, 1, tzinfo=timezone.utc)
 
 
@@ -105,6 +113,11 @@ class Session:
     files_removed: set = field(default_factory=set)   # paths from Bash `rm`
     models: set = field(default_factory=set)
     goal: str = ""               # 'achieved' | 'not_achieved' | '' (no GOAL_CHECK)
+    circuit_scores: list = field(default_factory=list)  # circuit-confidence-check rows:
+    # [{file, goal, score, status, ts}, ...] — one per Edit/Write, read from
+    # circuit_scores.jsonl in this session's hooks state dir (see
+    # _load_circuit_scores). status is "ok" only when score is a real float;
+    # cold/unreachable/no_goal/auth_error/error rows carry score=None.
 
     @property
     def total_tools(self) -> int:
@@ -175,6 +188,19 @@ class Session:
     def n_removed(self) -> int:
         return len(self.files_removed)
 
+    @property
+    def _circuit_ok_scores(self) -> list:
+        return [r["score"] for r in self.circuit_scores
+                if r.get("status") == "ok" and isinstance(r.get("score"), (int, float))]
+
+    @property
+    def circuit_mean(self) -> "float | None":
+        scores = self._circuit_ok_scores
+        return sum(scores) / len(scores) if scores else None
+
+    def circuit_low_count(self, threshold: float = 0.7) -> int:
+        return sum(1 for sc in self._circuit_ok_scores if sc < threshold)
+
 
 def _iter_rows(path):
     with open(path, "r", encoding="utf-8") as fh:
@@ -186,6 +212,17 @@ def _iter_rows(path):
                 yield json.loads(line)
             except json.JSONDecodeError:
                 continue
+
+
+def _load_circuit_scores(session_id: str) -> list:
+    """Read $HOOKS_STATE_HOME/<session_id>/circuit_scores.jsonl, tolerant of a
+    missing file (no circuit hook installed, or this session had no edits)."""
+    if not session_id:
+        return []
+    path = os.path.join(HOOKS_STATE_HOME, session_id, "circuit_scores.jsonl")
+    if not os.path.isfile(path):
+        return []
+    return list(_iter_rows(path))
 
 
 def _input_preview(name, inp, limit=120):
@@ -583,6 +620,11 @@ def load_sessions(cwd=None, limit=None, harness=None):
         except Exception:
             continue
         s.harness = h
+        if h == "claude":
+            # Only Claude Code's hooks write circuit_scores.jsonl (feature-plan
+            # decision q-3: Edit|Write only, and only this harness is wired in
+            # claude/settings.json) — copilot/pi sessions just get an empty list.
+            s.circuit_scores = _load_circuit_scores(s.session_id)
         if s.user_turns == 0 and s.total_tools == 0 and not s.title:
             continue  # empty / aborted transcript, nothing to analyze
         # claude is already dir-scoped by cwd; filter copilot/pi by recorded cwd.
@@ -619,6 +661,13 @@ class Aggregate:
     error_examples: dict = field(default_factory=dict)           # signature -> sample
     tokens_by_day: Counter = field(default_factory=Counter)      # YYYY-MM-DD -> tokens
     total_minutes: float = 0.0
+    circuit_scored: int = 0       # edits with a real ok score (circuit-confidence-check)
+    circuit_low: int = 0          # of those, how many scored below 0.7
+    circuit_score_sum: float = 0.0
+
+    @property
+    def circuit_mean(self) -> "float | None":
+        return self.circuit_score_sum / self.circuit_scored if self.circuit_scored else None
 
     @property
     def cache_ratio(self) -> float:
@@ -676,6 +725,10 @@ def aggregate(sessions) -> Aggregate:
             a.goal_not += 1
         else:
             a.goal_none += 1
+        scores = s._circuit_ok_scores
+        a.circuit_scored += len(scores)
+        a.circuit_score_sum += sum(scores)
+        a.circuit_low += s.circuit_low_count()
     return a
 
 
@@ -763,6 +816,9 @@ def render_report(sessions) -> str:
     scored = a.goal_achieved + a.goal_not
     w(f"GOAL_CHECK        : {a.goal_achieved} achieved / {a.goal_not} not "
       f"({a.goal_rate*100:.0f}% of {scored} scored; {a.goal_none} unscored)")
+    if a.circuit_scored:
+        w(f"Circuit score     : mean {a.circuit_mean:.2f} over {a.circuit_scored} edits, "
+          f"{a.circuit_low} below 0.7")
     w("")
     w("Top tools:")
     for name, c in a.top_tools.most_common(12):
@@ -1085,11 +1141,14 @@ class App:
                 attr |= self._a("dim")
             self._addstr(2 + i, 0, line, attr)
 
-        self._footer([
+        list_footer = [
             "↑↓/jk move", "Enter open", "a agents", "s sort", "/ search",
-            "d dashboard", "e errors", "v timeline", "N notes",
-            f"t theme:{self.theme.name}", "q back",
-        ])
+            "d dashboard", "e errors", "v timeline",
+        ]
+        if any(s.circuit_scores for s in self.sessions):
+            list_footer.append("c circuit")
+        list_footer += ["N notes", f"t theme:{self.theme.name}", "q back"]
+        self._footer(list_footer)
 
     # -- detail view (scrollable line buffer) --
     def _detail_lines(self, s, w):
@@ -1120,7 +1179,10 @@ class App:
             f"  Cache create : {_fmt_int(s.cache_creation)}",
             f"Hook fires : {sum(s.hook_fires.values())}  (errors {s.hook_errors})",
             f"GOAL_CHECK : {s.goal or 'not recorded'}",
-        ]:
+        ] + ([
+            f"Circuit score : mean {s.circuit_mean:.2f} over {len(s._circuit_ok_scores)} edits, "
+            f"{s.circuit_low_count()} below 0.7"
+        ] if s.circuit_mean is not None else []):
             add(2, line)
 
         add(0, "", 0)
@@ -1220,6 +1282,10 @@ class App:
             f"GOAL_CHECK    : {a.goal_achieved}✓ / {a.goal_not}✗  "
             f"({a.goal_rate*100:.0f}% of {scored} scored, {a.goal_none} unscored)",
         ]
+        if a.circuit_scored:
+            lines.append(
+                f"Circuit score : mean {a.circuit_mean:.2f} over {a.circuit_scored} edits, "
+                f"{a.circuit_low} below 0.7")
         for line in lines:
             self._addstr(y, 2, line)
             y += 1
@@ -1260,7 +1326,11 @@ class App:
                     self._addstr(y, 8, f"e.g. {cmd[:w-14]}", self._a("dim"))
                     y += 1
 
-        self._footer(["e errors", "v timeline", "b/Esc back", "N notes", "q quit"])
+        footer = ["e errors", "v timeline"]
+        if a.circuit_scored:
+            footer.append("c circuit")
+        footer += ["b/Esc back", "N notes", "q quit"]
+        self._footer(footer)
 
     # -- errors view --
     def _draw_errors(self):
@@ -1337,6 +1407,50 @@ class App:
             y += 1
         self._footer(["↑↓ move", "b/Esc back", "q quit"])
 
+    # -- circuit scores view (circuit-confidence-check) --
+    def _draw_circuit(self):
+        import curses
+        rows = _circuit_rows(self.sessions)
+        h, w = self.scr.getmaxyx()
+        scope = f"'{self.filter}'" if self.filter else "all projects"
+        scored = [r for r in rows if r.get("status") == "ok"]
+        self._addstr(
+            0, 0,
+            f" Circuit scores — {scope} ({len(scored)} scored, {len(rows)} total) "
+            .ljust(w - 1), self._a("title"))
+        self._addstr(
+            1, 0,
+            "Confidence each edit matched its stated goal, lowest first. "
+            "cold/unreachable/no_goal rows have no score.", self._a("dim"))
+
+        rows_avail = h - 4
+        if self.cursor < self.scroll:
+            self.scroll = self.cursor
+        elif self.cursor >= self.scroll + rows_avail:
+            self.scroll = self.cursor - rows_avail + 1
+
+        y = 2
+        for i in range(self.scroll, len(rows)):
+            if y >= h - 2:
+                break
+            r = rows[i]
+            attr = self._a("sel") if i == self.cursor else 0
+            score = r.get("score")
+            if r.get("status") == "ok" and isinstance(score, (int, float)):
+                tag = f"{score:.2f}"
+                if score < 0.7 and i != self.cursor:
+                    attr |= self._a("err")
+            else:
+                tag = r.get("status", "?")
+            fname = os.path.basename(r.get("file") or "")
+            line = (f"{tag:>6}  {r.get('project', '')[:16]:<16}  "
+                    f"{fname[:30]:<30}  {(r.get('goal') or '')[:60]}")
+            self._addstr(y, 0, line[:w - 1], attr)
+            y += 1
+        if not rows:
+            self._addstr(3, 4, "No circuit scores in scope yet.", self._a("dim"))
+        self._footer(["↑↓ move", "b/Esc back", "q quit"])
+
     # -- notes view --
     def _draw_notes(self):
         import curses
@@ -1386,6 +1500,8 @@ class App:
                 self._draw_errors()
             elif self.view == "timeline":
                 self._draw_timeline()
+            elif self.view == "circuit":
+                self._draw_circuit()
             elif self.view == "notes":
                 self._draw_notes()
             self.scr.refresh()
@@ -1468,6 +1584,10 @@ class App:
                 self.view = "timeline"
                 self.cursor = 0
                 self.scroll = 0
+            elif ch in ("c", "C"):
+                self.view = "circuit"
+                self.cursor = 0
+                self.scroll = 0
             return True
         if self.view == "errors":
             n = len(aggregate(self.sessions).error_patterns)
@@ -1502,6 +1622,17 @@ class App:
                 self.scroll = 0
             elif ch in ("j", curses.KEY_DOWN):
                 self.cursor = min(self.cursor + 1, max(0, len(self.notes) - 1))
+            elif ch in ("k", curses.KEY_UP):
+                self.cursor = max(0, self.cursor - 1)
+            return True
+        if self.view == "circuit":
+            n = len(_circuit_rows(self.sessions))
+            if ch in ("b", "\x1b"):
+                self.view = "list"
+                self.cursor = 0
+                self.scroll = 0
+            elif ch in ("j", curses.KEY_DOWN):
+                self.cursor = min(self.cursor + 1, max(0, n - 1))
             elif ch in ("k", curses.KEY_UP):
                 self.cursor = max(0, self.cursor - 1)
             return True
@@ -1551,6 +1682,10 @@ class App:
             self.view = "timeline"
             self.cursor = 0
             self.scroll = 0
+        elif ch in ("c", "C"):
+            self.view = "circuit"
+            self.cursor = 0
+            self.scroll = 0
         elif ch == "N":
             self.view = "notes"
             self.cursor = 0
@@ -1564,6 +1699,20 @@ class App:
             rec = save_note(s.session_id, s.project, s.title, text.strip())
             self.notes.insert(0, rec)
             self.status = "note saved"
+
+
+def _circuit_rows(sessions):
+    """Flatten every session's circuit_scores into one list annotated with
+    which session/project each row came from, worst (lowest ok score) first —
+    non-"ok" rows (cold/unreachable/no_goal/auth_error/error) have nothing to
+    rank by, so they sort last."""
+    rows = []
+    for s in sessions:
+        for r in s.circuit_scores:
+            rows.append({**r, "session": s.session_id, "project": s.project_short})
+    rows.sort(key=lambda r: r["score"] if r.get("status") == "ok"
+              and isinstance(r.get("score"), (int, float)) else 2.0)
+    return rows
 
 
 def _wrap(text, width):

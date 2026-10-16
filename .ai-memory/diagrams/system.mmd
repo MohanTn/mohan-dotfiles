@@ -28,8 +28,10 @@ flowchart TD
 
   subgraph P2["2. Prompt lifecycle — what fires around every message you send"]
     SS["SessionStart, once per session: session-start.sh --no-claude-md runs repo-map.sh, which regenerates .claude/repo-map.md from scratch every session by design — in: tracked files -> out: folder/file/symbol index with line numbers, so the agent skips an fd+rg orientation pass"]
+    SS2["SessionStart, second hook: session-start/retrieval-warm.sh runs 'hybrid-retrieval ensure', which starts the resident daemon if needed and indexes an unseen repo in the BACKGROUND (daemon 'warm' op, never waited on). Prints one line only when indexing just started ('used starting next session') or the binary is missing ('run ./setup.sh'). Silent once ready, and silent under IS_SANDBOX=1. Per harness: Claude --claude gives systemMessage JSON, Copilot appends it to additionalContext and asks the agent to relay it (sessionStart has no user-visible field), pi calls ctx.ui.notify. Installed by nix/hybrid-retrieval.nix as a uv tool from github (sparse only, no torch, no checkout), ref pinned there, reinstalled when the ref changes. Index lives in REPO/.retrieval/, globally git-ignored in nix/git.nix"]
+    SS --> SS2
     U1["UserPromptSubmit 1: user-prompt-submit.sh — clears per-turn state, injects the MCP reader hint"]
-    U2["UserPromptSubmit 2: context-augment.py — in: 'why is nix flake check failing' -> out: keywords plus abstracted excerpts of the files those keywords hit"]
+    U2["UserPromptSubmit 2: context-augment.py — in: 'why is nix flake check failing' -> out: keywords plus abstracted excerpts of the files those keywords hit. Asks the hybrid-retrieval daemon socket first when REPO/.retrieval/ exists, then its own fzf/rg heuristics. Autostarts the daemon via the hybrid-retrieval binary on PATH"]
     U3["UserPromptSubmit 3: inject-memory.sh — in: .ai-memory/manifest.json -> out: this whole file wrapped in a relevant_system_map block"]
     SS --> U1 --> U2 --> U3
   end

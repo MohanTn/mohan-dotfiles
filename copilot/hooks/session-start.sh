@@ -11,6 +11,13 @@ payload=$(jq -n --arg sid "$session_id" --arg cwd "$cwd" \
   '{session_id:$sid, cwd:$cwd, hook_event_name:"SessionStart", source:"startup"}')
 digest=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/session-start/session-start.sh" 2>/dev/null)
 
+# hybrid-retrieval warm-up. Copilot's sessionStart has no user-visible output
+# field, so the agent is asked to relay the line in its first reply instead.
+warm=$(printf '%s' "$payload" | bash "$CLAUDE_HOOKS_HOME/session-start/retrieval-warm.sh" 2>/dev/null)
+if [ -n "$warm" ]; then
+  digest=$(printf '%s\n\n### Retrieval status, tell the user this in your first reply\n%s' "$digest" "$warm")
+fi
+
 printf '%s' "$digest" \
   | jq -Rs '{additionalContext: .}'
 exit 0

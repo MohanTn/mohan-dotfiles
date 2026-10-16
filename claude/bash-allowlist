@@ -59,3 +59,18 @@ docker
 docker compose
 
 printf
+Bash(fd:*)
+Bash(rg:*)
+Bash(ls:*)
+Bash(cat:*)
+Bash(head:*)
+Bash(tail:*)
+Bash(wc:*)
+Bash(cd:*)
+Bash(git status:*)
+Bash(git diff:*)
+Bash(npm test:*)
+Bash(npm run test:*)
+Bash(npm run build:*)
+Bash(npx vitest:*)
+Bash(npx tsc:*)

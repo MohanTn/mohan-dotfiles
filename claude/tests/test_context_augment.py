@@ -190,6 +190,31 @@ class KeywordPrecision(unittest.TestCase):
         self.assertIn("boilerplates", symbols)
 
 
+class HybridAutostart(unittest.TestCase):
+    """The daemon is the `hybrid-retrieval` uv tool on PATH, never a repo checkout."""
+
+    def _spawned(self, which_result):
+        calls = []
+        orig_which, orig_popen = ca.shutil.which, ca.subprocess.Popen
+        ca.shutil.which = lambda name: which_result if name == "hybrid-retrieval" else None
+        ca.subprocess.Popen = lambda argv, **kw: calls.append(argv)
+        try:
+            ca.hybrid_autostart()
+        finally:
+            ca.shutil.which, ca.subprocess.Popen = orig_which, orig_popen
+        return calls
+
+    def test_spawns_the_binary_on_path(self):
+        self.assertEqual(self._spawned("/bin/hybrid-retrieval"),
+                         [["/bin/hybrid-retrieval", "serve"]])
+
+    def test_does_nothing_when_not_installed(self):
+        self.assertEqual(self._spawned(None), [])
+
+    def test_no_checkout_path_remains(self):
+        self.assertFalse(hasattr(ca, "HYBRID_RETRIEVAL_ROOT"))
+
+
 def _large_rel_in(root):
     rel = "large.py"
     lines = [f"def fn_{i}(a, b):\n    payload_marker = a + b\n    return payload_marker\n"

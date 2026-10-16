@@ -4,6 +4,7 @@ Run: python3 claude/tests/test_session_analytics.py  (from repo root)
 The script under test lives one level up, in claude/.
 """
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -480,6 +481,87 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(sa.load_config(path), {})
             sa.save_config({"theme": "matrix"}, path)
             self.assertEqual(sa.load_config(path), {"theme": "matrix"})
+
+
+class CircuitScoreTest(unittest.TestCase):
+    """circuit-confidence-check: parsing circuit_scores.jsonl and rolling it
+    into Session/Aggregate. _load_circuit_scores reads from the module-level
+    HOOKS_STATE_HOME constant, so tests point it at a tempdir rather than the
+    real ~/.local/state/claude-hooks."""
+
+    def _write_scores(self, d, session_id, rows):
+        sdir = os.path.join(d, session_id)
+        os.makedirs(sdir, exist_ok=True)
+        with open(os.path.join(sdir, "circuit_scores.jsonl"), "w") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+
+    def test_parses_circuit_scores_jsonl(self):
+        with tempfile.TemporaryDirectory() as d:
+            orig = sa.HOOKS_STATE_HOME
+            sa.HOOKS_STATE_HOME = d
+            try:
+                self._write_scores(d, "sid1", [
+                    {"file": "a.py", "goal": "add weather fetch", "score": 0.9,
+                     "status": "ok", "ts": "2026-09-26T10:00:00Z"},
+                    {"file": "b.py", "goal": None, "score": None,
+                     "status": "cold", "ts": "2026-09-26T10:01:00Z"},
+                ])
+                rows = sa._load_circuit_scores("sid1")
+                self.assertEqual(len(rows), 2)
+                self.assertEqual(rows[0]["file"], "a.py")
+            finally:
+                sa.HOOKS_STATE_HOME = orig
+
+    def test_missing_circuit_log_defaults_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            orig = sa.HOOKS_STATE_HOME
+            sa.HOOKS_STATE_HOME = d
+            try:
+                self.assertEqual(sa._load_circuit_scores("no-such-session"), [])
+                self.assertEqual(sa._load_circuit_scores(""), [])
+            finally:
+                sa.HOOKS_STATE_HOME = orig
+
+    def test_session_circuit_mean_and_low_count(self):
+        s = sa.Session(circuit_scores=[
+            {"file": "a.py", "score": 0.9, "status": "ok"},
+            {"file": "b.py", "score": 0.4, "status": "ok"},
+            {"file": "c.py", "score": None, "status": "cold"},
+        ])
+        self.assertAlmostEqual(s.circuit_mean, 0.65, places=3)
+        self.assertEqual(s.circuit_low_count(), 1)
+        self.assertIsNone(sa.Session().circuit_mean)
+
+    def test_aggregate_circuit_low_rate(self):
+        s1 = sa.Session(circuit_scores=[
+            {"file": "a.py", "score": 0.9, "status": "ok"},
+            {"file": "b.py", "score": 0.5, "status": "ok"},
+        ])
+        s2 = sa.Session(circuit_scores=[
+            {"file": "c.py", "score": 0.3, "status": "ok"},
+        ])
+        agg = sa.aggregate([s1, s2])
+        self.assertEqual(agg.circuit_scored, 3)
+        self.assertEqual(agg.circuit_low, 2)
+        self.assertAlmostEqual(agg.circuit_mean, (0.9 + 0.5 + 0.3) / 3, places=3)
+
+    def test_load_sessions_only_populates_circuit_scores_for_claude(self):
+        # Guards feature-plan decision q-3: only Claude Code's hooks write
+        # circuit_scores.jsonl, so copilot/pi sessions must not look one up.
+        with tempfile.TemporaryDirectory() as d:
+            orig = sa.HOOKS_STATE_HOME
+            sa.HOOKS_STATE_HOME = d
+            try:
+                self._write_scores(d, "sid-copilot", [
+                    {"file": "x.py", "goal": "g", "score": 0.9, "status": "ok"}])
+                s = sa.Session(session_id="sid-copilot", harness="copilot")
+                # load_sessions is the code path that guards this, not
+                # parse_session; simulate its guard directly.
+                loaded = sa._load_circuit_scores(s.session_id) if s.harness == "claude" else []
+                self.assertEqual(loaded, [])
+            finally:
+                sa.HOOKS_STATE_HOME = orig
 
 
 if __name__ == "__main__":

@@ -12,6 +12,11 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/session-start/session-start.sh\" --no-claude-md",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/session-start/retrieval-warm.sh\" --claude",
+            "timeout": 10
           }
         ]
       }
@@ -90,6 +95,11 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/post-tool-use/post-tool-use-edit.sh\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/post-tool-use/circuit-score.sh\"",
+            "timeout": 8
           }
         ]
       },

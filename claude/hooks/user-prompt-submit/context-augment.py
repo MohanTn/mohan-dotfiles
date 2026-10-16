@@ -24,6 +24,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -43,13 +44,11 @@ MAX_CANDIDATES = 20000   # cap the fd file/dir list so fzf stays fast on monorep
 MIN_WORD_LEN = 8         # bare lowercase words shorter than this are prose, not symbols
 
 # --- hybrid-retrieval integration ----------------------------------------------
-# A resident daemon (see that repo's CLAUDE.md) indexes opted-in repos and ranks files by
-# BM25 + dense vectors + import graph, which beats this file's own fzf/rg heuristics on
+# A resident daemon (the `hybrid-retrieval` uv tool, nix/hybrid-retrieval.nix) indexes repos
+# and ranks files by BM25 + import graph, which beats this file's own fzf/rg heuristics on
 # vague natural-language prompts that have no path- or symbol-shaped tokens to search for.
-# Only fires for repos that carry a .retrieval/ index; every other repo pays one cheap stat.
-HYBRID_RETRIEVAL_ROOT = os.environ.get(
-    "HYBRID_RETRIEVAL_ROOT", os.path.expanduser("~/REPO/hybrid-retrieval-pipeline")
-)
+# session-start/retrieval-warm.sh indexes every repo, so the .retrieval/ gate below only
+# skips a repo whose first index has not been written yet.
 HYBRID_TIMEOUT = 1.5     # seconds; fails open well inside this hook's own 10s budget
 
 # per-language single-line comment prefix, for safe whitespace-only minify
@@ -249,16 +248,16 @@ def hybrid_autostart() -> None:
     """Launch the daemon detached so the *next* prompt gets results; this one gets none.
 
     Singleton-locked on the daemon side, so a racing autostart from another repo's hook is
-    harmless. Only ever spawns the one known install, never something arbitrary.
+    harmless. Spawns the `hybrid-retrieval` binary on PATH, never a checkout.
     """
-    python = os.path.join(HYBRID_RETRIEVAL_ROOT, ".venv", "bin", "python")
-    if not os.path.exists(python):
+    binary = shutil.which("hybrid-retrieval")
+    if binary is None:
         return
     with contextlib.suppress(OSError):
         subprocess.Popen(
-            [python, "-m", "hybrid_retrieval.cli", "serve"],
+            [binary, "serve"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-            start_new_session=True, cwd=HYBRID_RETRIEVAL_ROOT,
+            start_new_session=True,
         )
 
 
