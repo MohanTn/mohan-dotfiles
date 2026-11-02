@@ -60,6 +60,15 @@ docker compose
 
 printf
 
+# --- deliberate exceptions to the admission rule above ---------------------
+# Added by explicit request so hook selftests (`bash claude/tests/test-hook.sh
+# selftest`) and fixture setup can run. bash can run arbitrary scripts, so this
+# widens the guard (python3 above already allows the same). mkdir and chmod
+# write to the filesystem.
+bash
+chmod
+mkdir
+
 # --- app build/run/test toolchains (dotnet and React) ---------------------
 # These run project code by design (build scripts, test runners). npm, npx,
 # yarn and node are already in the guard's DEFAULT_ALLOWED.

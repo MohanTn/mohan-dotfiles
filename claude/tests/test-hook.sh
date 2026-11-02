@@ -49,6 +49,7 @@ TEST_SESSION_ID="manual-test"
 declare -A HOOK_INFO=(
   [session-start.sh]="SessionStart::regenerate .claude/repo-map.md (via repo-map.sh) + print the digest that points at it"
   [retrieval-warm.sh]="SessionStart::hybrid-retrieval ensure, index the repo in the background and tell the user when indexing just started"
+  [aicode-init.sh]="SessionStart::run aicode-mcp init so the repo maps to a template (default dotnet-api + bundled templates/)"
   [user-prompt-submit.sh]="UserPromptSubmit::clear prior loop state"
   [pre-tool-use-edit-guard.sh]="PreToolUse (Edit/Write)::block no-op edits/writes"
   [bash-allowlist-guard.sh]="PreToolUse (Bash)::deny any command whose binaries are not on the shared Bash allowlist (allowlist-only shell policy)"
@@ -66,7 +67,7 @@ declare -A HOOK_INFO=(
 default_payload() {
   local hook="$1" cwd="$PWD"
   case "$hook" in
-    session-start.sh | retrieval-warm.sh)
+    session-start.sh | retrieval-warm.sh | aicode-init.sh)
       jq -n --arg sid "$TEST_SESSION_ID" --arg cwd "$cwd" \
         '{session_id:$sid, cwd:$cwd, hook_event_name:"SessionStart", source:"startup"}'
       ;;
@@ -348,6 +349,27 @@ cmd_selftest() {
   PATH="$bare_bin" IS_SANDBOX=1 expect_empty "retrieval-warm stays silent in the docker sandbox" \
     retrieval-warm.sh "$warm_payload"
   rm -rf "$fake_bin" "$bare_bin"
+
+  # aicode-init: a fake aicode-mcp on PATH prints whatever $FAKE_INIT says.
+  local init_bin init_payload
+  init_bin=$(mktemp -d)
+  printf '#!%s\necho "$FAKE_INIT"\n' "$(command -v bash)" > "$init_bin/aicode-mcp"
+  chmod +x "$init_bin/aicode-mcp"
+  init_payload=$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, hook_event_name:"SessionStart"}')
+  PATH="$init_bin:$PATH" FAKE_INIT="Kept existing x" expect_empty "aicode-init stays silent when nothing changed" \
+    aicode-init.sh "$init_payload"
+  PATH="$init_bin:$PATH" FAKE_INIT="Copied default templates to /x/templates" expect_contains "aicode-init reports copied templates" \
+    aicode-init.sh "$init_payload" "Copied default templates"
+  PATH="$init_bin:$PATH" FAKE_INIT="Created /x/.toolkit/settings.yaml" expect_contains "aicode-init --claude shows the line to the user" \
+    aicode-init.sh "$init_payload" '"systemMessage"' --claude
+  local no_init_bin
+  no_init_bin=$(mktemp -d)
+  for tool in bash jq basename tr sed cat timeout; do
+    ln -s "$(command -v "$tool")" "$no_init_bin/$tool"
+  done
+  PATH="$no_init_bin" expect_empty "aicode-init stays silent when aicode-mcp is not installed" \
+    aicode-init.sh "$init_payload"
+  rm -rf "$init_bin" "$no_init_bin"
 
   # .ai-memory: inject-memory (see llm-memory repo for the reference
   # .ai-memory/ layout it reads).

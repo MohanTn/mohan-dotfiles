@@ -17,6 +17,11 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/session-start/retrieval-warm.sh\" --claude",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/session-start/aicode-init.sh\" --claude",
+            "timeout": 10
           }
         ]
       }
