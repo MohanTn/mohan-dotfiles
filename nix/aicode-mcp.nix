@@ -29,7 +29,7 @@ in
   # After every installer, so `claude` exists and the copilot/pi config
   # writers above have already run.
   home.activation.aicodeMcp = lib.hm.dag.entryAfter
-    [ "installPackages" "installClaude" "installPi" "removeCopilotScaffoldMcp" ]
+    [ "installPackages" "installClaude" "installPi" "removeCopilotScaffoldMcp" "claudeSettings" ]
     (if cfg.enableAicodeMcp then ''
       echo "Setting up aicode-mcp..."
       (PATH="${path}:$PATH" DOTNET=${dotnet}/bin/dotnet run ${pkgs.bash}/bin/bash ${script} install) \

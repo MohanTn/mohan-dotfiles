@@ -5,6 +5,7 @@
 #   aicode-mcp.sh install      clone or fast-forward the repo, publish it when
 #                              HEAD moved, then register
 #   aicode-mcp.sh register     add scaffold-mcp and architect-mcp to every harness
+#                              and the scaffold/architect hooks to Claude Code
 #   aicode-mcp.sh unregister   remove them again (the enableAicodeMcp=false path)
 #
 # The servers speak MCP over stdio only, so nothing is started here: each
@@ -44,6 +45,30 @@ edit_json() {
   rm -f "$tmp"
 }
 
+# Claude Code hooks (README "Hooks"): scaffold gates the first Write of a new
+# file, architect feeds RULES.yaml back after edits. Both are no-ops in a
+# project without a sourceTemplate and fail open, so they are safe globally.
+# Entries are recognised by their command so re-running never duplicates them
+# and unregister removes only ours. $1 = add|remove.
+claude_hooks() {
+  local file="$HOME/.claude/settings.json" tmp
+  if [ "$1" = remove ] && [ ! -f "$file" ]; then return 0; fi
+  mkdir -p "$(dirname "$file")"
+  [ -s "$file" ] || echo '{}' > "$file"
+  tmp="$(mktemp)"
+  jq --arg op "$1" '
+    def ours: ([.hooks[]?.command] | any(test("aicode-mcp hook")));
+    def strip(ev): .hooks[ev] = ((.hooks[ev] // []) | map(select(ours | not)));
+    strip("PreToolUse") | strip("PostToolUse")
+    | if $op == "add" then
+        .hooks.PreToolUse += [{matcher: "Write", hooks: [{type: "command", command: "aicode-mcp hook --type scaffold"}]}]
+        | .hooks.PostToolUse += [{matcher: "Edit|Write|MultiEdit", hooks: [{type: "command", command: "aicode-mcp hook --type architect"}]}]
+      else . end
+  ' "$file" > "$tmp"
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
+
 register() {
   local s claude copilot='{}' pi='{}'
   claude="$(claude_bin)"
@@ -60,6 +85,7 @@ register() {
   [ -n "$claude" ] || echo "aicode-mcp: claude not installed, skipped its registration" >&2
   edit_json "$HOME/.copilot/mcp-config.json" "$copilot"
   edit_json "$HOME/.pi/agent/mcp.json" "$pi"
+  claude_hooks add
   # Marker for nix/aicode-mcp.nix: only unregister on a disabled switch when
   # something was registered, instead of calling claude on every machine.
   mkdir -p "$AICODE_MCP_DIR" && touch "$AICODE_MCP_DIR/.registered"
@@ -76,6 +102,7 @@ unregister() {
   fi
   edit_json "$HOME/.copilot/mcp-config.json" ""
   edit_json "$HOME/.pi/agent/mcp.json" ""
+  claude_hooks remove
   rm -f "$AICODE_MCP_DIR/.registered"
   echo "aicode-mcp: unregistered from claude, copilot and pi"
 }
