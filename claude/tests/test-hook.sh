@@ -351,17 +351,49 @@ cmd_selftest() {
   rm -rf "$fake_bin" "$bare_bin"
 
   # aicode-init: a fake aicode-mcp on PATH prints whatever $FAKE_INIT says.
-  local init_bin init_payload
+  local init_bin init_payload opted_repo
   init_bin=$(mktemp -d)
-  printf '#!%s\necho "$FAKE_INIT"\n' "$(command -v bash)" > "$init_bin/aicode-mcp"
+  printf '#!%s\necho "$FAKE_INIT"\necho "args: $*"\n' "$(command -v bash)" > "$init_bin/aicode-mcp"
   chmod +x "$init_bin/aicode-mcp"
-  init_payload=$(jq -n --arg cwd "$cwd" '{session_id:"selftest", cwd:$cwd, hook_event_name:"SessionStart"}')
+  opted_repo=$(mktemp -d)
+  git -C "$opted_repo" init -q
+  mkdir -p "$opted_repo/.toolkit" && touch "$opted_repo/.toolkit/settings.yaml"
+  init_payload=$(jq -n --arg cwd "$opted_repo" '{session_id:"selftest", cwd:$cwd, hook_event_name:"SessionStart"}')
   PATH="$init_bin:$PATH" FAKE_INIT="Kept existing x" expect_empty "aicode-init stays silent when nothing changed" \
     aicode-init.sh "$init_payload"
   PATH="$init_bin:$PATH" FAKE_INIT="Copied default templates to /x/templates" expect_contains "aicode-init reports copied templates" \
     aicode-init.sh "$init_payload" "Copied default templates"
   PATH="$init_bin:$PATH" FAKE_INIT="Created /x/.toolkit/settings.yaml" expect_contains "aicode-init --claude shows the line to the user" \
     aicode-init.sh "$init_payload" '"systemMessage"' --claude
+  # Stack detection: only opted-in, .NET or React git repos get initialised.
+  local init_repo init_repo_payload
+  init_repo=$(mktemp -d)
+  git -C "$init_repo" init -q
+  init_repo_payload=$(jq -n --arg cwd "$init_repo" '{cwd:$cwd}')
+  PATH="$init_bin:$PATH" FAKE_INIT="Created x" expect_empty "aicode-init skips a repo with no .NET or React marker" \
+    aicode-init.sh "$init_repo_payload"
+  PATH="$init_bin:$PATH" FAKE_INIT="Created x" expect_empty "aicode-init skips a dir outside git" \
+    aicode-init.sh "$(jq -n --arg cwd "$(mktemp -d)" '{cwd:$cwd}')"
+  echo '{"dependencies":{"react":"19.0.0"}}' > "$init_repo/package.json"
+  PATH="$init_bin:$PATH" FAKE_INIT="Created x" expect_contains "aicode-init asks for react-web in a React repo" \
+    aicode-init.sh "$init_repo_payload" "args: init --quiet --template react-web"
+  rm -f "$init_repo/package.json"
+  mkdir -p "$init_repo/src/Api" && touch "$init_repo/src/Api/Api.csproj"
+  git -C "$init_repo" add src
+  PATH="$init_bin:$PATH" FAKE_INIT="Created x" expect_contains "aicode-init asks for dotnet-api in a .NET repo" \
+    aicode-init.sh "$init_repo_payload" "args: init --quiet --template dotnet-api"
+  # Brownfield: more than 10 tracked source files, so no init, a one-time hint.
+  local n
+  for n in $(seq 1 11); do touch "$init_repo/src/Api/File$n.cs"; done
+  git -C "$init_repo" add src
+  PATH="$init_bin:$PATH" XDG_STATE_HOME="$init_repo/.state" FAKE_INIT="Created x" expect_contains "aicode-init hints repo-template in a brownfield repo" \
+    aicode-init.sh "$init_repo_payload" "/repo-template"
+  PATH="$init_bin:$PATH" XDG_STATE_HOME="$init_repo/.state" FAKE_INIT="Created x" expect_empty "aicode-init hints a brownfield repo only once" \
+    aicode-init.sh "$init_repo_payload"
+  mkdir -p "$init_repo/.toolkit" && touch "$init_repo/.toolkit/settings.yaml"
+  PATH="$init_bin:$PATH" FAKE_INIT="Created x" expect_contains "aicode-init keeps an opted-in repo's own template" \
+    aicode-init.sh "$init_repo_payload" "args: init --quiet)"
+  rm -rf "$init_repo" "$opted_repo"
   local no_init_bin
   no_init_bin=$(mktemp -d)
   for tool in bash jq basename tr sed cat timeout; do

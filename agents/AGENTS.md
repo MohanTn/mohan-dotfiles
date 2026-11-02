@@ -19,5 +19,10 @@ works. This keeps retrieval precise: a stale Episode is safe to ignore, a Fact
 is not.
 # Coding Style
 Language-specific style rules live in `~/.agents/style/`. Before writing or editing code, read the file that matches the stack: `react.md` for React and TypeScript UI, `dotnet.md` for C# and .NET. These rules override your defaults and the surrounding file only when the file clearly predates them.
+# Scaffold and Architect MCP
+In a repo with `.toolkit/settings.yaml` or a `project.json` naming a `sourceTemplate`, generate code through the `scaffold-mcp` and `architect-mcp` servers instead of hand-writing boilerplate:
+- New project: `list-boilerplates`, then `use-boilerplate`. New feature in a project: `list-scaffolding-methods`, then `use-scaffold-method`, then fill in the placeholder bodies.
+- An existing .NET or React repo without a template gets one built from its own code with the `repo-template` skill, never the generic `dotnet-api` or `react-web` templates.
+- Before editing a file call `get-file-design-pattern`. After editing call `review-code-change` and fix every must_do and must_not_do violation.
 # Search Tools
 Use `rg` (ripgrep) and `fd` for quick codebase searches.

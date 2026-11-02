@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "allow": ["Bash(rg *)", "Bash(git diff *)"],
+    "allow": ["Bash(rg *)", "Bash(git diff *)", "mcp__scaffold-mcp", "mcp__architect-mcp"],
     "defaultMode": "auto"
   },
   "hooks": {
