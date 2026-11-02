@@ -26,7 +26,7 @@ in
     # depend on (GOAL/GOAL_CHECK, repo-map.md), since the default prompt is
     # gone. Pi loads the same file as
     # ~/.pi/agent/SYSTEM.md (see nix/pi.nix).
-    cc = "claude --model sonnet --system-prompt-file ${../agents/lean-system-prompt.md} --allowed-tools \"Bash(git *)\" \"Bash(fd *)\" \"Bash(rg *)\" \"Bash(npm *)\" \"Bash(python3 *)\" Edit Write";
+    cc = "claude --model sonnet --system-prompt-file ${../agents/lean-system-prompt.md} --allowed-tools \"Bash(git *)\" \"Bash(fd *)\" \"Bash(rg *)\" \"Bash(npm *)\" \"Bash(npx *)\" \"Bash(yarn *)\" \"Bash(dotnet *)\" \"Bash(python3 *)\" Edit Write";
     # Mirrors claude/settings.json's permissions.allow (Bash(rg *), Bash(git
     # diff *)) for Copilot CLI, which has no persisted settings.json
     # equivalent of that allowlist (only the --allow-tool flag, confirmed

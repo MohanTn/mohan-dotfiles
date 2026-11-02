@@ -39,7 +39,11 @@
     nerd-fonts.symbols-only
 
     # dev platforms
-    dotnet-sdk_8
+    # one combined dotnet, since separate SDK packages both ship bin/dotnet and collide
+    (dotnetCorePackages.combinePackages [
+      dotnetCorePackages.sdk_8_0
+      dotnetCorePackages.sdk_10_0
+    ])
 
     # GitHub & GitLab
     gh    # GitHub CLI

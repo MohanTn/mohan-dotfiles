@@ -59,6 +59,13 @@ docker
 docker compose
 
 printf
+
+# --- app build/run/test toolchains (dotnet and React) ---------------------
+# These run project code by design (build scripts, test runners). npm, npx,
+# yarn and node are already in the guard's DEFAULT_ALLOWED.
+dotnet
+pnpm
+
 Bash(fd:*)
 Bash(rg:*)
 Bash(ls:*)

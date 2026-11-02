@@ -67,7 +67,7 @@ Aliases of note: `cc` (Claude with the lean system prompt + tool allowlist),
 | `pnpm` | packages.nix | enriched_planning |
 | `python3` | packages.nix | `statusline-usage.py`, `session-analytics.py` |
 | `gcc`, `gnumake` | packages.nix | Treesitter parser builds |
-| `dotnet-sdk_8` | packages.nix | C# work |
+| `dotnetCorePackages.combinePackages [sdk_8_0 sdk_10_0]` | packages.nix | C# work, .NET 8 and 10 SDKs side by side |
 
 ## 7. AI coding agents
 
