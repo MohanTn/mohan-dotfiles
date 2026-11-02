@@ -12,6 +12,7 @@
     enableLocalScribe = false;
     enableGitConfig = false;
     enableGcloud = false;
+    enableAicodeMcp = false;
     enableLittleCoder = false;
     littleCoderGpu = false;
     enableHomebrew = false;
@@ -20,5 +21,7 @@
     # around, so the packaged default keeps it on.
     enableZsh = true;
     enableTmux = true;
+    # tmux is installed, but you attach to it yourself.
+    tmuxAutostart = false;
   };
 }

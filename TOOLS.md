@@ -102,6 +102,7 @@ Aliases of note: `cc` (Claude with the lean system prompt + tool allowlist),
 | Python dev tools (`poetry`, `pip-tools`) | optional-packages.nix (`enablePython`) | Python projects |
 | `pipeline-worker` | optional-packages.nix (`enablePipelineWorker`) | Agent pipeline runner, env in zsh.nix |
 | LocalScribe | optional-packages.nix (`enableLocalScribe`) | Installed from GitHub releases to `~/.local/bin` |
+| aicode-mcp | aicode-mcp.nix (`enableAicodeMcp`) | Clones/pulls MohanTn/aicode-mcp-dotnet, builds it, registers `scaffold-mcp` and `architect-mcp` in Claude, Copilot and Pi |
 
 ## 10. Build and CI
 

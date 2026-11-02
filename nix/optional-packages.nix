@@ -14,6 +14,7 @@ in
     enableLocalScribe = mkEnableOption "LocalScribe (from GitHub releases)";
     enableGitConfig = mkEnableOption "Git configuration (userName and userEmail)";
     enableGcloud = mkEnableOption "Google Cloud SDK (gcloud)";
+    enableAicodeMcp = mkEnableOption "aicode-mcp scaffold/architect MCP servers for Claude, Copilot and Pi (nix/aicode-mcp.nix)";
 
     # These two are opt-*out*, unlike everything above: they describe the
     # terminal this repo is built around, so a config file that predates them
@@ -33,9 +34,18 @@ in
       type = types.bool;
       default = true;
       description = ''
-        Install and configure tmux (nix/tmux.nix) and auto-start a session in
-        each new interactive terminal. When false, neither the tmux config
-        nor the auto-start block in the shell rc is generated.
+        Install and configure tmux (nix/tmux.nix). When false, neither the
+        tmux config nor the auto-start block in the shell rc is generated.
+      '';
+    };
+
+    tmuxAutostart = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Auto-start a tmux session in each new interactive terminal. Only has
+        an effect when enableTmux is true. Off by default, so terminals open
+        a plain shell and you attach with `tmux` / `tmux attach` yourself.
       '';
     };
   };

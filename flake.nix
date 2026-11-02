@@ -105,6 +105,21 @@
             cat "$out"
           '';
 
+        # aicode-mcp.sh's clone/pull/rebuild/register logic against stub
+        # claude and dotnet, plus an eval of the module with the option on
+        # (the `home` check only sees this machine's answer, usually off).
+        aicode-mcp = pkgs.runCommand "aicode-mcp-tests"
+          { nativeBuildInputs = [ pkgs.bash pkgs.git pkgs.jq pkgs.ripgrep ]; }
+          ''
+            echo "enabled: ${builtins.unsafeDiscardOutputDependency
+              (home-manager.lib.homeManagerConfiguration {
+                inherit pkgs;
+                extraSpecialArgs = { inherit username; };
+                modules = [ ./nix/home.nix { customPackages.enableAicodeMcp = pkgs.lib.mkForce true; } ];
+              }).activationPackage.drvPath}"
+            bash ${./aicode-mcp}/test.sh | tee "$out"
+          '';
+
         # The hooks' own regression suite, run in a sandbox HOME exactly the
         # way Claude Code invokes them (JSON payload on stdin).
         # universal-ctags backs repo-map.sh's symbol pass and python3 backs
@@ -544,8 +559,8 @@
             grep -q 'shell-common.nix' ${./nix/zsh.nix}
             grep -q 'shell-common.nix' ${./nix/bash.nix}
 
-            echo "-- the tmux auto-start block is gated on enableTmux"
-            grep -q 'optionalString cfg.enableTmux' ${./nix/shell-common.nix}
+            echo "-- the tmux auto-start block is gated on enableTmux and tmuxAutostart"
+            grep -q 'optionalString (cfg.enableTmux && cfg.tmuxAutostart)' ${./nix/shell-common.nix}
 
             echo "all shell parity checks passed" > "$out"
             cat "$out"

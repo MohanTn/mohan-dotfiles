@@ -42,7 +42,8 @@ in
   };
 
   # Auto-start tmux for real interactive terminals, but only when tmux was
-  # opted into (./setup-packages.sh -> enableTmux); nix/tmux.nix installs
+  # opted into (./setup-packages.sh -> enableTmux) and so was auto-start
+  # (tmuxAutostart, off by default so you attach manually). nix/tmux.nix installs
   # nothing otherwise, so this block would find no tmux on PATH anyway and
   # is left out entirely rather than relying on that.
   #
@@ -56,7 +57,7 @@ in
   # break if swallowed by a TUI.
   # `[[ ]]` with `==` pattern matching behaves identically in bash and zsh,
   # so this one block serves both rc files.
-  tmuxAutostart = lib.optionalString cfg.enableTmux ''
+  tmuxAutostart = lib.optionalString (cfg.enableTmux && cfg.tmuxAutostart) ''
     if [[ $- == *i* ]] && [[ -t 1 ]] && [[ -z $TMUX ]] \
       && [[ -z $NO_TMUX ]] && [[ -z $CLAUDECODE ]] && [[ -z $INSIDE_EMACS ]] \
       && [[ $TERM_PROGRAM != "vscode" ]] && [[ $TERM != "dumb" ]] \

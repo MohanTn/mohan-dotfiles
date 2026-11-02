@@ -75,13 +75,18 @@ if [ "$HOMEBREW" = "true" ]; then
     BREW_LIST="${BREW_LIST} \"${pkg}\""
   done
 fi
+AICODE_MCP=$(ask_yes_no "9b. Set up the aicode-mcp MCP servers (scaffold, architect) for Claude, Copilot and Pi?" "n")
 
 # Terminal setup. Unlike everything above these default to YES: they describe
 # the shell/multiplexer this repo is built around, so the answer you give by
 # pressing Enter is the setup the rest of the config assumes.
 echo ""
 ZSH=$(ask_yes_no "10. Use zsh as your shell? (n = configure bash instead)" "y")
-TMUX=$(ask_yes_no "11. Use tmux? (auto-starts a session in each new terminal)" "y")
+TMUX=$(ask_yes_no "11. Use tmux?" "y")
+TMUX_AUTOSTART=false
+if [ "$TMUX" = "true" ]; then
+  TMUX_AUTOSTART=$(ask_yes_no "   11b. Auto-start a tmux session in each new terminal? (n = attach manually)" "n")
+fi
 
 echo ""
 echo "Generating configuration file..."
@@ -102,6 +107,7 @@ cat > "$CONFIG_FILE" << EOF
     enableLocalScribe = ${LOCAL_SCRIBE};
     enableGitConfig = ${GIT_CONFIG};
     enableGcloud = ${GCLOUD};
+    enableAicodeMcp = ${AICODE_MCP};
     enableLittleCoder = ${LITTLE_CODER};
     littleCoderGpu = ${LITTLE_CODER_GPU};
     littleCoderOllama = ${LITTLE_CODER_OLLAMA};
@@ -110,6 +116,7 @@ cat > "$CONFIG_FILE" << EOF
     brewPackages = [${BREW_LIST} ];
     enableZsh = ${ZSH};
     enableTmux = ${TMUX};
+    tmuxAutostart = ${TMUX_AUTOSTART};
   };
 }
 EOF
@@ -130,13 +137,15 @@ echo "Selected packages:"
 [ "$LITTLE_CODER" = "true" ] && [ "$LITTLE_CODER_OLLAMA" = "false" ] \
   && echo "    ↳ backend: local Gemma GGUF via llama.cpp"
 [ "$LITTLE_CODER_GPU" = "true" ] && echo "    ↳ GPU offload (Vulkan llama.cpp)"
+[ "$AICODE_MCP" = "true" ] && echo "  ✓ aicode-mcp (scaffold-mcp, architect-mcp in claude/copilot/pi)"
 [ "$HOMEBREW" = "true" ] && echo "  ✓ Homebrew${BREW_LIST:+ (formulae:${BREW_LIST//\"/})}"
 if [ "$ZSH" = "true" ]; then
   echo "  ✓ zsh (oh-my-posh prompt, zinit plugins)"
 else
   echo "  ✓ bash (same aliases, helpers and environment; no oh-my-posh prompt or zinit plugins)"
 fi
-[ "$TMUX" = "true" ] && echo "  ✓ tmux (auto-starts in each new terminal)"
+[ "$TMUX" = "true" ] && [ "$TMUX_AUTOSTART" = "true" ] && echo "  ✓ tmux (auto-starts in each new terminal)"
+[ "$TMUX" = "true" ] && [ "$TMUX_AUTOSTART" = "false" ] && echo "  ✓ tmux (attach manually with: tmux)"
 [ "$TMUX" = "false" ] && echo "  · tmux off (new terminals open a plain shell)"
 echo ""
 echo "Next, run:"

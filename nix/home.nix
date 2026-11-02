@@ -25,6 +25,7 @@ in
     ./claude.nix
     ./copilot.nix
     ./pi.nix
+    ./aicode-mcp.nix
     ./hybrid-retrieval.nix
     ./little-coder.nix
     ./tmux.nix
