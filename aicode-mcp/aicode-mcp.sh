@@ -5,7 +5,7 @@
 #   aicode-mcp.sh install      clone or fast-forward the repo, publish it when
 #                              HEAD moved, then register
 #   aicode-mcp.sh register     add scaffold-mcp and architect-mcp to every harness
-#                              and the scaffold/architect hooks to Claude Code
+#                              and the scaffold/policy/architect hooks to Claude Code
 #   aicode-mcp.sh unregister   remove them again (the enableAicodeMcp=false path)
 #
 # The servers speak MCP over stdio only, so nothing is started here: each
@@ -46,8 +46,9 @@ edit_json() {
 }
 
 # Claude Code hooks (README "Hooks"): scaffold gates the first Write of a new
-# file, architect feeds RULES.yaml back after edits. Both are no-ops in a
-# project without a sourceTemplate and fail open, so they are safe globally.
+# file, policy enforces edit_policy (extend-only or frozen) on existing files,
+# architect feeds RULES.yaml back after edits. All are no-ops in a project
+# without a sourceTemplate and fail open, so they are safe globally.
 # Entries are recognised by their command so re-running never duplicates them
 # and unregister removes only ours. $1 = add|remove.
 claude_hooks() {
@@ -61,7 +62,10 @@ claude_hooks() {
     def strip(ev): .hooks[ev] = ((.hooks[ev] // []) | map(select(ours | not)));
     strip("PreToolUse") | strip("PostToolUse")
     | if $op == "add" then
-        .hooks.PreToolUse += [{matcher: "Write", hooks: [{type: "command", command: "aicode-mcp hook --type scaffold"}]}]
+        .hooks.PreToolUse += [
+          {matcher: "Write", hooks: [{type: "command", command: "aicode-mcp hook --type scaffold"}]},
+          {matcher: "Edit|MultiEdit|Write", hooks: [{type: "command", command: "aicode-mcp hook --type policy"}]}
+        ]
         | .hooks.PostToolUse += [{matcher: "Edit|Write|MultiEdit", hooks: [{type: "command", command: "aicode-mcp hook --type architect"}]}]
       else . end
   ' "$file" > "$tmp"

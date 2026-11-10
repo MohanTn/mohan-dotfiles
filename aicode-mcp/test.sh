@@ -67,12 +67,14 @@ rg -q -- "mcp add --scope user architect-mcp -- aicode-mcp mcp-serve --server ar
 pass "registered in claude, copilot and pi"
 
 s="$HOME/.claude/settings.json"
-jq -e '.model == "m" and ([.hooks.PreToolUse[].hooks[].command] | sort) == ["aicode-mcp hook --type scaffold","mine.sh"]' "$s" > /dev/null \
-  || fail "scaffold hook missing or user hook lost"
+jq -e '.model == "m" and ([.hooks.PreToolUse[].hooks[].command] | sort) == ["aicode-mcp hook --type policy","aicode-mcp hook --type scaffold","mine.sh"]' "$s" > /dev/null \
+  || fail "scaffold or policy hook missing, or user hook lost"
+jq -e '[.hooks.PreToolUse[] | select(.matcher == "Edit|MultiEdit|Write") | .hooks[].command] == ["aicode-mcp hook --type policy"]' "$s" > /dev/null \
+  || fail "policy hook has the wrong matcher"
 jq -e '[.hooks.PostToolUse[] | select(.matcher == "Edit|Write|MultiEdit") | .hooks[].command] == ["aicode-mcp hook --type architect"]' "$s" > /dev/null \
   || fail "architect hook missing"
 bash "$script" register > /dev/null
-jq -e '([.hooks.PreToolUse[].hooks[].command] | length) == 2 and ([.hooks.PostToolUse[]] | length) == 1' "$s" > /dev/null \
+jq -e '([.hooks.PreToolUse[].hooks[].command] | length) == 3 and ([.hooks.PostToolUse[]] | length) == 1' "$s" > /dev/null \
   || fail "register duplicated the hooks"
 pass "claude hooks added once, user hooks kept"
 

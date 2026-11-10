@@ -137,7 +137,7 @@ echo "Selected packages:"
 [ "$LITTLE_CODER" = "true" ] && [ "$LITTLE_CODER_OLLAMA" = "false" ] \
   && echo "    ↳ backend: local Gemma GGUF via llama.cpp"
 [ "$LITTLE_CODER_GPU" = "true" ] && echo "    ↳ GPU offload (Vulkan llama.cpp)"
-[ "$AICODE_MCP" = "true" ] && echo "  ✓ aicode-mcp (scaffold-mcp, architect-mcp in claude/copilot/pi)"
+[ "$AICODE_MCP" = "true" ] && echo "  ✓ aicode-mcp (scaffold-mcp, architect-mcp in claude/copilot/pi, edit-policy hooks in claude)"
 [ "$HOMEBREW" = "true" ] && echo "  ✓ Homebrew${BREW_LIST:+ (formulae:${BREW_LIST//\"/})}"
 if [ "$ZSH" = "true" ]; then
   echo "  ✓ zsh (oh-my-posh prompt, zinit plugins)"
